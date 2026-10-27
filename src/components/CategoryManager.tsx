@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Category, Kind } from '../domain/types'
-import { countTransactionsInCategory } from '../state/actions'
+import { countRecurringInCategory, countTransactionsInCategory } from '../state/actions'
 import { useFinance } from '../state/FinanceContext'
 import { ConfirmDialog } from './ConfirmDialog'
 
@@ -42,6 +42,7 @@ function CategorySection({ kind, title }: { kind: Kind; title: string }) {
   }
 
   const deleteCount = toDelete ? countTransactionsInCategory(data, toDelete.id) : 0
+  const ruleCount = toDelete ? countRecurringInCategory(data, toDelete.id) : 0
 
   return (
     <>
@@ -106,8 +107,13 @@ function CategorySection({ kind, title }: { kind: Kind; title: string }) {
         <ConfirmDialog
           title={`„${toDelete.name}“ löschen?`}
           message={
-            deleteCount > 0
-              ? `${deleteCount} ${deleteCount === 1 ? 'Buchung wird' : 'Buchungen werden'} der Kategorie „Sonstiges“ zugeordnet.`
+            deleteCount + ruleCount > 0
+              ? `${[
+                  deleteCount > 0 && `${deleteCount} ${deleteCount === 1 ? 'Buchung' : 'Buchungen'}`,
+                  ruleCount > 0 && `${ruleCount} wiederkehrende ${ruleCount === 1 ? 'Buchung' : 'Buchungen'}`,
+                ]
+                  .filter(Boolean)
+                  .join(' und ')} ${deleteCount + ruleCount === 1 ? 'wird' : 'werden'} der Kategorie „Sonstiges“ zugeordnet.`
               : 'Die Kategorie wird entfernt.'
           }
           confirmLabel="Löschen"

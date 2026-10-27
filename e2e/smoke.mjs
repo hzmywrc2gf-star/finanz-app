@@ -28,7 +28,7 @@ async function expectNoText(t) {
   if ((await bodyText()).includes(t)) throw new Error(`Text sollte fehlen: "${t}"`)
 }
 async function addTx({ kind = 'Ausgabe', amount, category, date, note }) {
-  await page.getByRole('button', { name: 'Buchung hinzufügen' }).first().click()
+  await page.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
   await page.getByRole('button', { name: kind, exact: true }).click()
   await page.fill('#tx-amount', amount)
   if (date) await page.fill('#tx-date', date)
@@ -70,7 +70,7 @@ await page.screenshot({ path: `${SHOTS}/2-start-mit-buchungen.png` })
 ok('4 Buchungen angelegt, Kontostand 1000 + 2500 − 45,99 − 12,01 − 800 = 2.642,00 €')
 
 // Validierung
-await page.getByRole('button', { name: 'Buchung hinzufügen' }).first().click()
+await page.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
 await page.fill('#tx-amount', '0')
 await page.getByRole('button', { name: 'Sichern' }).click()
 await expectText('Betrag')
@@ -193,10 +193,161 @@ await page.screenshot({ path: `${SHOTS}/5-start-dark.png` })
 await page.emulateMedia({ colorScheme: 'light' })
 await tab('Einstellungen').click()
 await page.screenshot({ path: `${SHOTS}/6-einstellungen.png`, fullPage: true })
-await page.getByRole('button', { name: 'Buchung hinzufügen' }).first().click().catch(() => {})
 await tab('Start').click()
-await page.getByRole('button', { name: 'Buchung hinzufügen' }).first().click()
+await page.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
 await page.screenshot({ path: `${SHOTS}/7-neue-buchung.png` })
+
+await page.keyboard.press('Escape')
+
+// ---------- Wiederkehrende Buchungen (Datum der Umgebung: 2026-10-27, Stand vorher 2.600,00 €) ----------
+const txCount = () => page.locator('[aria-label="wiederkehrend"]').count()
+async function addRule({ kind = 'Ausgabe', amount, category, note, interval, day, start, end }) {
+  await page.getByRole('button', { name: 'Wiederkehrende Buchung hinzufügen' }).click()
+  await page.getByRole('button', { name: kind, exact: true }).click()
+  await page.fill('#rc-amount', amount)
+  await page.selectOption('#rc-cat', { label: category })
+  if (note) await page.fill('#rc-note', note)
+  if (interval) await page.getByRole('button', { name: interval, exact: true }).click()
+  if (start) await page.fill('#rc-start', start)
+  if (day) await page.fill('#rc-day', day)
+  if (end) await page.fill('#rc-end', end)
+  await page.getByRole('button', { name: 'Sichern' }).click()
+}
+const mustBalance = async (expected, what) => {
+  const b = await balance()
+  if (b !== expected) throw new Error(`${what}: erwartet ${expected}, war ${b}`)
+}
+
+await tab('Einstellungen').click()
+await expectText('WIEDERKEHRENDE BUCHUNGEN'); await expectText('Noch keine wiederkehrenden Buchungen.')
+await addRule({ amount: '800', category: 'Fixkosten', note: 'Miete', start: '2026-08-01' })
+await page.getByRole('alertdialog').waitFor()
+await expectText('Vergangene Termine nachbuchen?'); await expectText('3 Termine seit 01.08.2026 liegen in der Vergangenheit.')
+await page.getByRole('alertdialog').getByRole('button', { name: 'Nachbuchen' }).click()
+await expectText('monatlich am 1.'); await expectText('nächste: 01.11.')
+await tab('Start').click()
+await mustBalance('200,00 €', 'Nach Nachbuchen (2.600 − 3 × 800)')
+for (const d of ['Sa, 01.08.', 'Di, 01.09.', 'Do, 01.10.']) await expectText(d)
+if ((await txCount()) !== 3) throw new Error('Erwartet 3 Buchungen mit ↻, gefunden: ' + (await txCount()))
+ok('Regel „Miete“ 800,00 € ab 01.08.: Dialog „3 Termine“, Nachbuchen → Kontostand genau −2.400,00 € (200,00 €), 3 Buchungen mit ↻')
+
+// Miete ist am 01.11. fällig (innerhalb von 7 Tagen) → „Demnächst fällig“
+await expectText('DEMNÄCHST FÄLLIG'); await expectText('So, 01.11.')
+
+// Gehalt am 30., Start heute: kein Dialog, nichts gebucht, aber „Demnächst fällig“ (vor der Miete)
+await tab('Einstellungen').click()
+await addRule({ kind: 'Einnahme', amount: '2.000,00', category: 'Gehalt', note: 'Gehalt', day: '30', start: '2026-10-27' })
+await page.getByRole('alertdialog').waitFor({ timeout: 500 }).then(() => { throw new Error('Dialog trotz keiner vergangenen Termine') }, () => {})
+await expectText('Gehalt'); await expectText('nächste: 30.10.')
+await tab('Start').click()
+await mustBalance('200,00 €', 'Nach Gehalt-Regel (noch nichts fällig)')
+await expectText('Fr, 30.10.'); await expectText('+2.000,00 €')
+const startText = await bodyText()
+if (startText.indexOf('Fr, 30.10.') > startText.indexOf('So, 01.11.')) throw new Error('„Demnächst fällig“ nicht nach Datum sortiert')
+if (startText.indexOf('DEMNÄCHST FÄLLIG') < startText.indexOf('Kontostand') || startText.indexOf('DEMNÄCHST FÄLLIG') > startText.indexOf('LETZTE BUCHUNGEN'))
+  throw new Error('„Demnächst fällig“ steht an der falschen Stelle')
+await page.screenshot({ path: `${SHOTS}/11-start-demnaechst.png`, fullPage: true })
+ok('Gehalt-Regel (Tag 30, Start heute): kein Dialog, Kontostand unverändert; „Demnächst fällig“: Fr, 30.10. +2.000,00 € vor So, 01.11. Miete −800,00 €')
+
+// „Nur künftige“: 15. monatlich ab 15.09. → 2 vergangene Termine werden übersprungen
+await tab('Einstellungen').click()
+await addRule({ amount: '9,99', category: 'Freizeit', note: 'Streaming', day: '15', start: '2026-09-15' })
+await expectText('2 Termine seit 15.09.2026 liegen in der Vergangenheit.')
+await page.getByRole('alertdialog').getByRole('button', { name: 'Nur künftige' }).click()
+await expectText('Streaming'); await expectText('nächste: 15.11.')
+await tab('Start').click()
+await mustBalance('200,00 €', 'Nach „Nur künftige“')
+if ((await txCount()) !== 3) throw new Error('„Nur künftige“ hat gebucht')
+ok('„Nur künftige“: 2 vergangene Termine übersprungen, Kontostand unverändert, nächste: 15.11.')
+
+// Screenshots Einstellungen + Formular
+await tab('Einstellungen').click()
+await page.waitForTimeout(300)
+await page.screenshot({ path: `${SHOTS}/9-einstellungen-wiederkehrend.png`, fullPage: true })
+await page.getByRole('button', { name: /Miete.*monatlich am 1\./ }).click()
+await page.waitForTimeout(500) // Sheet-Animation abwarten
+await page.screenshot({ path: `${SHOTS}/10-formular-wiederkehrend.png` })
+
+// Bearbeiten: Betrag nur für die Zukunft
+await page.fill('#rc-amount', '850,00')
+await page.getByRole('button', { name: 'Sichern' }).click()
+await expectText('−850,00 €')
+await tab('Start').click()
+await mustBalance('200,00 €', 'Nach Bearbeiten der Regel')
+const body850 = await bodyText()
+const count = (needle) => body850.split(needle).length - 1
+if (count('−800,00 €') !== 4 || count('−850,00 €') !== 1) throw new Error('Erwartet 4 × −800,00 € (3 gebucht + manuelle Miete) und 1 × −850,00 € (fällig), war ' + count('−800,00 €') + ' / ' + count('−850,00 €'))
+if ((await txCount()) !== 3) throw new Error('Bearbeiten hat Buchungen verändert')
+ok('Regel Miete auf 850,00 € geändert: 3 gebuchte Einträge bleiben bei 800,00 €, nur der nächste Termin (01.11.) zeigt 850,00 €')
+
+// Löschen: Buchungen bleiben
+await tab('Einstellungen').click()
+for (const name of [/Streaming/, /Miete.*monatlich/, /Gehalt.*monatlich/]) {
+  await page.getByRole('button', { name }).click()
+  await page.getByRole('button', { name: 'Löschen', exact: true }).click()
+  await expectText('Bereits gebuchte Einträge bleiben erhalten.')
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Löschen' }).click()
+}
+await expectText('Noch keine wiederkehrenden Buchungen.')
+await tab('Start').click()
+await expectNoText('DEMNÄCHST FÄLLIG')
+await mustBalance('200,00 €', 'Nach Löschen der Regeln')
+if ((await txCount()) !== 3) throw new Error('Gebuchte Einträge sind nach Löschen der Regel weg')
+ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleiben, „Demnächst fällig“ verschwindet')
+
+// ---------- Datumswechsel mit page.clock (frischer Kontext, fester Start 31.10.2026 10:00) ----------
+{
+  const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+  const p2 = await ctx2.newPage()
+  p2.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  p2.on('pageerror', (e) => errors.push(e.message))
+  await p2.clock.install({ time: new Date('2026-10-31T10:00:00+01:00') })
+  await p2.goto(URL)
+  const bal2 = async () => nbsp(await p2.locator('[data-testid="balance"]').innerText())
+  const waitBal = async (expected) => {
+    for (let i = 0; i < 30; i++) { if ((await bal2()) === expected) return; await p2.waitForTimeout(100) }
+    throw new Error(`Rollover: Kontostand erwartet ${expected}, war ${await bal2()}`)
+  }
+  const stored = () => p2.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const nav2 = (name) => p2.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name })
+  await nav2('Einstellungen').click()
+  await p2.getByRole('button', { name: 'Wiederkehrende Buchung hinzufügen' }).click()
+  await p2.fill('#rc-amount', '10')
+  await p2.selectOption('#rc-cat', { label: 'Freizeit' })
+  await p2.fill('#rc-note', 'Abo')
+  await p2.fill('#rc-day', '1')
+  await p2.getByRole('button', { name: 'Sichern' }).click() // Start = heute (31.10.), keine vergangenen Termine
+  await nav2('Start').click()
+  await waitBal('0,00 €')
+  if ((await stored()).transactions.length !== 0) throw new Error('Rollover: am 31.10. darf nichts gebucht sein')
+  ok('Rollover: Regel „Abo“ 10,00 € am 1. angelegt, am 31.10. noch nichts gebucht')
+
+  await p2.clock.fastForward('24:00:00') // 01.11.2026 10:00, der Stunden-Timer feuert
+  await waitBal('-10,00 €')
+  await p2.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await p2.clock.fastForward('01:00:00')
+  await p2.waitForTimeout(300)
+  let st = await stored()
+  if (st.transactions.length !== 1 || st.transactions[0].date !== '2026-11-01' || st.transactions[0].amountCents !== 1000)
+    throw new Error('Rollover: erwartet genau 1 Buchung am 01.11., war ' + JSON.stringify(st.transactions))
+  ok('Rollover 31.10. → 01.11. (Timer): genau 1 Buchung über 10,00 €, Kontostand −10,00 €; weitere Timer/visibilitychange buchen nichts doppelt')
+
+  await p2.clock.setSystemTime(new Date('2026-12-01T09:00:00+01:00'))
+  await p2.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await waitBal('-20,00 €')
+  await p2.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await p2.waitForTimeout(300)
+  st = await stored()
+  if (st.transactions.map((t) => t.date).join() !== '2026-11-01,2026-12-01') throw new Error('Rollover Dezember: ' + st.transactions.map((t) => t.date))
+  ok('Rollover Monatswechsel (visibilitychange, 01.12.): Buchung für 01.12. genau einmal, Kontostand −20,00 €')
+
+  await p2.reload()
+  await waitBal('-20,00 €')
+  st = await stored()
+  if (st.transactions.length !== 2) throw new Error('Rollover: Neuladen hat doppelt gebucht')
+  ok('Neuladen nach dem Datumswechsel bucht nichts doppelt (2 Buchungen, −20,00 €)')
+  await ctx2.close()
+}
 
 await browser.close()
 if (errors.length) { console.error('Konsolenfehler:\n' + errors.join('\n')); process.exit(1) }

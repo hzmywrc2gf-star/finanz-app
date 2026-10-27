@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultData } from '../domain/defaults'
+import { bookDue } from '../domain/recurring'
 import {
-  addCategory, addTransaction, deleteCategory, deleteTransaction, renameCategory, setStartBalance,
-  updateTransaction,
+  addCategory, addRecurring, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
+  renameCategory, setStartBalance, updateRecurring, updateTransaction,
 } from './actions'
+import type { RecurringInput } from './actions'
 
 const base = () => createDefaultData()
 const meta = { id: 'x1', createdAt: 5 }
@@ -59,5 +61,78 @@ describe('categories', () => {
   it('cannot delete Sonstiges', () => {
     expect(() => deleteCategory(base(), 'expense-sonstiges')).toThrow()
     expect(() => deleteCategory(base(), 'income-sonstiges')).toThrow()
+  })
+})
+
+describe('recurring', () => {
+  const rin: RecurringInput = {
+    kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: ' Miete ',
+    interval: 'monthly', dayOfMonth: 1, startDate: '2026-08-01',
+  }
+  const today = '2026-10-27'
+
+  it('adds with catch-up and books past occurrences immediately', () => {
+    const d = addRecurring(base(), rin, { today, catchUp: true, id: 'r1', now: 7 })
+    expect(d.recurring[0]).toEqual({
+      id: 'r1', kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: 'Miete',
+      interval: 'monthly', dayOfMonth: 1, startDate: '2026-08-01', bookedThrough: today,
+    })
+    expect(d.transactions.map((t) => t.date)).toEqual(['2026-08-01', '2026-09-01', '2026-10-01'])
+    expect(d.transactions.every((t) => t.recurringId === 'r1' && t.note === 'Miete')).toBe(true)
+  })
+  it('without catch-up skips past occurrences but still books future ones', () => {
+    let d = addRecurring(base(), rin, { today, catchUp: false, id: 'r1' })
+    expect(d.transactions).toHaveLength(0)
+    expect(d.recurring[0].bookedThrough).toBe(today)
+    d = bookDue(d, '2026-11-01')
+    expect(d.transactions.map((t) => t.date)).toEqual(['2026-11-01'])
+  })
+  it('a future start is booked when due, with or without catch-up', () => {
+    for (const catchUp of [true, false]) {
+      let d = addRecurring(base(), { ...rin, startDate: '2026-11-15', dayOfMonth: 15 }, { today, catchUp, id: 'r1' })
+      expect(d.recurring[0].bookedThrough).toBe('2026-11-14')
+      expect(d.transactions).toHaveLength(0)
+      d = bookDue(d, '2026-11-15')
+      expect(d.transactions.map((t) => t.date)).toEqual(['2026-11-15'])
+    }
+  })
+  it('validates input', () => {
+    const add = (over: Partial<RecurringInput>) => addRecurring(base(), { ...rin, ...over }, { today, catchUp: true })
+    expect(() => add({ amountCents: 0 })).toThrow(/Betrag/)
+    expect(() => add({ categoryId: 'income-gehalt' })).toThrow(/Kategorie/)
+    expect(() => add({ categoryId: 'zzz' })).toThrow(/Kategorie/)
+    expect(() => add({ dayOfMonth: 0 })).toThrow(/Tag/)
+    expect(() => add({ dayOfMonth: 32 })).toThrow(/Tag/)
+    expect(() => add({ dayOfMonth: 1.5 })).toThrow(/Tag/)
+    expect(() => add({ startDate: '2026-02-30' })).toThrow(/Startdatum/)
+    expect(() => add({ endDate: '2026-07-31' })).toThrow(/Enddatum/)
+    expect(() => add({ endDate: '2026-08-01' })).not.toThrow()
+  })
+  it('update changes future only; delete keeps bookings', () => {
+    let d = addRecurring(base(), rin, { today, catchUp: true, id: 'r1' })
+    d = updateRecurring(d, 'r1', { ...rin, amountCents: 85000, note: '' })
+    expect(d.recurring[0]).toMatchObject({ amountCents: 85000, bookedThrough: today })
+    expect(d.recurring[0].note).toBeUndefined()
+    expect(d.transactions.map((t) => t.amountCents)).toEqual([80000, 80000, 80000])
+    expect(bookDue(d, '2026-11-01').transactions.at(-1)?.amountCents).toBe(85000)
+    expect(() => updateRecurring(d, 'nope', rin)).toThrow(/nicht gefunden/)
+    d = deleteRecurring(d, 'r1')
+    expect(d.recurring).toHaveLength(0)
+    expect(d.transactions).toHaveLength(3)
+    expect(bookDue(d, '2026-12-01')).toBe(d)
+  })
+  it('editing a generated transaction keeps its recurringId', () => {
+    let d = addRecurring(base(), rin, { today, catchUp: true, id: 'r1' })
+    const t = d.transactions[0]
+    d = updateTransaction(d, t.id, { kind: 'expense', amountCents: 79000, date: t.date, categoryId: t.categoryId })
+    expect(d.transactions[0]).toMatchObject({ amountCents: 79000, recurringId: 'r1' })
+  })
+  it('deleteCategory reassigns rules to Sonstiges of the same kind', () => {
+    let d = addCategory(base(), 'expense', 'Haustier', 'c1')
+    d = addCategory(d, 'income', 'Zins', 'c2')
+    d = addRecurring(d, { ...rin, categoryId: 'c1', startDate: '2026-11-01' }, { today, catchUp: true, id: 'r1' })
+    d = addRecurring(d, { ...rin, kind: 'income', categoryId: 'c2', startDate: '2026-11-01' }, { today, catchUp: true, id: 'r2' })
+    d = deleteCategory(deleteCategory(d, 'c1'), 'c2')
+    expect(d.recurring.map((r) => r.categoryId)).toEqual(['expense-sonstiges', 'income-sonstiges'])
   })
 })

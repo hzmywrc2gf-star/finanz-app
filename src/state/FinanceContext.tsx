@@ -3,8 +3,10 @@ import type { ReactNode } from 'react'
 import type { AppData, Kind } from '../domain/types'
 import type { FinanceRepository } from '../data/repository'
 import { LocalStorageRepository } from '../data/localStorageRepo'
+import { todayISO } from '../domain/dates'
+import { bookDue } from '../domain/recurring'
 import * as A from './actions'
-import type { TransactionInput } from './actions'
+import type { RecurringInput, TransactionInput } from './actions'
 
 export interface FinanceApi {
   data: AppData
@@ -17,12 +19,21 @@ export interface FinanceApi {
   addCategory(kind: Kind, name: string): void
   renameCategory(id: string, name: string): void
   deleteCategory(id: string): void
+  /** catchUp: also book the occurrences since startDate that lie in the past. */
+  addRecurring(input: RecurringInput, catchUp: boolean): void
+  updateRecurring(id: string, input: RecurringInput): void
+  deleteRecurring(id: string): void
   replaceAll(data: AppData): void
 }
+
+/** How often due recurring bookings are re-checked while the app stays open. */
+const REBOOK_INTERVAL_MS = 60 * 60 * 1000
 
 const FinanceContext = createContext<FinanceApi | null>(null)
 
 const defaultRepo = new LocalStorageRepository()
+
+const SAVE_ERROR = 'Speichern fehlgeschlagen. Bitte Speicherplatz prüfen.'
 
 export function FinanceProvider({
   children,
@@ -39,29 +50,55 @@ export function FinanceProvider({
     let cancelled = false
     repository.load().then((d) => {
       if (cancelled) return
-      ref.current = d
-      setData(d)
+      const booked = bookDue(d, todayISO())
+      ref.current = booked
+      setData(booked)
+      if (booked !== d) repository.save(booked).catch(() => setSaveError(SAVE_ERROR))
     })
     return () => {
       cancelled = true
     }
   }, [repository])
 
+  const commit = useCallback(
+    (next: AppData) => {
+      ref.current = next
+      setData(next)
+      repository.save(next).then(
+        () => setSaveError(null),
+        () => setSaveError(SAVE_ERROR),
+      )
+    },
+    [repository],
+  )
+
   // Actions may throw (German validation errors) so forms can show them.
   const apply = useCallback(
     (fn: (d: AppData) => AppData) => {
       const current = ref.current
       if (!current) throw new Error('Daten werden noch geladen.')
-      const next = fn(current)
-      ref.current = next
-      setData(next)
-      repository.save(next).then(
-        () => setSaveError(null),
-        () => setSaveError('Speichern fehlgeschlagen. Bitte Speicherplatz prüfen.'),
-      )
+      commit(fn(current))
     },
-    [repository],
+    [commit],
   )
+
+  // The date can change while the app stays open (or in the background): re-check when it
+  // becomes visible again and once an hour.
+  useEffect(() => {
+    const rebook = () => {
+      const current = ref.current
+      if (!current) return
+      const next = bookDue(current, todayISO())
+      if (next !== current) commit(next)
+    }
+    const onVisible = () => document.visibilityState === 'visible' && rebook()
+    document.addEventListener('visibilitychange', onVisible)
+    const timer = setInterval(rebook, REBOOK_INTERVAL_MS)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(timer)
+    }
+  }, [commit])
 
   const api = useMemo<FinanceApi | null>(() => {
     if (!data) return null
@@ -75,7 +112,11 @@ export function FinanceProvider({
       addCategory: (k, n) => apply((d) => A.addCategory(d, k, n)),
       renameCategory: (id, n) => apply((d) => A.renameCategory(d, id, n)),
       deleteCategory: (id) => apply((d) => A.deleteCategory(d, id)),
-      replaceAll: (nd) => apply(() => nd),
+      addRecurring: (i, catchUp) => apply((d) => A.addRecurring(d, i, { today: todayISO(), catchUp })),
+      updateRecurring: (id, i) => apply((d) => A.updateRecurring(d, id, i)),
+      deleteRecurring: (id) => apply((d) => A.deleteRecurring(d, id)),
+      // an older backup may already have occurrences due
+      replaceAll: (nd) => apply(() => bookDue(nd, todayISO())),
     }
   }, [data, saveError, apply])
 

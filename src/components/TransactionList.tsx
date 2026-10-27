@@ -1,6 +1,7 @@
 import type { Category, Transaction } from '../domain/types'
 import { formatShortDay } from '../domain/dates'
 import { formatSigned } from '../domain/money'
+import { RepeatIcon } from './Icons'
 
 export function TransactionList({
   transactions,
@@ -26,6 +27,7 @@ export function TransactionList({
               <div className="row-sub">
                 {formatShortDay(t.date)}
                 {t.note ? ` · ${t.note}` : ''}
+                {t.recurringId && <RepeatIcon />}
               </div>
             </span>
             <span className={`row-amount num ${t.kind === 'income' ? 'income-text' : 'expense-text'}`}>

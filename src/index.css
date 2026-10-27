@@ -454,6 +454,14 @@ button.row:active {
   color: var(--expense-text);
 }
 
+.dialog .actions.stacked {
+  flex-direction: column-reverse;
+}
+.dialog .actions.stacked button + button {
+  border-left: 0;
+  border-bottom: 0.5px solid var(--sep);
+}
+
 @keyframes fade {
   from {
     opacity: 0;
@@ -602,4 +610,33 @@ button.row:active {
 .inline-form button + button {
   font-weight: 400;
   color: var(--text-2);
+}
+
+/* Wiederkehrende Buchungen */
+.rec-icon {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 6px;
+  color: var(--text-2);
+}
+.row-add {
+  color: var(--accent);
+  font-size: 17px;
+}
+.field .clear-btn {
+  flex: none;
+  color: var(--accent);
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 4px;
+}
+.field input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.row-sub.wrap {
+  white-space: normal;
+}
+.wide-labels .field label {
+  width: 120px;
 }

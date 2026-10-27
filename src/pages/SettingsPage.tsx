@@ -5,6 +5,7 @@ import { centsToInputString, parseEuroInput } from '../domain/money'
 import { exportJSON, parseBackup } from '../data/backup'
 import type { AppData } from '../domain/types'
 import { useFinance } from '../state/FinanceContext'
+import { RecurringManager } from '../components/RecurringManager'
 import { CategoryManager } from '../components/CategoryManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 
@@ -107,6 +108,8 @@ export function SettingsPage() {
         </div>
       )}
       <div className="footnote">Der Kontostand ergibt sich aus Startguthaben plus Einnahmen minus Ausgaben.</div>
+
+      <RecurringManager />
 
       <CategoryManager />
 
