@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, monthEnd, monthLabel, monthStart, addWeeks, isoWeekNumber, isValidISODate, startOfWeek, todayISO, weekDays, weekLabel } from './dates'
+import { addMonths, monthEnd, monthLabel, monthShort, monthStart, addWeeks, isoWeekNumber, isValidISODate, startOfWeek, todayISO, weekDays, weekLabel } from './dates'
 
 describe('startOfWeek', () => {
   it('handles Sunday, Monday, Wednesday', () => {
@@ -61,6 +61,11 @@ describe('months', () => {
     expect(addMonths('2027-01-01', -1)).toBe('2026-12-01')
     expect(addMonths('2026-01-31', 1)).toBe('2026-02-01')
     expect(addMonths('2026-10-01', 14)).toBe('2927-12-01'.replace('2927', '2027'))
+  })
+  it('monthShort', () => {
+    expect(monthShort('2026-10-27')).toBe('Okt')
+    expect(monthShort('2026-05-01')).toBe('Mai')
+    expect(monthShort('2026-03-01')).toBe('Mär')
   })
   it('monthLabel', () => {
     expect(monthLabel('2026-10-01')).toBe('Oktober 2026')

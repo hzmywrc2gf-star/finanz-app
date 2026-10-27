@@ -9,15 +9,22 @@ export function formatPercent(p: number): string {
   return `${percentFmt.format(p)}\u00a0%`
 }
 
-/** 123456 -> "1.234,56 €" (non-breaking space before €), negative "-1.234,56 €". */
+/** 123456 -> "1.234,56 €" (non-breaking space before €), negative "−1.234,56 €". */
 export function formatCents(cents: number): string {
-  return eur.format(cents / 100).replace('−', '-')
+  // Typographic minus (U+2212), same as the signed amounts in lists
+  return (cents < 0 ? '\u2212' : '') + eur.format(Math.abs(cents) / 100)
 }
 
 /** Absolute amount with explicit sign for lists: "+12,50 €" / "−12,50 €". */
 export function formatSigned(cents: number, kind: 'income' | 'expense'): string {
   const body = formatCents(Math.abs(cents))
   return (kind === 'income' ? '+' : '−') + body
+}
+
+/** Change against a reference with explicit sign: "+120,00 €" / "−35,50 €" / "±0,00 €". */
+export function formatDelta(cents: number): string {
+  if (cents === 0) return '±' + formatCents(0)
+  return (cents > 0 ? '+' : '−') + formatCents(Math.abs(cents))
 }
 
 /** 1250 -> "12,50" (for prefilling inputs, no grouping). */

@@ -380,6 +380,9 @@ button.row:active {
   font-size: 10px;
   font-weight: 500;
   min-height: 44px;
+  min-width: 0;
+  padding: 0 1px;
+  white-space: nowrap;
 }
 .tab[aria-current='page'] {
   color: var(--accent);
@@ -731,4 +734,156 @@ button.row:active {
   right: 0;
   height: 0.5px;
   background: var(--sep);
+}
+
+/* Monatsauswertung */
+.summary-extra {
+  border-top: 0.5px solid var(--sep);
+  padding: 8px 16px;
+}
+.summary-extra .bar-head {
+  min-height: 28px;
+  align-items: center;
+}
+.glyph {
+  font-size: 10px;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+.bar-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.delta {
+  margin-left: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+}
+
+/* Trend chart: grouped bars (Einnahmen left, Ausgaben right), one shared axis from 0 */
+.trend {
+  --plot-h: 140px;
+  --label-h: 26px;
+  position: relative;
+  height: calc(var(--plot-h) + var(--label-h));
+  margin-top: 8px;
+}
+.trend-grid {
+  position: absolute;
+  inset: 0 0 var(--label-h) 0;
+}
+.trend-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+}
+.trend-line::after {
+  content: '';
+  position: absolute;
+  left: 44px;
+  right: 0;
+  top: 0;
+  border-top: 0.5px solid var(--sep);
+}
+.trend-line span {
+  position: absolute;
+  left: 0;
+  width: 38px;
+  text-align: right;
+  transform: translateY(-50%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.trend-cols {
+  position: absolute;
+  inset: 0 0 0 44px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+.trend-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 44px;
+  border-radius: 8px;
+  padding: 0;
+}
+.trend-col[aria-pressed='true'] {
+  background: var(--card-2);
+}
+.trend-bars {
+  height: var(--plot-h);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+}
+.trend-bar {
+  display: block;
+  width: 12px;
+  border-radius: 4px 4px 0 0;
+}
+.trend-label {
+  height: var(--label-h);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.trend-col[data-selected='true'] .trend-label {
+  font-weight: 700;
+  color: var(--text);
+}
+.callout {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--card-2);
+  font-size: 13px;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+}
+.trend-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.trend-table th,
+.trend-table td {
+  padding: 6px 0 6px 6px;
+  text-align: right;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.trend-table th:first-child {
+  text-align: left;
+  padding-left: 0;
+}
+.trend-table thead th {
+  color: var(--text-2);
+  font-size: 12px;
+  border-bottom: 0.5px solid var(--sep);
+}
+.trend-table tbody tr + tr > * {
+  border-top: 0.5px solid var(--sep);
+}
+.trend-table tr[data-selected='true'] > * {
+  font-weight: 700;
 }

@@ -112,8 +112,16 @@ const MONTHS = [
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
 ]
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
 /** "Oktober 2026" */
 export function monthLabel(iso: string): string {
   const [y, m] = iso.split('-').map(Number)
   return `${MONTHS[m - 1]} ${y}`
+}
+
+/** "Okt" (for chart axes; "Mai" stays "Mai"). */
+export function monthShort(iso: string): string {
+  const m = Number(iso.split('-')[1])
+  return MONTHS_SHORT[m - 1]
 }

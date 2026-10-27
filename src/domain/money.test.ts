@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centsToInputString, formatCents, formatPercent, formatSigned, parseEuroInput } from './money'
+import { centsToInputString, formatCents, formatDelta, formatPercent, formatSigned, parseEuroInput } from './money'
 
 const nb = ' '
 
@@ -8,7 +8,7 @@ describe('formatCents', () => {
     expect(formatCents(0)).toBe(`0,00${nb}€`)
     expect(formatCents(5)).toBe(`0,05${nb}€`)
     expect(formatCents(123456)).toBe(`1.234,56${nb}€`)
-    expect(formatCents(-123456)).toBe(`-1.234,56${nb}€`)
+    expect(formatCents(-123456)).toBe(`−1.234,56${nb}€`)
     expect(formatCents(100000000)).toBe(`1.000.000,00${nb}€`)
   })
   it('formats signed list amounts and percent', () => {
@@ -51,5 +51,13 @@ describe('centsToInputString', () => {
     expect(centsToInputString(1250)).toBe('12,50')
     expect(centsToInputString(5)).toBe('0,05')
     expect(centsToInputString(-123456)).toBe('-1234,56')
+  })
+})
+
+describe('formatDelta', () => {
+  it('signs positive, negative and zero', () => {
+    expect(formatDelta(12000)).toBe('+120,00\u00a0€')
+    expect(formatDelta(-3550)).toBe('−35,50\u00a0€')
+    expect(formatDelta(0)).toBe('±0,00\u00a0€')
   })
 })

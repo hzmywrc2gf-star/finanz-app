@@ -18,7 +18,7 @@ const page = await ctx.newPage()
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 page.on('pageerror', (e) => errors.push(e.message))
 
-const tab = (name) => page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name })
+const tab = (name) => page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
 const bodyText = async () => nbsp(await page.locator('body').innerText())
 async function expectText(t) {
   for (let i = 0; i < 20; i++) { if ((await bodyText()).includes(t)) return; await page.waitForTimeout(100) }
@@ -38,7 +38,7 @@ async function addTx({ kind = 'Ausgabe', amount, category, date, note }) {
 }
 async function balance() {
   const t = await bodyText()
-  return t.match(/Kontostand\s*\n?\s*(-?[\d.]+,\d\d €)/)?.[1]
+  return t.match(/Kontostand\s*\n?\s*([-−]?[\d.]+,\d\d €)/)?.[1]
 }
 
 await page.goto(URL)
@@ -452,9 +452,194 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
   await expectNoText('Gesamt'); await expectText('Tippe auf eine Kategorie, um ein Monatsbudget festzulegen.')
   await tab('Start').click()
   await expectNoText('BUDGETS')
-  await mustBalance('-173,10 €', 'Kontostand 200,00 − 270,00 − 103,10')
+  await mustBalance('−173,10 €', 'Kontostand 200,00 − 270,00 − 103,10')
   if ((await stored()).categories.some((c) => 'monthlyBudgetCents' in c)) throw new Error('Budget nicht entfernt')
   ok('Budgets entfernt: Zeilen zeigen wieder „Budget festlegen“ (423,10 € / 1.600,00 €), Hinweis-Text zurück, Start-Karte weg, keine monthlyBudgetCents mehr gespeichert')
+}
+
+// ---------- Monatsauswertung (Daten wie oben; Heute = 27.10.2026) ----------
+// Oktober: Einnahmen Gehalt 2.500,00 · Ausgaben Wocheneinkauf 50,00 + Miete 800,00 (27.10.) + Miete-Regel 800,00 (01.10., ↻)
+//   + Kino 20,00 + Futter 30,00 (Sonstiges) + Großeinkauf 270,00 + Nachkauf 103,10 = 2.073,10 → Saldo 426,90, Sparquote 17,1 %
+// September: nur Miete-Regel 800,00 (↻); wir buchen zusätzlich Freizeit 50,00 (12.09.) → Ausgaben 850,00, Saldo −850,00
+// August: nur Miete-Regel 800,00 (↻)
+{
+  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const flat = (s) => nbsp(s).trim().replace(/\s*\n\s*/g, ' | ')
+  const after = (title) => page.locator('.section-title', { hasText: title }).locator('xpath=following-sibling::*[1]')
+  const css = (loc, prop) => loc.evaluate((el, p) => getComputedStyle(el)[p], prop)
+  const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
+  const GREEN = 'rgb(36, 138, 61)', RED = 'rgb(215, 0, 21)'
+  const noOverflow = async (what) => {
+    if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error(`${what}: horizontaler Überlauf`)
+  }
+
+  await tab('Start').click()
+  await addTx({ amount: '50,00', category: 'Freizeit', date: '2026-09-12', note: 'Konzert' })
+
+  // Unabhängige Gegenrechnung aus localStorage
+  const sumBy = (txs, kind, month, pred = () => true) =>
+    txs.filter((t) => t.kind === kind && t.date.startsWith(month) && pred(t)).reduce((a, t) => a + t.amountCents, 0)
+  const st0 = await stored()
+  const oct = { inc: sumBy(st0.transactions, 'income', '2026-10'), exp: sumBy(st0.transactions, 'expense', '2026-10'), rec: sumBy(st0.transactions, 'expense', '2026-10', (t) => t.recurringId) }
+  const sep = { inc: sumBy(st0.transactions, 'income', '2026-09'), exp: sumBy(st0.transactions, 'expense', '2026-09') }
+  if (oct.inc !== 250000 || oct.exp !== 207310 || oct.rec !== 80000 || sep.inc !== 0 || sep.exp !== 85000) throw new Error('Monat: Ausgangsdaten stimmen nicht: ' + JSON.stringify({ oct, sep }))
+
+  await tab('Monat').click()
+  must(await tab('Monat').getAttribute('aria-current'), 'page', 'Tab Monat aktiv')
+  must(await page.locator('h1').innerText(), 'Monat', 'Titel')
+  await expectText('Oktober 2026'); await expectNoText('Aktueller Monat')
+  must(flat(await page.locator('.summary').innerText()), 'Einnahmen | 2.500,00 € | Ausgaben | 2.073,10 € | Saldo | 426,90 €', 'Summary Oktober')
+  must(flat(await page.locator('.summary-extra').innerText()), 'Sparquote | 17,1 % | davon wiederkehrend | 800,00 €', 'Sparquote / wiederkehrend')
+  must(await css(page.locator('.summary .v').nth(0), 'color'), GREEN, 'Einnahmen grün')
+  must(await css(page.locator('.summary .v').nth(1), 'color'), RED, 'Ausgaben rot')
+  must(await css(page.locator('.summary .v').nth(2), 'color'), GREEN, 'Saldo ≥ 0 grün')
+  must(await css(page.locator('.summary-extra .bar-head').nth(1), 'color'), 'rgba(60, 60, 67, 0.6)', 'wiederkehrend gedämpft')
+  ok('Monat Oktober 2026: Einnahmen 2.500,00 €, Ausgaben 2.073,10 €, Saldo 426,90 € (grün), Sparquote 17,1 %, davon wiederkehrend 800,00 € (gedämpft); deckt sich mit localStorage')
+
+  // Vergleich zum Vormonat (September: Einnahmen 0, Ausgaben 850,00, Saldo −850,00)
+  const cmp = () => after('Vergleich zum Vormonat')
+  const rows = async () => (await cmp().locator('li').allInnerTexts()).map(flat)
+  must((await rows()).join(' // '), 'Einnahmen | Vormonat 0,00 € | ▲+2.500,00 € // Ausgaben | Vormonat 850,00 € | ▲+1.223,10 € // Saldo | Vormonat −850,00 € | ▲+1.276,90 €', 'Vergleich Oktober')
+  must(await css(cmp().locator('.row-amount').nth(0), 'color'), GREEN, 'mehr Einnahmen = gut')
+  must(await css(cmp().locator('.row-amount').nth(1), 'color'), RED, 'mehr Ausgaben = schlecht')
+  must(await css(cmp().locator('.row-amount').nth(2), 'color'), GREEN, 'Saldo besser = gut')
+  await expectText('ggü. September 2026')
+  must(oct.exp - sep.exp, 122310, 'Delta Ausgaben aus localStorage'); must((oct.inc - oct.exp) - (sep.inc - sep.exp), 127690, 'Delta Saldo aus localStorage')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: `${SHOTS}/17-monat.png` })
+  ok('Vergleich zum Vormonat: Einnahmen ▲+2.500,00 € (grün), Ausgaben ▲+1.223,10 € (rot), Saldo ▲+1.276,90 € (grün), „ggü. September 2026“')
+
+  // Verlauf: 6 Gruppen, Einnahmen links / Ausgaben rechts
+  const cols = page.locator('.trend-col')
+  must(await cols.count(), 6, 'Anzahl Monatsgruppen')
+  must((await page.locator('.trend-label').allInnerTexts()).join(' '), 'Mai Jun Jul Aug Sep Okt', 'Monatslabels')
+  must(await css(page.locator('.trend-label').nth(5), 'fontWeight'), '700', 'gewählter Monat fett')
+  must(await css(page.locator('.trend-label').nth(0), 'fontWeight'), '400', 'andere Monate nicht fett')
+  const bars = async (i) => page.locator('.trend-col').nth(i).locator('.trend-bar').evaluateAll((els) => els.map((e) => ({ h: e.getBoundingClientRect().height, x: e.getBoundingClientRect().x, bg: getComputedStyle(e).backgroundColor, r: getComputedStyle(e).borderTopLeftRadius })))
+  const [bMai, bAug, bOkt] = [await bars(0), await bars(3), await bars(5)]
+  if (bMai[0].h !== 0 || bMai[1].h !== 0) throw new Error('Nullmonat zeigt einen Balken')
+  if (bAug[0].h !== 0 || bAug[1].h <= 0) throw new Error('August: Einnahmen 0 → kein Balken, Ausgaben vorhanden')
+  if (!(bOkt[0].x < bOkt[1].x) || bOkt[0].bg !== 'rgb(52, 199, 89)' || bOkt[1].bg !== 'rgb(255, 59, 48)') throw new Error('Reihenfolge/Farben Einnahmen links, Ausgaben rechts: ' + JSON.stringify(bOkt))
+  if (bOkt[0].r !== '4px') throw new Error('Balken nicht oben gerundet')
+  // gemeinsame Achse 0..3.000 €: 2.500 → 83,3 % und 2.073,10 → 69,1 % der Plot-Höhe (140 px)
+  if (Math.abs(bOkt[0].h - 140 * 2500 / 3000) > 1 || Math.abs(bOkt[1].h - 140 * 2073.1 / 3000) > 1) throw new Error('Balkenhöhen passen nicht zur gemeinsamen Achse: ' + JSON.stringify(bOkt))
+  const tickLabels = (await page.locator('.trend-line span').allInnerTexts()).map(nbsp)
+  must(tickLabels.join(' '), '0 € 1.500 € 3.000 €', 'Achsenbeschriftung')
+  if ((await cols.nth(0).boundingBox()).width < 44) throw new Error('Trefferfläche < 44 px')
+  const legend = nbsp(await page.locator('.legend').innerText()).replace(/\s+/g, ' ')
+  must(legend, 'Einnahmen Ausgaben', 'Legende')
+  must(await css(page.locator('.legend span').nth(0), 'color'), 'rgb(0, 0, 0)', 'Legendentext in Normalfarbe')
+  ok('Verlauf: 6 Gruppen Mai–Okt (Okt fett), Einnahmen links grün / Ausgaben rechts rot, Nullmonate ohne Balken, Höhen auf gemeinsamer Achse 0–3.000 €, Treffer ≥ 44 px, Legende')
+
+  // Callout
+  await expectText('Tippe auf einen Monat für Details.')
+  await cols.nth(5).click()
+  must(nbsp(await page.getByRole('status').innerText()), 'Oktober 2026 · Einnahmen 2.500,00 € · Ausgaben 2.073,10 € · Saldo 426,90 €', 'Callout Oktober')
+  await cols.nth(4).click()
+  must(nbsp(await page.getByRole('status').innerText()), 'September 2026 · Einnahmen 0,00 € · Ausgaben 850,00 € · Saldo −850,00 €', 'Callout September')
+  must(await cols.nth(4).getAttribute('aria-pressed'), 'true', 'aria-pressed')
+  await expectNoText('Tippe auf einen Monat für Details.')
+  must(await page.getByRole('group', { name: /Einnahmen und Ausgaben pro Monat, Mai 2026 bis Oktober 2026/ }).count(), 1, 'Chart aria-label')
+  must(await page.getByRole('button', { name: 'Oktober 2026 · Einnahmen 2.500,00 € · Ausgaben 2.073,10 € · Saldo 426,90 €' }).count(), 1, 'Gruppe als Button mit Beschriftung')
+  // Tastatur: Fokus + Enter
+  await cols.nth(3).focus(); await page.keyboard.press('Enter')
+  must(nbsp(await page.getByRole('status').innerText()), 'August 2026 · Einnahmen 0,00 € · Ausgaben 800,00 € · Saldo −800,00 €', 'Callout August per Tastatur')
+  await cols.nth(5).click()
+
+  // Tabelle
+  const table = (await page.locator('.trend-table tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.children].map((c) => c.textContent.replace(/ /g, ' ')).join(' | '))))
+  must(table.join(' // '), 'Okt 2026 | 2.500,00 € | 2.073,10 € | 426,90 € // Sep 2026 | 0,00 € | 850,00 € | −850,00 € // Aug 2026 | 0,00 € | 800,00 € | −800,00 € // Jul 2026 | 0,00 € | 0,00 € | 0,00 € // Jun 2026 | 0,00 € | 0,00 € | 0,00 € // Mai 2026 | 0,00 € | 0,00 € | 0,00 €', 'Tabelle')
+  must((await page.locator('.trend-table thead th').allInnerTexts()).join(' '), 'Monat Einnahmen Ausgaben Saldo', 'Tabellenkopf')
+  await page.locator('.trend-table').scrollIntoViewIfNeeded()
+  await page.locator('.trend').evaluate((el) => el.scrollIntoView({ block: 'start' }))
+  await page.evaluate(() => window.scrollBy(0, -90))
+  await page.screenshot({ path: `${SHOTS}/18-monat-verlauf.png` })
+  ok('Callout per Tippen/Tastatur („Oktober 2026 · Einnahmen 2.500,00 € · Ausgaben 2.073,10 € · Saldo 426,90 €“), Tabelle neueste zuerst Okt/Sep/Aug/Jul/Jun/Mai mit exakten Beträgen')
+
+  // Kategorien
+  const catRows = async (title) => (await after(title).locator('li').allInnerTexts()).map(flat)
+  must((await catRows('Ausgaben nach Kategorie')).join(' // '), 'Fixkosten ▲ 800,00 € | 1.600,00 €77,2 % // Lebensmittel ▲ 423,10 € | 423,10 €20,4 % // Sonstiges ▲ 30,00 € | 30,00 €1,4 % // Freizeit ▼ 30,00 € | 20,00 €1,0 %', 'Ausgaben nach Kategorie')
+  const fixDelta = after('Ausgaben nach Kategorie').locator('.delta')
+  must(await css(fixDelta.nth(0), 'color'), RED, '▲ Kategorie rot'); must(await css(fixDelta.nth(3), 'color'), GREEN, '▼ Kategorie grün')
+  const fills = await after('Ausgaben nach Kategorie').locator('.bar-fill').evaluateAll((els) => els.map((e) => e.style.width))
+  if (fills[0] !== '100%' || Math.abs(parseFloat(fills[1]) - 26.4) > 0.1) throw new Error('Kategorie-Balken: ' + fills)
+  must((await catRows('Einnahmen nach Kategorie')).join(' // '), 'Gehalt | 2.500,00 €100,0 %', 'Einnahmen nach Kategorie')
+  await page.locator('.section-title', { hasText: 'Ausgaben nach Kategorie' }).evaluate((el) => el.scrollIntoView({ block: 'start' }))
+  await page.evaluate(() => window.scrollBy(0, -16))
+  await page.screenshot({ path: `${SHOTS}/19-monat-kategorien.png` })
+  ok('Ausgaben nach Kategorie: Fixkosten 1.600,00 € 77,2 % (▲ 800,00 €), Lebensmittel 423,10 € 20,4 % (▲ 423,10 €), Sonstiges 30,00 € (▲ 30,00 €), Freizeit 20,00 € (▼ 30,00 € grün); Einnahmen: Gehalt 2.500,00 € 100,0 %')
+
+  // Größte Ausgaben
+  const top = after('Größte Ausgaben')
+  must((await top.locator('.row-amount').allInnerTexts()).map(nbsp).join(' '), '−800,00 € −800,00 € −270,00 € −103,10 € −50,00 €', 'Größte Ausgaben Reihenfolge')
+  must((await top.locator('.row-sub').allInnerTexts()).map(nbsp).join(' // '), 'Di, 27.10. · Miete // Do, 01.10. · Miete // Di, 27.10. · Großeinkauf // Di, 27.10. · Nachkauf // Di, 27.10. · Wocheneinkauf', 'Größte Ausgaben Details')
+  must(await top.locator('[aria-label="wiederkehrend"]').count(), 1, 'Regel-Miete mit ↻')
+  if ((await top.innerText()).includes('Kino')) throw new Error('Kino (20,00 €) gehört nicht in die Top 5')
+  await top.locator('.row').first().click()
+  await page.getByRole('dialog').waitFor()
+  must(await page.inputValue('#tx-amount'), '800,00', 'Bearbeiten-Sheet öffnet')
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: 'Abbrechen' }).first().click()
+  ok('Größte Ausgaben: 800,00 (27.10.) vor 800,00 (01.10. ↻), 270,00, 103,10, 50,00; Kino fehlt; Tippen öffnet das Bearbeiten-Sheet')
+
+  // Layout 375 px + Tab-Leiste
+  await page.setViewportSize({ width: 375, height: 667 })
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await noOverflow('Monat 375 px')
+  const tabbar = await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button').evaluateAll((els) =>
+    els.map((b) => { const r = b.getBoundingClientRect(), l = b.querySelector('span').getBoundingClientRect(); return { t: b.innerText, w: r.width, h: r.height, l: l.left - r.left, rr: r.right - l.right, ls: b.querySelector('span').scrollWidth > b.querySelector('span').clientWidth + 1 } }))
+  must(tabbar.map((t) => t.t).join(' '), 'Start Woche Monat Budgets Einstellungen', 'Reihenfolge der Tabs')
+  for (const t of tabbar) if (t.w < 44 || t.h < 44 || t.l < 0 || t.rr < 0 || t.ls) throw new Error('Tab-Leiste 375 px: ' + JSON.stringify(t))
+  await page.screenshot({ path: `${SHOTS}/21-tabbar-se.png` })
+  await page.screenshot({ path: `${SHOTS}/17b-monat-se.png`, fullPage: true })
+  await page.setViewportSize({ width: 390, height: 664 })
+  ok('375 px: kein horizontaler Überlauf auf „Monat“, 5 Tabs (Start, Woche, Monat, Budgets, Einstellungen) ≥ 44 px, Beschriftungen nicht abgeschnitten')
+
+  // Navigation: September, August, zurück
+  await page.getByRole('button', { name: 'Vorheriger Monat' }).click()
+  await expectText('September 2026'); await expectText('Aktueller Monat')
+  must(flat(await page.locator('.summary').innerText()), 'Einnahmen | 0,00 € | Ausgaben | 850,00 € | Saldo | −850,00 €', 'Summary September')
+  must(await css(page.locator('.summary .v').nth(2), 'color'), RED, 'Saldo < 0 rot')
+  must(flat(await page.locator('.summary-extra').innerText()), 'davon wiederkehrend | 800,00 €', 'Sparquote bei Einnahmen 0 ausgeblendet')
+  must((await rows()).join(' // '), 'Einnahmen | Vormonat 0,00 € | ±0,00 € // Ausgaben | Vormonat 800,00 € | ▲+50,00 € // Saldo | Vormonat −800,00 € | ▼−50,00 €', 'Vergleich September')
+  must(await css(cmp().locator('.row-amount').nth(0), 'color'), 'rgba(60, 60, 67, 0.6)', '±0 gedämpft')
+  must(await css(cmp().locator('.row-amount').nth(2), 'color'), RED, 'Saldo schlechter = schlecht')
+  await expectText('ggü. August 2026'); await expectNoText('Einnahmen nach Kategorie')
+  must((await catRows('Ausgaben nach Kategorie')).join(' // '), 'Fixkosten | 800,00 €94,1 % // Freizeit ▲ 50,00 € | 50,00 €5,9 %', 'Kategorien September (Fixkosten unverändert ohne Delta)')
+  must((await page.locator('.trend-label').allInnerTexts()).join(' '), 'Apr Mai Jun Jul Aug Sep', 'Trend folgt dem Monat')
+  await page.getByRole('button', { name: 'Vorheriger Monat' }).click()
+  await expectText('August 2026'); await expectText('Keine Daten für Juli 2026')
+  must(flat(await page.locator('.summary').innerText()), 'Einnahmen | 0,00 € | Ausgaben | 800,00 € | Saldo | −800,00 €', 'Summary August')
+  await page.getByRole('button', { name: 'Aktueller Monat' }).click()
+  await expectText('Oktober 2026'); await expectNoText('Aktueller Monat')
+  must(flat(await page.locator('.summary').innerText()), 'Einnahmen | 2.500,00 € | Ausgaben | 2.073,10 € | Saldo | 426,90 €', 'Zurück im Oktober')
+  ok('Navigation: September (Saldo −850,00 € rot, Sparquote weg, Vergleich ±0,00 / ▲+50,00 € / ▼−50,00 €), August („Keine Daten für Juli 2026“), „Aktueller Monat“ zurück auf Oktober')
+
+  // Leerer Monat: Hinweis, Trend nur solange Daten im 6-Monats-Fenster liegen
+  await page.getByRole('button', { name: 'Nächster Monat' }).click()
+  await expectText('Keine Buchungen im November 2026.')
+  await expectNoText('Vergleich zum Vormonat'); await expectNoText('Größte Ausgaben')
+  must(await cols.count(), 6, 'Trend im leeren November weiterhin sichtbar')
+  must((await page.locator('.trend-label').allInnerTexts()).join(' '), 'Jun Jul Aug Sep Okt Nov', 'Trend November')
+  for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'Nächster Monat' }).click()
+  await expectText('April 2027'); await expectText('Keine Buchungen im April 2027.')
+  must(await cols.count(), 0, 'Kein Trend ohne Daten im Fenster'); await expectNoText('Verlauf (6 Monate)')
+  await page.getByRole('button', { name: 'Aktueller Monat' }).click()
+  ok('Leerer Monat: „Keine Buchungen im November 2026.“ mit weiterhin sichtbarem Verlauf; April 2027 (keine Daten im Fenster) ohne Verlauf; Rückkehr auf Oktober')
+
+  // Dark Mode
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: `${SHOTS}/20-monat-dark.png`, fullPage: true })
+  must(await css(page.locator('.trend-bar').nth(10), 'backgroundColor'), 'rgb(48, 209, 88)', 'Dark: Einnahmen #30D158')
+  must(await css(page.locator('.trend-bar').nth(11), 'backgroundColor'), 'rgb(255, 69, 58)', 'Dark: Ausgaben #FF453A')
+  await page.emulateMedia({ colorScheme: 'light' })
+  ok('Dark Mode: Balkenfarben Einnahmen #30D158 / Ausgaben #FF453A')
+
+  // Persistenz nach Neuladen
+  await page.reload(); await tab('Monat').click()
+  must(flat(await page.locator('.summary').innerText()), 'Einnahmen | 2.500,00 € | Ausgaben | 2.073,10 € | Saldo | 426,90 €', 'Nach Reload')
+  ok('Monat nach Neuladen unverändert (Oktober 2026, 426,90 € Saldo)')
 }
 
 // ---------- Datumswechsel mit page.clock (frischer Kontext, fester Start 31.10.2026 10:00) ----------
@@ -471,7 +656,7 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
     throw new Error(`Rollover: Kontostand erwartet ${expected}, war ${await bal2()}`)
   }
   const stored = () => p2.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
-  const nav2 = (name) => p2.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name })
+  const nav2 = (name) => p2.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
   await nav2('Einstellungen').click()
   await p2.getByRole('button', { name: 'Wiederkehrende Buchung hinzufügen' }).click()
   await p2.fill('#rc-amount', '10')
@@ -485,7 +670,7 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
   ok('Rollover: Regel „Abo“ 10,00 € am 1. angelegt, am 31.10. noch nichts gebucht')
 
   await p2.clock.fastForward('24:00:00') // 01.11.2026 10:00, der Stunden-Timer feuert
-  await waitBal('-10,00 €')
+  await waitBal('−10,00 €')
   await p2.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
   await p2.clock.fastForward('01:00:00')
   await p2.waitForTimeout(300)
@@ -496,7 +681,7 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
 
   await p2.clock.setSystemTime(new Date('2026-12-01T09:00:00+01:00'))
   await p2.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
-  await waitBal('-20,00 €')
+  await waitBal('−20,00 €')
   await p2.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
   await p2.waitForTimeout(300)
   st = await stored()
@@ -504,7 +689,7 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
   ok('Rollover Monatswechsel (visibilitychange, 01.12.): Buchung für 01.12. genau einmal, Kontostand −20,00 €')
 
   await p2.reload()
-  await waitBal('-20,00 €')
+  await waitBal('−20,00 €')
   st = await stored()
   if (st.transactions.length !== 2) throw new Error('Rollover: Neuladen hat doppelt gebucht')
   ok('Neuladen nach dem Datumswechsel bucht nichts doppelt (2 Buchungen, −20,00 €)')
