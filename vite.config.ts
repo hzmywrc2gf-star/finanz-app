@@ -10,10 +10,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png', 'favicon.png'],
       manifest: {
-        name: 'Finanzen',
-        short_name: 'Finanzen',
+        name: 'Finanzklar',
+        short_name: 'Finanzklar',
         lang: 'de',
-        description: 'Persönliche Finanzen: Kontostand, Buchungen und Wochenübersicht',
+        description: 'Finanzklar – persönliche Finanzen: Kontostand, Buchungen und Wochenübersicht',
         display: 'standalone',
         start_url: './',
         scope: './',

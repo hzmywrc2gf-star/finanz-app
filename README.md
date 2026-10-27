@@ -1,4 +1,4 @@
-# Finanzen – persönliche Haushalts-App
+# Finanzklar – persönliche Haushalts-App
 
 Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, die Daten bleiben auf dem Gerät – kein Server, kein Login.
 

@@ -1,4 +1,4 @@
-# Projektkontext: finanz-app
+# Projektkontext: finanz-app („Finanzklar“)
 
 Persönliche Finanz-PWA (Deutsch, mobil zuerst, Apple-Stil). Nutzer ist kein Entwickler; Antworten auf Deutsch, kleine Schritte, alles vor „fertig“ verifizieren (Tests + `npm run e2e` + Screenshots).
 

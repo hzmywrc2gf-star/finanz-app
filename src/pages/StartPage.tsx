@@ -26,7 +26,7 @@ export function StartPage({
 
   return (
     <>
-      <h1 className="page-title">Finanzen</h1>
+      <h1 className="page-title">Finanzklar</h1>
       <div className="card card-pad">
         <div className="balance-label">Kontostand</div>
         <div
