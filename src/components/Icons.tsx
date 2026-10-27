@@ -1,0 +1,27 @@
+import type { ReactNode } from 'react'
+
+const base = {
+  width: 26,
+  height: 26,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+}
+
+const wrap = (children: ReactNode, size?: number) => (
+  <svg {...base} width={size ?? 26} height={size ?? 26}>
+    {children}
+  </svg>
+)
+
+export const HomeIcon = () => wrap(<><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v9.5h13V10" /><path d="M10 19.5v-5h4v5" /></>)
+export const WeekIcon = () => wrap(<><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>)
+export const SettingsIcon = () =>
+  wrap(<><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></>)
+export const PlusIcon = () => wrap(<path d="M12 5v14M5 12h14" strokeWidth={2.4} />, 28)
+export const ChevronLeft = () => wrap(<path d="m15 5-7 7 7 7" strokeWidth={2.2} />, 24)
+export const ChevronRight = () => wrap(<path d="m9 5 7 7-7 7" strokeWidth={2.2} />, 24)
