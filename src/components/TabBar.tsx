@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
-import { HomeIcon, SettingsIcon, WeekIcon } from './Icons'
+import { BudgetIcon, HomeIcon, SettingsIcon, WeekIcon } from './Icons'
 
-export type TabId = 'start' | 'week' | 'settings'
+export type TabId = 'start' | 'week' | 'budgets' | 'settings'
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   { id: 'start', label: 'Start', icon: <HomeIcon /> },
   { id: 'week', label: 'Woche', icon: <WeekIcon /> },
+  { id: 'budgets', label: 'Budgets', icon: <BudgetIcon /> },
   { id: 'settings', label: 'Einstellungen', icon: <SettingsIcon /> },
 ]
 

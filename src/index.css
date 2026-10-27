@@ -10,6 +10,12 @@
   --income-text: #248a3d;
   --expense: #ff3b30;
   --expense-text: #d70015;
+  --ok: #34c759;
+  --ok-text: #248a3d;
+  --warn: #ff9500;
+  --warn-text: #c93400;
+  --over: var(--expense);
+  --over-text: var(--expense-text);
   --tabbar-bg: rgba(249, 249, 249, 0.86);
   --backdrop: rgba(0, 0, 0, 0.4);
   --seg-bg: rgba(118, 118, 128, 0.12);
@@ -32,6 +38,10 @@
     --income-text: #30d158;
     --expense: #ff453a;
     --expense-text: #ff6961;
+    --ok: #30d158;
+    --ok-text: #30d158;
+    --warn: #ff9f0a;
+    --warn-text: #ffb340;
     --tabbar-bg: rgba(29, 29, 31, 0.86);
     --backdrop: rgba(0, 0, 0, 0.6);
     --seg-bg: rgba(118, 118, 128, 0.24);
@@ -639,4 +649,86 @@ button.row:active {
 }
 .wide-labels .field label {
   width: 120px;
+}
+
+/* Budgets */
+.budget-row {
+  align-items: stretch;
+  padding: 12px 16px;
+}
+.budget-body {
+  flex: 1;
+  min-width: 0;
+  display: block;
+}
+.budget-body .bar-head,
+.budget-total .bar-head {
+  align-items: baseline;
+}
+/* On narrow screens the amounts wrap below the name instead of truncating it. */
+.budget-body .bar-head {
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 0;
+}
+.budget-name {
+  flex: 1 0 auto;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+.budget-amounts {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 15px;
+}
+.budget-sub {
+  display: flex;
+  font-size: 13px;
+  margin-top: 2px;
+}
+.budget-sub.muted {
+  display: block;
+}
+.budget-track {
+  margin-top: 8px;
+}
+.budget-total {
+  margin-bottom: 0;
+}
+.budget-total .budget-name {
+  font-size: 17px;
+  font-weight: 600;
+}
+.budget-remaining {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.budget-total .budget-amounts {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 2px 0 0;
+  white-space: normal;
+}
+.budget-alert {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.budget-alert:active {
+  background: var(--card-2);
+}
+.budget-alert-row .row-title,
+.budget-alert-row .row-sub {
+  display: block;
+}
+.budget-alert-row + .budget-alert-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 0.5px;
+  background: var(--sep);
 }

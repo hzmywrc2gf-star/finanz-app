@@ -14,6 +14,7 @@ Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, di
 - **Kategorien**: Standard-Kategorien plus eigene (hinzufügen, umbenennen, löschen). Buchungen gelöschter Kategorien wandern nach „Sonstiges“.
 - **Wochenübersicht** (Mo–So): Einnahmen, Ausgaben, Saldo, Ausgaben pro Kategorie mit Prozent und Balken, alle Buchungen der Woche.
 - **Wiederkehrende Buchungen**: Miete, Abos, Gehalt (monatlich, vierteljährlich, jährlich) werden automatisch gebucht, mit optionalem Nachbuchen vergangener Termine und „Demnächst fällig“ auf der Startseite.
+- **Monatsbudgets**: pro Ausgaben-Kategorie ein Budget festlegen (Tab „Budgets“), Fortschrittsbalken grün/orange/rot, Gesamtbudget, Monatsnavigation und Hinweis auf der Startseite ab 80 % Verbrauch.
 - **Backup**: Export/Import aller Daten als JSON (Einstellungen → Datensicherung).
 - **Offline-fähig** und als App auf dem Home-Bildschirm installierbar.
 
@@ -50,8 +51,7 @@ React + Vite + TypeScript, `vite-plugin-pwa` (Manifest, Service Worker). Beträg
 
 ## Nächste Ausbaustufen
 
-1. **Budgets pro Kategorie** mit Fortschrittsbalken und Warnung bei Überschreitung.
-2. **Monatsauswertung** mit Vergleich zum Vormonat.
-3. **Sparziele** mit Zielbetrag und Datum.
-4. **Sync zwischen Handy und PC** – neues Repository-Backend (z. B. Supabase oder PocketBase), Login optional.
-5. Kleinere Ideen: Suche/Filter, CSV-Export, Haptik/Swipe-to-delete.
+1. **Monatsauswertung** mit Vergleich zum Vormonat.
+2. **Sparziele** mit Zielbetrag und Datum.
+3. **Sync zwischen Handy und PC** – neues Repository-Backend (z. B. Supabase oder PocketBase), Login optional.
+4. Kleinere Ideen: Suche/Filter, CSV-Export, Haptik/Swipe-to-delete.

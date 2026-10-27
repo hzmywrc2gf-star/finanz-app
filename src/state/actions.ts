@@ -115,6 +115,24 @@ export function renameCategory(data: AppData, id: string, name: string): AppData
   }
 }
 
+/** cents = null removes the budget. Only expense categories can have one. */
+export function setCategoryBudget(data: AppData, id: string, cents: number | null): AppData {
+  const cat = data.categories.find((c) => c.id === id)
+  if (!cat) throw new Error('Die Kategorie wurde nicht gefunden.')
+  if (cat.kind !== 'expense') throw new Error('Budgets gibt es nur für Ausgaben-Kategorien.')
+  if (cents !== null && (!Number.isSafeInteger(cents) || cents <= 0)) {
+    throw new Error('Das Budget muss größer als 0 sein.')
+  }
+  return {
+    ...data,
+    categories: data.categories.map((c) => {
+      if (c.id !== id) return c
+      const { monthlyBudgetCents: _old, ...rest } = c
+      return cents === null ? rest : { ...rest, monthlyBudgetCents: cents }
+    }),
+  }
+}
+
 /** Number of transactions that use a category. */
 export function countTransactionsInCategory(data: AppData, id: string): number {
   return data.transactions.filter((t) => t.categoryId === id).length

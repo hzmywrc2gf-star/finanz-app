@@ -18,10 +18,10 @@ const isKind = (v: unknown): v is Kind => v === 'income' || v === 'expense'
 
 const isInterval = (v: unknown): v is Interval => v === 'monthly' || v === 'quarterly' || v === 'yearly'
 
-/** Strictly validates a parsed object of the current version (2); also used for stored data. Throws German Error. */
+/** Strictly validates a parsed object of the current version (3); also used for stored data. Throws German Error. */
 export function validateAppData(raw: unknown): AppData {
   if (!isObj(raw)) return fail('Kein gültiges Objekt.')
-  if (raw.version !== 2) return fail('Unbekannte Version.')
+  if (raw.version !== 3) return fail('Unbekannte Version.')
   if (!isObj(raw.settings)) return fail('Einstellungen fehlen.')
   const start = raw.settings.startBalanceCents
   if (typeof start !== 'number' || !Number.isSafeInteger(start)) {
@@ -41,6 +41,13 @@ export function validateAppData(raw: unknown): AppData {
     if (typeof c.builtIn !== 'boolean') return fail(`Kategorie „${c.name}“ ist ungültig.`)
     if (catIds.has(c.id)) return fail('Doppelte Kategorie-ID.')
     const cat: Category = { id: c.id, name: c.name, kind: c.kind, builtIn: c.builtIn }
+    if (c.monthlyBudgetCents !== undefined) {
+      if (c.kind !== 'expense') return fail(`Kategorie „${c.name}“: Budgets gibt es nur für Ausgaben-Kategorien.`)
+      if (typeof c.monthlyBudgetCents !== 'number' || !Number.isSafeInteger(c.monthlyBudgetCents) || c.monthlyBudgetCents <= 0) {
+        return fail(`Das Budget der Kategorie „${c.name}“ ist keine positive ganze Zahl (Cent).`)
+      }
+      cat.monthlyBudgetCents = c.monthlyBudgetCents
+    }
     categories.push(cat)
     catIds.set(cat.id, cat)
   }
@@ -130,7 +137,7 @@ export function validateAppData(raw: unknown): AppData {
     recurring.push(rule)
   }
 
-  return { version: 2, settings: { startBalanceCents: start }, categories, transactions, recurring }
+  return { version: 3, settings: { startBalanceCents: start }, categories, transactions, recurring }
 }
 
 export function parseBackup(text: string): AppData {

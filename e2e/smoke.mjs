@@ -295,6 +295,168 @@ await mustBalance('200,00 €', 'Nach Löschen der Regeln')
 if ((await txCount()) !== 3) throw new Error('Gebuchte Einträge sind nach Löschen der Regel weg')
 ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleiben, „Demnächst fällig“ verschwindet')
 
+// ---------- Budgets (Stand: Oktober 2026, Daten aus den Schritten oben) ----------
+// Lebensmittel im Oktober: nur „Wocheneinkauf“ (45,99 → auf 50,00 bearbeitet) = 5.000 Cent.
+// Fixkosten im Oktober: manuelle Miete 800,00 (27.10.) + gebuchte Regel-Miete 01.10. 800,00 = 1.600,00 €.
+// Freizeit im Oktober: Kino 20,00 € (20.10.); das „Streaming“-Abo wurde nicht gebucht.
+{
+  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const octSum = async (catId) =>
+    (await stored()).transactions.filter((t) => t.kind === 'expense' && t.categoryId === catId && t.date.startsWith('2026-10')).reduce((s, t) => s + t.amountCents, 0)
+  const LEBENSMITTEL = 5000, FIXKOSTEN = 160000, FREIZEIT = 2000
+  if ((await octSum('expense-lebensmittel')) !== LEBENSMITTEL || (await octSum('expense-fixkosten')) !== FIXKOSTEN || (await octSum('expense-freizeit')) !== FREIZEIT)
+    throw new Error('Budget-Ausgangsdaten stimmen nicht mit dem erwarteten Oktober überein')
+  const row = (name) => page.getByRole('button', { name: new RegExp(`^${name}`) })
+  const rowText = async (name) => nbsp(await row(name).innerText()).trim().replace(/\s*\n\s*/g, ' | ')
+  const mustRow = async (name, expected, what) => {
+    const t = await rowText(name)
+    if (t !== expected) throw new Error(`${what}: erwartet "${expected}", war "${t}"`)
+  }
+  const css = (loc, prop) => loc.evaluate((el, p) => getComputedStyle(el)[p], prop)
+  async function setBudget(name, amount) {
+    await row(name).click()
+    await page.fill('#budget-amount', amount)
+    await page.getByRole('button', { name: 'Sichern' }).click()
+    await page.getByRole('dialog').waitFor({ state: 'detached' })
+  }
+
+  await tab('Budgets').click()
+  await expectText('Budgets'); await expectText('Oktober 2026')
+  await expectText('Tippe auf eine Kategorie, um ein Monatsbudget festzulegen.')
+  await expectNoText('Gesamt')
+  await mustRow('Lebensmittel', 'Lebensmittel | 50,00 € | Budget festlegen', 'Lebensmittel ohne Budget')
+  await mustRow('Sonstiges', 'Sonstiges | 30,00 € | Budget festlegen', 'Sonstiges ohne Budget')
+  ok('Budgets-Tab: Oktober 2026, Hinweis ohne Budgets, Lebensmittel 50,00 € / Sonstiges 30,00 € mit „Budget festlegen“')
+
+  // Formular: Validierung, dann 400,00
+  await row('Lebensmittel').click()
+  await page.getByRole('dialog', { name: 'Budget · Lebensmittel' }).waitFor()
+  await expectNoText('Budget entfernen')
+  await page.fill('#budget-amount', 'abc')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await expectText('Bitte einen gültigen Betrag eingeben, z. B. 400,00.')
+  await page.fill('#budget-amount', '0')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await expectText('Das Budget muss größer als 0 sein.')
+  await page.fill('#budget-amount', '400,00')
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: `${SHOTS}/14-budget-formular.png` })
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await page.getByRole('dialog').waitFor({ state: 'detached' })
+  await mustRow('Lebensmittel', 'Lebensmittel | 50,00 € von 400,00 € | noch 350,00 € | 12,5 %', 'Lebensmittel 400,00')
+  await expectText('Gesamt'); await expectText('50,00 € von 400,00 €')
+  const bar = page.getByRole('progressbar', { name: 'Budget Lebensmittel' })
+  if (nbsp(await bar.getAttribute('aria-valuetext')) !== '12,5 % verbraucht' || (await bar.getAttribute('aria-valuenow')) !== '13') throw new Error('Progressbar-Werte falsch')
+  if (!(await page.getByRole('progressbar', { name: 'Gesamtbudget' }).count())) throw new Error('Gesamt-Fortschrittsbalken fehlt')
+  ok('Budget Lebensmittel 400,00 €: Validierungsfehler angezeigt; „50,00 € von 400,00 €“, „noch 350,00 €“, 12,5 %, Gesamt-Karte, Progressbar mit aria-Werten')
+
+  // ok → warn (genau 80 %): 50,00 + 270,00 = 320,00
+  await tab('Start').click()
+  await expectNoText('verbraucht')
+  await addTx({ amount: '270,00', category: 'Lebensmittel', note: 'Großeinkauf' })
+  await expectText('BUDGETS'); await expectText('Lebensmittel'); await expectText('80,0 % verbraucht · noch 80,00 €') // Start: exakt 80 % → Hinweis
+  await tab('Budgets').click()
+  await mustRow('Lebensmittel', 'Lebensmittel | 320,00 € von 400,00 € | noch 80,00 € | 80,0 %', 'Lebensmittel 80 %')
+  let remaining = row('Lebensmittel').getByText('noch 80,00 €')
+  if ((await css(remaining, 'color')) !== 'rgb(201, 52, 0)') throw new Error('Warn-Textfarbe falsch: ' + (await css(remaining, 'color')))
+  const fill = row('Lebensmittel').locator('.bar-fill')
+  if ((await css(fill, 'backgroundColor')) !== 'rgb(255, 149, 0)' || (await fill.evaluate((el) => el.style.width)) !== '80%') throw new Error('Warn-Balken falsch')
+  ok('Genau 80 % (320,00 € von 400,00 €): Status warn, „noch 80,00 €“ in #C93400, Balken #FF9500 mit 80 % Breite')
+
+
+  // Start-Hinweis (warn), Tippen öffnet den Budgets-Tab
+  await tab('Start').click()
+  const alertCard = page.getByRole('button', { name: /80,0 % verbraucht/ })
+  if ((await css(alertCard.getByText('80,0 % verbraucht · noch 80,00 €'), 'color')) !== 'rgb(201, 52, 0)') throw new Error('Start-Hinweis: Warnfarbe falsch')
+  const startTxt = await bodyText()
+  if (startTxt.indexOf('BUDGETS') < startTxt.indexOf('Kontostand') || startTxt.indexOf('BUDGETS') > startTxt.indexOf('LETZTE BUCHUNGEN')) throw new Error('Budget-Karte steht an der falschen Stelle')
+  await alertCard.click()
+  await expectText('Oktober 2026')
+  if ((await tab('Budgets').getAttribute('aria-current')) !== 'page') throw new Error('Tippen auf den Hinweis wechselt nicht zu Budgets')
+  ok('Start-Hinweis „Lebensmittel · 80,0 % verbraucht · noch 80,00 €“ (orange) zwischen Kontostand und Buchungen; Tippen öffnet den Budgets-Tab')
+
+  // warn → over: +103,10 = 423,10 (105,8 %, 23,10 € drüber)
+  await tab('Start').click()
+  await addTx({ amount: '103,10', category: 'Lebensmittel', note: 'Nachkauf' })
+  await tab('Budgets').click()
+  await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 23,10 € drüber | 105,8 %', 'Lebensmittel drüber')
+  remaining = row('Lebensmittel').getByText('23,10 € drüber')
+  if ((await css(remaining, 'color')) !== 'rgb(215, 0, 21)') throw new Error('Over-Textfarbe falsch: ' + (await css(remaining, 'color')))
+  if ((await css(fill, 'backgroundColor')) !== 'rgb(255, 59, 48)' || (await fill.evaluate((el) => el.style.width)) !== '100%') throw new Error('Over-Balken falsch')
+  await tab('Start').click()
+  await expectText('105,8 % · 23,10 € drüber')
+  ok('Über Budget (423,10 € von 400,00 €): „23,10 € drüber“ in #D70015, Balken rot und auf 100 % gekappt, Start-Hinweis „105,8 % · 23,10 € drüber“')
+
+  // Monatsnavigation
+  await tab('Budgets').click()
+  await page.getByRole('button', { name: 'Nächster Monat' }).click()
+  await expectText('November 2026'); await expectText('Aktueller Monat')
+  await mustRow('Lebensmittel', 'Lebensmittel | 0,00 € von 400,00 € | noch 400,00 € | 0,0 %', 'November')
+  const novCount = (await bodyText()).split('0,00 € von 400,00 €').length - 1
+  if (novCount !== 2) throw new Error('November: Gesamt + Zeile erwartet, gefunden ' + novCount)
+  await page.getByRole('button', { name: 'Vorheriger Monat' }).click()
+  await page.getByRole('button', { name: 'Vorheriger Monat' }).click()
+  await expectText('September 2026')
+  await mustRow('Lebensmittel', 'Lebensmittel | 0,00 € von 400,00 € | noch 400,00 € | 0,0 %', 'September')
+  await page.getByRole('button', { name: 'Aktueller Monat' }).click()
+  await expectText('Oktober 2026')
+  await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 23,10 € drüber | 105,8 %', 'Zurück im Oktober')
+  ok('Monatsnavigation: November 2026 „0,00 € von 400,00 €“ / „noch 400,00 €“, September ebenso, „Aktueller Monat“ springt zurück auf Oktober (423,10 €)')
+
+  // Weitere Budgets: ok / warn / over nebeneinander
+  await setBudget('Fixkosten', '1.700,00')
+  await setBudget('Freizeit', '100')
+  await mustRow('Fixkosten', 'Fixkosten | 1.600,00 € von 1.700,00 € | noch 100,00 € | 94,1 %', 'Fixkosten')
+  await mustRow('Freizeit', 'Freizeit | 20,00 € von 100,00 € | noch 80,00 € | 20,0 %', 'Freizeit')
+  // Gesamt: 423,10 + 1.600,00 + 20,00 = 2.043,10 von 2.200,00 → noch 156,90 €, 92,9 %
+  const totalCard = page.locator('.budget-total')
+  const tt = nbsp(await totalCard.innerText()).trim().replace(/\s*\n\s*/g, ' | ')
+  if (tt !== 'Gesamt | noch 156,90 € | 2.043,10 € von 2.200,00 €') throw new Error('Gesamt-Karte: ' + tt)
+  if (nbsp(await totalCard.getByRole('progressbar').getAttribute('aria-valuetext')) !== '92,9 % verbraucht') throw new Error('Gesamt-Progressbar')
+  if ((await css(row('Freizeit').locator('.bar-fill'), 'backgroundColor')) !== 'rgb(52, 199, 89)') throw new Error('Ok-Balken falsch')
+  if ((await css(row('Freizeit').getByText('noch 80,00 €'), 'color')) !== 'rgb(36, 138, 61)') throw new Error('Ok-Textfarbe falsch')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: `${SHOTS}/12-budgets.png`, fullPage: true })
+  await tab('Start').click()
+  await expectText('94,1 % verbraucht · noch 100,00 €')
+  const alerts = nbsp(await page.getByRole('button', { name: /drüber/ }).innerText()).trim().replace(/\s*\n\s*/g, ' | ')
+  if (alerts !== 'Lebensmittel | 105,8 % · 23,10 € drüber | Fixkosten | 94,1 % verbraucht · noch 100,00 €') throw new Error('Start-Hinweise/Sortierung: ' + alerts)
+  await page.screenshot({ path: `${SHOTS}/13-start-budget-hinweis.png`, fullPage: true })
+  ok('3 Budgets: Fixkosten 1.600,00 € von 1.700,00 € (94,1 %, warn), Freizeit 20,00 € von 100,00 € (ok, grün), Gesamt 2.043,10 € von 2.200,00 € / noch 156,90 €; Start-Hinweise nach Prozent sortiert (Freizeit ok → kein Hinweis)')
+
+  // iPhone SE (375 px) Layout-Check
+  await page.setViewportSize({ width: 375, height: 667 })
+  await page.screenshot({ path: `${SHOTS}/13b-start-budget-hinweis-se.png`, fullPage: true })
+  await tab('Budgets').click()
+  await page.screenshot({ path: `${SHOTS}/12b-budgets-se.png`, fullPage: true })
+  if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Budgets: horizontaler Überlauf bei 375 px')
+  await page.setViewportSize({ width: 390, height: 664 })
+
+  // Persistenz
+  await page.reload()
+  await tab('Budgets').click()
+  await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 23,10 € drüber | 105,8 %', 'Nach Reload')
+  const st = await stored()
+  if (st.version !== 3 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
+    throw new Error('Gespeicherte Daten: Version/Budget falsch')
+  ok('Budget bleibt nach Neuladen erhalten (gespeichert als Version 3, monthlyBudgetCents 40000)')
+
+  // Entfernen
+  for (const name of ['Fixkosten', 'Freizeit', 'Lebensmittel']) {
+    await row(name).click()
+    await page.getByRole('button', { name: 'Budget entfernen' }).click()
+    await page.getByRole('dialog').waitFor({ state: 'detached' })
+  }
+  await mustRow('Fixkosten', 'Fixkosten | 1.600,00 € | Budget festlegen', 'Fixkosten ohne Budget')
+  await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € | Budget festlegen', 'Lebensmittel ohne Budget')
+  await expectNoText('Gesamt'); await expectText('Tippe auf eine Kategorie, um ein Monatsbudget festzulegen.')
+  await tab('Start').click()
+  await expectNoText('BUDGETS')
+  await mustBalance('-173,10 €', 'Kontostand 200,00 − 270,00 − 103,10')
+  if ((await stored()).categories.some((c) => 'monthlyBudgetCents' in c)) throw new Error('Budget nicht entfernt')
+  ok('Budgets entfernt: Zeilen zeigen wieder „Budget festlegen“ (423,10 € / 1.600,00 €), Hinweis-Text zurück, Start-Karte weg, keine monthlyBudgetCents mehr gespeichert')
+}
+
 // ---------- Datumswechsel mit page.clock (frischer Kontext, fester Start 31.10.2026 10:00) ----------
 {
   const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })

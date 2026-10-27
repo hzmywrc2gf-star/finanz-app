@@ -5,6 +5,8 @@ export interface Category {
   name: string
   kind: Kind
   builtIn: boolean
+  /** Monthly budget in positive integer cents; only on expense categories, absent = no budget. */
+  monthlyBudgetCents?: number
 }
 
 export interface Transaction {
@@ -46,7 +48,7 @@ export interface Settings {
 }
 
 export interface AppData {
-  version: 2
+  version: 3
   settings: Settings
   categories: Category[]
   transactions: Transaction[]

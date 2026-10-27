@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addWeeks, isoWeekNumber, isValidISODate, startOfWeek, todayISO, weekDays, weekLabel } from './dates'
+import { addMonths, monthEnd, monthLabel, monthStart, addWeeks, isoWeekNumber, isValidISODate, startOfWeek, todayISO, weekDays, weekLabel } from './dates'
 
 describe('startOfWeek', () => {
   it('handles Sunday, Monday, Wednesday', () => {
@@ -44,5 +44,26 @@ describe('local dates', () => {
     expect(isValidISODate('2026-02-29')).toBe(false)
     expect(isValidISODate('2028-02-29')).toBe(true)
     expect(isValidISODate('2026-1-1')).toBe(false)
+  })
+})
+
+describe('months', () => {
+  it('monthStart / monthEnd', () => {
+    expect(monthStart('2026-10-27')).toBe('2026-10-01')
+    expect(monthEnd('2026-10-27')).toBe('2026-10-31')
+    expect(monthEnd('2026-02-10')).toBe('2026-02-28')
+    expect(monthEnd('2028-02-10')).toBe('2028-02-29')
+    expect(monthEnd('2026-12-01')).toBe('2026-12-31')
+  })
+  it('addMonths crosses years and returns month starts', () => {
+    expect(addMonths('2026-10-27', 1)).toBe('2026-11-01')
+    expect(addMonths('2026-12-31', 1)).toBe('2027-01-01')
+    expect(addMonths('2027-01-01', -1)).toBe('2026-12-01')
+    expect(addMonths('2026-01-31', 1)).toBe('2026-02-01')
+    expect(addMonths('2026-10-01', 14)).toBe('2927-12-01'.replace('2927', '2027'))
+  })
+  it('monthLabel', () => {
+    expect(monthLabel('2026-10-01')).toBe('Oktober 2026')
+    expect(monthLabel('2027-03-15')).toBe('März 2027')
   })
 })
