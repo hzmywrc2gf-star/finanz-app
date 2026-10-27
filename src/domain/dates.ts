@@ -89,3 +89,31 @@ export function weekdayName(iso: string): string {
 export function formatShortDay(iso: string): string {
   return `${WEEKDAYS_SHORT[parseISODate(iso).getDay()]}, ${formatDayMonth(iso)}`
 }
+
+/** First day of the month containing the date: '2026-10-27' -> '2026-10-01'. */
+export function monthStart(iso: string): string {
+  return `${iso.slice(0, 7)}-01`
+}
+
+/** Moves a month start by whole months (any date works, the result is a month start). */
+export function addMonths(iso: string, months: number): string {
+  const d = parseISODate(monthStart(iso))
+  d.setMonth(d.getMonth() + months)
+  return toISODate(d)
+}
+
+/** Last day of the month containing the date: '2026-02-10' -> '2026-02-28'. */
+export function monthEnd(iso: string): string {
+  return addDays(addMonths(iso, 1), -1)
+}
+
+const MONTHS = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+]
+
+/** "Oktober 2026" */
+export function monthLabel(iso: string): string {
+  const [y, m] = iso.split('-').map(Number)
+  return `${MONTHS[m - 1]} ${y}`
+}

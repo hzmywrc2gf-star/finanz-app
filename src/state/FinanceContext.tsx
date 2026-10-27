@@ -19,6 +19,8 @@ export interface FinanceApi {
   addCategory(kind: Kind, name: string): void
   renameCategory(id: string, name: string): void
   deleteCategory(id: string): void
+  /** cents = null removes the monthly budget. */
+  setCategoryBudget(id: string, cents: number | null): void
   /** catchUp: also book the occurrences since startDate that lie in the past. */
   addRecurring(input: RecurringInput, catchUp: boolean): void
   updateRecurring(id: string, input: RecurringInput): void
@@ -112,6 +114,7 @@ export function FinanceProvider({
       addCategory: (k, n) => apply((d) => A.addCategory(d, k, n)),
       renameCategory: (id, n) => apply((d) => A.renameCategory(d, id, n)),
       deleteCategory: (id) => apply((d) => A.deleteCategory(d, id)),
+      setCategoryBudget: (id, c) => apply((d) => A.setCategoryBudget(d, id, c)),
       addRecurring: (i, catchUp) => apply((d) => A.addRecurring(d, i, { today: todayISO(), catchUp })),
       updateRecurring: (id, i) => apply((d) => A.updateRecurring(d, id, i)),
       deleteRecurring: (id) => apply((d) => A.deleteRecurring(d, id)),

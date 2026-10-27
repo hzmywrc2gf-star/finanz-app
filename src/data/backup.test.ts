@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultData } from '../domain/defaults'
-import { addRecurring, addTransaction } from '../state/actions'
+import { addRecurring, addTransaction, setCategoryBudget } from '../state/actions'
 import { exportJSON, parseBackup } from './backup'
 
 const sample = () =>
@@ -31,7 +31,7 @@ describe('backup', () => {
   it('rejects invalid input with German errors', () => {
     expect(() => parseBackup('nope')).toThrow(/JSON/)
     expect(() => parseBackup('[]')).toThrow(/Ungültige Sicherungsdatei/)
-    expect(() => parseBackup(mutate((d) => (d.version = 3)))).toThrow(/Version/)
+    expect(() => parseBackup(mutate((d) => (d.version = 4)))).toThrow(/Version/)
     expect(() => parseBackup(mutate((d) => (d.transactions = {})))).toThrow(/Buchungen/)
     expect(() => parseBackup(mutate((d) => (d.categories = null)))).toThrow(/Kategorien/)
     expect(() => parseBackup(mutate((d) => (d.settings.startBalanceCents = 1.5)))).toThrow()
@@ -44,13 +44,13 @@ describe('backup', () => {
     expect(() => parseBackup(mutate((d) => (d.transactions[0].kind = 'x')))).toThrow(/Art/)
     expect(() => parseBackup(mutate((d) => (d.categories = d.categories.filter((c: any) => c.id !== 'expense-sonstiges'))))).toThrow(/Sonstiges/)
   })
-  it('exports version 2', () => {
-    expect(JSON.parse(exportJSON(sample())).version).toBe(2)
+  it('exports version 3', () => {
+    expect(JSON.parse(exportJSON(sample())).version).toBe(3)
   })
   it('migrates a v1 backup to v2 with empty rules', () => {
     const v1 = { version: 1, settings: { startBalanceCents: 5 }, categories: createDefaultData().categories, transactions: [] }
     const out = parseBackup(JSON.stringify(v1))
-    expect(out).toEqual({ ...v1, version: 2, recurring: [] })
+    expect(out).toEqual({ ...v1, version: 3, recurring: [] })
   })
   it('validates recurring rules strictly', () => {
     const bad = (fn: (r: any) => void, re: RegExp) =>
@@ -76,5 +76,20 @@ describe('backup', () => {
     const d = JSON.parse(mutate((x) => (x.transactions[0].recurringId = 'gone')))
     expect(parseBackup(JSON.stringify(d)).transactions[0].recurringId).toBe('gone')
     expect(() => parseBackup(mutate((x) => (x.transactions[0].recurringId = 5)))).toThrow(/Regel/)
+  })
+  it('migrates a v2 backup to v3 unchanged apart from the version', () => {
+    const v2 = { ...JSON.parse(exportJSON(sample())), version: 2 }
+    const out = parseBackup(JSON.stringify(v2))
+    expect(out).toEqual({ ...v2, version: 3 })
+  })
+  it('roundtrips and validates category budgets', () => {
+    const withBudget = setCategoryBudget(sample(), 'expense-lebensmittel', 40000)
+    const back = parseBackup(exportJSON(withBudget))
+    expect(back).toEqual(withBudget)
+    expect(back.categories.find((c) => c.id === 'expense-lebensmittel')?.monthlyBudgetCents).toBe(40000)
+    const bad = (value: unknown, id = 'expense-lebensmittel') =>
+      mutate((d) => (d.categories.find((c: any) => c.id === id).monthlyBudgetCents = value))
+    for (const v of [0, -5, 12.5, '400', null]) expect(() => parseBackup(bad(v))).toThrow(/Budget/)
+    expect(() => parseBackup(bad(1000, 'income-gehalt'))).toThrow(/nur für Ausgaben/)
   })
 })

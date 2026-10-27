@@ -6,6 +6,7 @@ import type { TabId } from './components/TabBar'
 import { TransactionForm } from './components/TransactionForm'
 import { StartPage } from './pages/StartPage'
 import { WeekPage } from './pages/WeekPage'
+import { BudgetPage } from './pages/BudgetPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 type FormState = { transaction?: Transaction; defaultDate?: string } | null
@@ -19,7 +20,11 @@ export default function App() {
     <FinanceProvider>
       <main className="app">
         {tab === 'start' && (
-          <StartPage onAdd={() => setForm({})} onEdit={(transaction) => setForm({ transaction })} />
+          <StartPage
+            onAdd={() => setForm({})}
+            onEdit={(transaction) => setForm({ transaction })}
+            onOpenBudgets={() => setTab('budgets')}
+          />
         )}
         {tab === 'week' && (
           <WeekPage
@@ -27,6 +32,7 @@ export default function App() {
             onEdit={(transaction) => setForm({ transaction })}
           />
         )}
+        {tab === 'budgets' && <BudgetPage />}
         {tab === 'settings' && <SettingsPage />}
       </main>
       <TabBar active={tab} onChange={setTab} />

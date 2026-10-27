@@ -2,7 +2,8 @@ import type { Transaction } from '../domain/types'
 import { currentBalance } from '../domain/calc'
 import { compareTransactionsDesc } from '../domain/calc'
 import { todayISO, formatShortDay } from '../domain/dates'
-import { formatCents, formatSigned } from '../domain/money'
+import { formatCents, formatPercent, formatSigned } from '../domain/money'
+import { budgetAlerts } from '../domain/budget'
 import { recurringTitle, upcoming } from '../domain/recurring'
 import { useFinance } from '../state/FinanceContext'
 import { TransactionList } from '../components/TransactionList'
@@ -11,12 +12,15 @@ import { Fab } from '../components/Fab'
 export function StartPage({
   onAdd,
   onEdit,
+  onOpenBudgets,
 }: {
   onAdd: () => void
   onEdit: (t: Transaction) => void
+  onOpenBudgets: () => void
 }) {
   const { data } = useFinance()
   const balance = currentBalance(data)
+  const alerts = budgetAlerts(data, todayISO())
   const due = upcoming(data, todayISO())
   const recent = [...data.transactions].sort(compareTransactionsDesc).slice(0, 8)
 
@@ -32,6 +36,27 @@ export function StartPage({
           {formatCents(balance)}
         </div>
       </div>
+
+      {alerts.length > 0 && (
+        <>
+          <div className="section-title">Budgets</div>
+          <button className="list card budget-alert" onClick={onOpenBudgets}>
+            {alerts.map((a) => (
+              <span key={a.categoryId} className="row-static budget-alert-row">
+                <span className="dot" style={{ background: `var(--${a.status})` }} />
+                <span className="row-main">
+                  <span className="row-title">{a.name}</span>
+                  <span className="row-sub" style={{ color: `var(--${a.status}-text)` }}>
+                    {a.status === 'over'
+                      ? `${formatPercent(a.percent)} · ${formatCents(-a.remainingCents)} drüber`
+                      : `${formatPercent(a.percent)} verbraucht · noch ${formatCents(a.remainingCents)}`}
+                  </span>
+                </span>
+              </span>
+            ))}
+          </button>
+        </>
+      )}
 
       {due.length > 0 && (
         <>
