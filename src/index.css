@@ -1643,6 +1643,10 @@ button.row:is(:active, [data-pressed]) {
 .lock-panel form .btn {
   margin-top: 12px;
 }
+/* password revealed under the Face ID button: keep it a separate group */
+.lock-face ~ form {
+  margin-top: 14px;
+}
 .lock-face {
   display: flex;
   align-items: center;
