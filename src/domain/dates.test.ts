@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, addMonths, isValidISODate, monthEnd, monthLabel, monthShort, monthStart, todayISO } from './dates'
+import { addDays, addMonths, addYears, isValidISODate, monthEnd, monthLabel, monthShort, monthStart, todayISO } from './dates'
 
 describe('local dates', () => {
   it('todayISO uses local fields', () => {
@@ -28,6 +28,11 @@ describe('months', () => {
     expect(monthEnd('2026-02-10')).toBe('2026-02-28')
     expect(monthEnd('2028-02-10')).toBe('2028-02-29')
     expect(monthEnd('2026-12-01')).toBe('2026-12-31')
+  })
+  it('addYears keeps the day and maps 29 February to 28 February', () => {
+    expect(addYears('2026-10-27', 1)).toBe('2027-10-27')
+    expect(addYears('2024-02-29', 1)).toBe('2025-02-28')
+    expect(addYears('2024-02-29', 4)).toBe('2028-02-29')
   })
   it('addMonths crosses years and returns month starts', () => {
     expect(addMonths('2026-10-27', 1)).toBe('2026-11-01')

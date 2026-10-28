@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Interval, Kind, RecurringRule } from '../domain/types'
-import { addDays, formatDateDE, todayISO } from '../domain/dates'
+import { addDays, addYears, formatDateDE, todayISO } from '../domain/dates'
 import { centsToInputString, parseEuroInput } from '../domain/money'
 import { INTERVAL_LABELS, dayOfMonthOf, nextOccurrence, occurrencesBetween } from '../domain/recurring'
 import type { RecurringInput } from '../state/actions'
@@ -21,6 +21,8 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
   const [start, setStart] = useState(rule?.startDate ?? todayISO())
   // until the day is edited by hand it follows the start date
   const [day, setDay] = useState<string | null>(rule ? String(rule.dayOfMonth) : null)
+  // off = the contract runs indefinitely (saved without endDate)
+  const [hasEnd, setHasEnd] = useState(Boolean(rule?.endDate))
   const [end, setEnd] = useState(rule?.endDate ?? '')
   const [autoBook, setAutoBook] = useState(rule?.autoBook ?? true)
   const [error, setError] = useState<string | null>(null)
@@ -59,7 +61,11 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
       setError('Bitte ein Startdatum wählen.')
       return
     }
-    if (end && end < start) {
+    if (hasEnd && !end) {
+      setError('Bitte ein Enddatum wählen.')
+      return
+    }
+    if (hasEnd && end < start) {
       setError('Das Enddatum darf nicht vor dem Startdatum liegen.')
       return
     }
@@ -71,7 +77,7 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
       interval,
       dayOfMonth: dayNum,
       startDate: start,
-      endDate: end || undefined,
+      endDate: hasEnd ? end : undefined,
       autoBook,
     }
     try {
@@ -178,17 +184,31 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
             <label htmlFor="rc-start">Startdatum</label>
             <input id="rc-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
           </div>
-          <div className="field">
-            <label htmlFor="rc-end">Enddatum</label>
-            <input id="rc-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-            {end && (
-              <button type="button" className="clear-btn" onClick={() => setEnd('')}>
-                Entfernen
-              </button>
-            )}
-          </div>
         </div>
         <div className="footnote">Am 29.–31. wird in kürzeren Monaten am Monatsletzten gebucht.</div>
+        <div className="card wide-labels" style={{ marginTop: 16 }}>
+          <div className="field switch-row">
+            <label htmlFor="rc-end-on">Enddatum</label>
+            <input
+              id="rc-end-on"
+              className="switch"
+              type="checkbox"
+              role="switch"
+              checked={hasEnd}
+              onChange={(e) => {
+                setHasEnd(e.target.checked)
+                if (e.target.checked && !end) setEnd(addYears(start || todayISO(), 1))
+              }}
+            />
+          </div>
+          {hasEnd && (
+            <div className="field">
+              <label htmlFor="rc-end">Endet am</label>
+              <input id="rc-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+            </div>
+          )}
+        </div>
+        {!hasEnd && <div className="footnote">Läuft unbegrenzt.</div>}
 
         <div className="card" style={{ marginTop: 16 }}>
           <div className="field switch-row">

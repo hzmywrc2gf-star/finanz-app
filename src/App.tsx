@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Transaction } from './domain/types'
+import { USE_HISTORY } from './lib/platform'
 import { LockProvider } from './state/LockProvider'
 import { StartStack } from './components/StartStack'
 import type { StackAnim } from './components/StartStack'
@@ -43,12 +44,14 @@ function AppContent() {
   const pendingAnim = useRef<StackAnim>('instant')
 
   // Each opened sub-page is one history entry, so the system back button (Android, desktop) returns to the hub.
+  // Not on iPhone/iPad: iOS would run its own back-swipe animation on top of ours (double animation), so
+  // there the view is the only state and our own gesture and back button are the only ways back.
   const openSub = useCallback((view: StartView) => {
-    history.pushState({ sub: view }, '')
+    if (USE_HISTORY) history.pushState({ sub: view }, '')
     setNav({ view, anim: 'animate' })
   }, [])
   const goBack = useCallback((anim: StackAnim) => {
-    if (subOf(history.state) !== 'hub') {
+    if (USE_HISTORY && subOf(history.state) !== 'hub') {
       pendingAnim.current = anim
       history.back() // popstate below updates the view
     } else {
@@ -58,7 +61,7 @@ function AppContent() {
   const changeTab = useCallback((next: TabId) => {
     setTab(next)
     setNav({ view: 'hub', anim: 'instant' })
-    if (subOf(history.state) !== 'hub') {
+    if (USE_HISTORY && subOf(history.state) !== 'hub') {
       pendingAnim.current = 'instant'
       history.back() // drop the sub-page entry so no stray back step remains
     }

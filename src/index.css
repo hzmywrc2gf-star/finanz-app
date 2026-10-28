@@ -912,13 +912,6 @@ button.row:is(:active, [data-pressed]) {
   color: var(--accent);
   font-size: 17px;
 }
-.field .clear-btn {
-  flex: none;
-  color: var(--accent);
-  font-size: 15px;
-  min-height: 44px;
-  padding: 0 4px;
-}
 .field input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;

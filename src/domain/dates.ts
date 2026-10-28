@@ -58,6 +58,13 @@ export function addMonths(iso: string, months: number): string {
   return toISODate(d)
 }
 
+/** Same day `years` later; 29 February falls back to 28 February: '2024-02-29' -> '2025-02-28'. */
+export function addYears(iso: string, years: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const last = parseISODate(monthEnd(`${String(y + years).padStart(4, '0')}-${String(m).padStart(2, '0')}-01`)).getDate()
+  return toISODate(new Date(y + years, m - 1, Math.min(d, last)))
+}
+
 /** Last day of the month containing the date: '2026-02-10' -> '2026-02-28'. */
 export function monthEnd(iso: string): string {
   return addDays(addMonths(iso, 1), -1)
