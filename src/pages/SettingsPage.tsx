@@ -1,10 +1,15 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { todayISO } from '../domain/dates'
+import { downloadTextFile } from '../lib/download'
+import { haptic } from '../lib/haptics'
 import { centsToInputString, parseEuroInput } from '../domain/money'
 import { exportJSON, parseBackup } from '../data/backup'
+import { isEncryptedBackup } from '../data/backupCrypto'
 import type { AppData } from '../domain/types'
 import { useFinance } from '../state/FinanceContext'
+import { BackupExportSheet } from '../components/BackupExportSheet'
+import { BackupImportSheet } from '../components/BackupImportSheet'
 import { CategoryManager } from '../components/CategoryManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SegmentedControl } from '../components/SegmentedControl'
@@ -24,6 +29,9 @@ export function SettingsPage() {
   const [balanceMsg, setBalanceMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [pending, setPending] = useState<AppData | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [confirmPlain, setConfirmPlain] = useState(false)
+  const [encryptedFile, setEncryptedFile] = useState<string | null>(null)
   const [theme, setTheme] = useThemePref()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -42,17 +50,12 @@ export function SettingsPage() {
     setBalanceMsg({ ok: true, text: 'Startguthaben gespeichert.' })
   }
 
-  function exportBackup() {
-    const blob = new Blob([exportJSON(data)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `finanz-backup-${todayISO()}.json`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-    setBackupMsg({ ok: true, text: 'Sicherung wurde exportiert.' })
+  function exportPlain() {
+    downloadTextFile(`finanz-backup-${todayISO()}.json`, exportJSON(data))
+    haptic()
+    setConfirmPlain(false)
+    setExporting(false)
+    setBackupMsg({ ok: true, text: 'Sicherung wurde exportiert (ohne Passwort).' })
   }
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
@@ -60,12 +63,29 @@ export function SettingsPage() {
     e.target.value = ''
     if (!file) return
     try {
-      setPending(parseBackup(await file.text()))
+      const text = await file.text()
+      if (isEncryptedBackup(text)) {
+        setEncryptedFile(text) // the password sheet decrypts, then the usual validation and confirmation follow
+        setBackupMsg(null)
+        return
+      }
+      setPending(parseBackup(text))
       setBackupMsg(null)
     } catch (err) {
       setPending(null)
       setBackupMsg({ ok: false, text: err instanceof Error ? err.message : 'Import fehlgeschlagen.' })
     }
+  }
+
+  function onDecrypted(json: string) {
+    try {
+      setPending(parseBackup(json))
+      setBackupMsg(null)
+    } catch (err) {
+      setPending(null)
+      setBackupMsg({ ok: false, text: err instanceof Error ? err.message : 'Import fehlgeschlagen.' })
+    }
+    setEncryptedFile(null)
   }
 
   function confirmImport() {
@@ -151,7 +171,7 @@ export function SettingsPage() {
 
       <div className="section-title">Datensicherung</div>
       <div className="card btn-row">
-        <button className="btn secondary" style={{ background: 'var(--card-2)' }} onClick={exportBackup}>
+        <button className="btn secondary" style={{ background: 'var(--card-2)' }} onClick={() => setExporting(true)}>
           Exportieren
         </button>
         <button className="btn secondary" style={{ background: 'var(--card-2)' }} onClick={() => fileRef.current?.click()}>
@@ -164,8 +184,29 @@ export function SettingsPage() {
           {backupMsg.text}
         </div>
       )}
-      <div className="footnote">Alle Daten liegen nur auf diesem Gerät. Exportiere sie regelmäßig als Sicherung.</div>
+      <div className="footnote">Alle Daten liegen nur auf diesem Gerät. Exportiere sie regelmäßig als Sicherung, am besten mit Passwort.</div>
 
+      {exporting && (
+        <BackupExportSheet
+          data={data}
+          onClose={() => setExporting(false)}
+          onExported={() => setBackupMsg({ ok: true, text: 'Verschlüsselte Sicherung wurde exportiert.' })}
+          onPlain={() => setConfirmPlain(true)}
+        />
+      )}
+      {confirmPlain && (
+        <ConfirmDialog
+          title="Ohne Passwort exportieren?"
+          message="Die Datei ist dann für jeden lesbar, der sie öffnet (z. B. in iCloud oder als Mail-Anhang). Trotzdem unverschlüsselt exportieren?"
+          confirmLabel="Unverschlüsselt exportieren"
+          danger
+          onCancel={() => setConfirmPlain(false)}
+          onConfirm={exportPlain}
+        />
+      )}
+      {encryptedFile && (
+        <BackupImportSheet fileText={encryptedFile} onClose={() => setEncryptedFile(null)} onDecrypted={onDecrypted} />
+      )}
       {pending && (
         <ConfirmDialog
           title="Alle Daten ersetzen?"

@@ -52,6 +52,13 @@ async function openStartPage(name) {
 const openBookings = () => openStartPage('Alle Buchungen')
 const openCash = () => openStartPage('Bargeld')
 const openContracts = () => openStartPage('Verträge')
+// Datensicherung: „Exportieren“ öffnet das Passwort-Sheet; unverschlüsselt geht es über „Ohne Passwort exportieren“ + Bestätigung
+async function plainExport(p = page) {
+  await p.getByRole('button', { name: 'Exportieren', exact: true }).click()
+  await p.getByRole('dialog', { name: 'Backup exportieren' }).getByRole('button', { name: 'Ohne Passwort exportieren' }).click()
+  const [d] = await Promise.all([p.waitForEvent('download'), p.getByRole('alertdialog').getByRole('button', { name: 'Unverschlüsselt exportieren' }).click()])
+  return d
+}
 // Kontostand steht auf der Start-Übersicht – der Aufruf wechselt dorthin zurück
 async function balance() {
   await tab('Start').click()
@@ -178,7 +185,7 @@ ok('Daten nach Neuladen erhalten (Kontostand 2.600,00 €)')
 
 // Export / Import
 await tab('Einstellungen').click()
-const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Exportieren' }).click()])
+const dl = await plainExport()
 const file = `${SHOTS}/../backup-test.json`
 await dl.saveAs(file)
 const json = JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -201,6 +208,126 @@ await expectText('Import erfolgreich: 5 Buchungen')
 await tab('Start').click()
 if ((await balance()) !== '2.600,00 €') throw new Error('Nach Import: ' + (await balance()))
 ok('Ungültiges Backup abgelehnt; Import stellt Stand wieder her (2.600,00 €)')
+
+// ---------- Verschlüsselte Backups (Passwort-Sheets, AES-GCM + PBKDF2 600k) ----------
+{
+  const rawStore = () => page.evaluate(() => localStorage.getItem('finanz-app:v1'))
+  const pwSheet = () => page.getByRole('dialog', { name: 'Backup exportieren' })
+  await tab('Einstellungen').click()
+  const before = await rawStore()
+  const plain = JSON.parse(fs.readFileSync(file, 'utf8'))
+  await page.getByRole('button', { name: 'Exportieren', exact: true }).click()
+  await pwSheet().waitFor()
+  await page.waitForTimeout(400) // Sheet ist eingeglitten
+  await page.screenshot({ path: `${SHOTS}/42-backup-export-passwort.png` })
+  // Eingabeprüfung: zu kurz, ungleich
+  await page.fill('#bk-pw', 'kurz'); await page.fill('#bk-pw2', 'kurz')
+  await pwSheet().getByRole('button', { name: 'Verschlüsselt exportieren' }).click()
+  await expectText('Das Passwort braucht mindestens 10 Zeichen.')
+  await page.fill('#bk-pw', 'GeheimesPasswort1'); await page.fill('#bk-pw2', 'GeheimesPasswort2')
+  await pwSheet().getByRole('button', { name: 'Verschlüsselt exportieren' }).click()
+  await expectText('Die Passwörter stimmen nicht überein.')
+  if (await page.getByRole('alert').count() !== 1) throw new Error('Genau eine Fehlermeldung erwartet')
+  ok('Verschlüsselter Export: zu kurzes Passwort („mindestens 10 Zeichen“) und ungleiche Wiederholung werden abgelehnt, Sheet bleibt offen')
+  // Felder sind Passwortfelder mit new-password; Anzeigen-Knopf schaltet um
+  if ((await page.getAttribute('#bk-pw', 'type')) !== 'password' || (await page.getAttribute('#bk-pw', 'autocomplete')) !== 'new-password') throw new Error('Passwortfeld falsch')
+  await pwSheet().getByRole('button', { name: 'Passwort anzeigen' }).click()
+  if ((await page.getAttribute('#bk-pw', 'type')) !== 'text') throw new Error('Anzeigen schaltet nicht um')
+  await pwSheet().getByRole('button', { name: 'Passwort verbergen' }).click()
+  // Export mit Passwort: Fortschritt, Dateiname, Inhalt
+  await page.fill('#bk-pw2', 'GeheimesPasswort1')
+  await page.evaluate(() => { window.__vibes = []; navigator.vibrate = (n) => { window.__vibes.push(n); return true } })
+  const [encDl] = await Promise.all([page.waitForEvent('download'), pwSheet().getByRole('button', { name: 'Verschlüsselt exportieren' }).click()])
+  if (encDl.suggestedFilename() !== 'finanz-backup-2026-10-27-verschluesselt.json') throw new Error('Dateiname: ' + encDl.suggestedFilename())
+  const encFile = `${SHOTS}/../backup-test-verschluesselt.json`
+  await encDl.saveAs(encFile)
+  const encText = fs.readFileSync(encFile, 'utf8')
+  const env = JSON.parse(encText)
+  if (env.format !== 'finanzklar-encrypted' || env.version !== 1 || env.kdf.name !== 'PBKDF2' || env.kdf.hash !== 'SHA-256' || env.kdf.iterations !== 600000 || env.cipher.name !== 'AES-GCM' || !env.data)
+    throw new Error('Umschlag: ' + encText.slice(0, 200))
+  if (Buffer.from(env.kdf.salt, 'base64').length !== 16 || Buffer.from(env.cipher.iv, 'base64').length !== 12) throw new Error('Salt/IV Länge')
+  const secrets = [...new Set(plain.transactions.map((t) => t.note).filter(Boolean))]
+  if (!secrets.length) throw new Error('Testdaten ohne Notizen')
+  for (const sec of secrets) if (encText.includes(sec)) throw new Error('Klartext in verschlüsselter Datei: ' + sec)
+  for (const needle of ['amountCents', 'transactions', 'startBalanceCents', 'Lebensmittel', '100000']) if (encText.includes(needle)) throw new Error('Klartext: ' + needle)
+  await pwSheet().waitFor({ state: 'detached' })
+  await expectText('Verschlüsselte Sicherung wurde exportiert.')
+  const vibes = await page.evaluate(() => window.__vibes)
+  if (vibes.length !== 1) throw new Error('Haptik beim Export: ' + JSON.stringify(vibes))
+  ok(`Verschlüsselter Export ${encDl.suggestedFilename()}: Umschlag finanzklar-encrypted v1, PBKDF2-SHA-256 600000, AES-GCM, Salt 16 / IV 12 Byte, kein Klartext (${secrets.length} Notizen, Beträge, Schlüsselnamen fehlen), Haptik 1×`)
+
+  // Import: falsches Passwort → Fehler, Sheet bleibt, Daten unverändert
+  await page.locator('input[type=file]').setInputFiles(encFile)
+  const openSheet = page.getByRole('dialog', { name: 'Backup entschlüsseln' })
+  await openSheet.waitFor()
+  await page.waitForTimeout(400)
+  await page.fill('#bk-open-pw', 'FalschesPasswort')
+  await openSheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+  await page.getByRole('alert').filter({ hasText: 'Passwort falsch oder Datei beschädigt.' }).waitFor({ timeout: 15000 })
+  await page.screenshot({ path: `${SHOTS}/43-backup-import-passwort.png` })
+  if ((await page.getAttribute('#bk-open-pw', 'autocomplete')) !== 'current-password') throw new Error('autocomplete')
+  if (await page.getByRole('alertdialog').count()) throw new Error('Bestätigung trotz falschem Passwort')
+  if ((await rawStore()) !== before) throw new Error('Daten bei falschem Passwort verändert')
+  if (!(await openSheet.isVisible())) throw new Error('Sheet nach falschem Passwort nicht mehr offen')
+  await openSheet.getByRole('button', { name: 'Abbrechen' }).click()
+  await openSheet.waitFor({ state: 'detached' })
+  ok('Import verschlüsselt: falsches Passwort → „Passwort falsch oder Datei beschädigt.“, Sheet bleibt offen, Daten unverändert')
+  // richtiges Passwort → „Alle Daten ersetzen?“ → Daten exakt wie vorher
+  await tab('Start').click()
+  await addTx({ amount: '777', category: 'Sonstiges', note: 'Nach dem Export' })
+  await tab('Einstellungen').click()
+  if ((await rawStore()) === before) throw new Error('Testbuchung fehlt')
+  await page.locator('input[type=file]').setInputFiles(encFile)
+  await openSheet.waitFor()
+  await page.fill('#bk-open-pw', 'GeheimesPasswort1')
+  await openSheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+  await page.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).waitFor({ timeout: 15000 })
+  await openSheet.waitFor({ state: 'detached' })
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Ersetzen' }).click()
+  await expectText('Import erfolgreich: 5 Buchungen')
+  if ((await rawStore()) !== before) throw new Error('Daten nach verschlüsseltem Import nicht identisch')
+  ok('Import verschlüsselt: richtiges Passwort → „Alle Daten ersetzen?“ → Ersetzen; gespeicherte Daten sind byte-genau wie vor dem Export')
+  // beschädigte verschlüsselte Datei
+  const broken = JSON.stringify({ ...env, kdf: { ...env.kdf, iterations: 1000 } })
+  fs.writeFileSync(`${SHOTS}/../kaputt.json`, broken)
+  await page.locator('input[type=file]').setInputFiles(`${SHOTS}/../kaputt.json`)
+  await openSheet.waitFor()
+  await page.fill('#bk-open-pw', 'GeheimesPasswort1')
+  await openSheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+  await page.getByRole('alert').filter({ hasText: 'Die Datei ist beschädigt.' }).waitFor({ timeout: 5000 })
+  await openSheet.getByRole('button', { name: 'Abbrechen' }).click()
+  await openSheet.waitFor({ state: 'detached' })
+  ok('Import verschlüsselt: Datei mit manipulierten Parametern (Iterationen 1000) → „Die Datei ist beschädigt.“, Abbrechen schließt')
+  // unverschlüsselt weiterhin möglich: Warnung, Dateiname unverändert
+  await page.getByRole('button', { name: 'Exportieren', exact: true }).click()
+  await pwSheet().getByRole('button', { name: 'Ohne Passwort exportieren' }).click()
+  const warn = page.getByRole('alertdialog')
+  await warn.waitFor()
+  await expectText('Die Datei ist dann für jeden lesbar, der sie öffnet (z. B. in iCloud oder als Mail-Anhang). Trotzdem unverschlüsselt exportieren?')
+  await warn.getByRole('button', { name: 'Abbrechen' }).click(); await warn.waitFor({ state: 'detached' })
+  await pwSheet().waitFor()
+  await pwSheet().getByRole('button', { name: 'Ohne Passwort exportieren' }).click()
+  const [plainDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('alertdialog').getByRole('button', { name: 'Unverschlüsselt exportieren' }).click()])
+  if (plainDl.suggestedFilename() !== 'finanz-backup-2026-10-27.json') throw new Error('Dateiname: ' + plainDl.suggestedFilename())
+  if (JSON.parse(fs.readFileSync(await plainDl.path(), 'utf8')).transactions.length !== 5) throw new Error('Klartext-Export')
+  await pwSheet().waitFor({ state: 'detached' })
+  // ältere Klartext-Datei (ohne Passwortabfrage)
+  await page.locator('input[type=file]').setInputFiles(file)
+  await page.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).waitFor()
+  if (await page.getByRole('dialog', { name: 'Backup entschlüsseln' }).count()) throw new Error('Passwortabfrage für Klartext-Datei')
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Ersetzen' }).click()
+  await expectText('Import erfolgreich: 5 Buchungen')
+  ok('Ohne Passwort exportieren: Warnung (Abbrechen kehrt zurück), danach Klartext-Datei finanz-backup-2026-10-27.json; ältere Klartext-Backups importieren weiter ohne Passwortabfrage')
+  // Dunkel-Screenshot
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.getByRole('button', { name: 'Exportieren', exact: true }).click()
+  await pwSheet().waitFor(); await page.waitForTimeout(400)
+  await page.fill('#bk-pw', 'GeheimesPasswort1')
+  await page.screenshot({ path: `${SHOTS}/44-backup-export-dunkel.png` })
+  await page.keyboard.press('Escape'); await pwSheet().waitFor({ state: 'detached' })
+  await page.emulateMedia({ colorScheme: 'light' })
+  await tab('Start').click()
+}
 
 // Offline
 await ctx.setOffline(true)
@@ -1020,7 +1147,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 
   // --- Backup mit Umbuchung und Konto ---
   await tab('Einstellungen').click()
-  const [dl2] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Exportieren' }).click()])
+  const dl2 = await plainExport()
   const file2 = `${SHOTS}/../backup-test.json`
   await dl2.saveAs(file2)
   const j2 = JSON.parse(fs.readFileSync(file2, 'utf8'))
@@ -1714,7 +1841,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     mustEq(await css(p, '.trend-bar:nth-child(2)', 'backgroundColor'), 'rgb(255, 69, 58)', 'Dunkel: Ausgaben-Balken')
     ok('Darstellung: Monat-Diagramm nutzt unter erzwungenem Dunkel #30D158 / #FF453A')
     await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
-    const [dl] = await Promise.all([p.waitForEvent('download'), p.getByRole('button', { name: 'Exportieren' }).click()])
+    const dl = await plainExport(p)
     const backup = fs.readFileSync(await dl.path(), 'utf8')
     if (/theme|dark|Darstellung/i.test(backup)) throw new Error('Darstellung steckt im Backup')
     ok('Darstellung: nicht Teil des JSON-Backups')

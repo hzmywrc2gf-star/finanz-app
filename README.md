@@ -20,7 +20,7 @@ Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, di
 - **Wischen zum Löschen**: In den Buchungslisten (Alle Buchungen, Bargeld, Monat) eine Zeile nach links ziehen, bis „Löschen“ erscheint – oder ganz durchziehen, um sofort zu löschen. Danach bleibt 5 Sekunden „Rückgängig“ unten im Bild. Auch das Löschen im Bearbeiten-Fenster lässt sich so zurücknehmen.
 - **Leichte Haptik**: kurzes Vibrieren/Tippen beim Speichern, Löschen und Rückgängig (Android; auf dem iPhone ab iOS 18, sonst stumm).
 - **Darstellung**: Automatisch (folgt dem iPhone), Hell oder Dunkel – Einstellungen → Darstellung, gilt sofort und wird nur auf diesem Gerät gemerkt (nicht in der Sicherung).
-- **Backup**: Export/Import aller Daten als JSON (Einstellungen → Datensicherung).
+- **Backup**: Export/Import aller Daten als JSON (Einstellungen → Datensicherung). Der Export ist standardmäßig mit Passwort verschlüsselt (AES-GCM-256, Schlüssel per PBKDF2-SHA-256 mit 600 000 Runden, nur Web Crypto des Browsers); ohne das Passwort lässt sich die Datei nicht wiederherstellen, es wird nirgends gespeichert. Unverschlüsselt exportieren geht nach einer Warnung; ältere Klartext-Backups lassen sich weiter importieren.
 - **Offline-fähig** und als App auf dem Home-Bildschirm installierbar.
 
 ## Starten

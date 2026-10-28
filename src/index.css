@@ -1414,3 +1414,18 @@ button.row:active {
   width: 20px;
   height: 20px;
 }
+
+/* Backup passwords */
+.pw-fields .field label {
+  width: auto;
+  white-space: nowrap;
+}
+.plain-export {
+  display: block;
+  margin: 8px auto 0;
+  color: var(--expense-text);
+  font-size: 15px;
+}
+.btn:disabled {
+  opacity: 0.5;
+}
