@@ -2,6 +2,8 @@
 
 Persönliche Finanz-PWA (Deutsch, mobil zuerst, Apple-Stil). Nutzer ist kein Entwickler; Antworten auf Deutsch, kleine Schritte, alles vor „fertig“ verifizieren (Tests + `npm run e2e` + Screenshots).
 
+**Freigabe-Regel (Nutzerwunsch, gilt immer):** Vor JEDEM Online-Stellen (Merge/Push auf `main` mit App-Änderung) dem Nutzer Screenshots ALLER sichtbaren Änderungen zeigen (per `SendUserFile`; Hell und Dunkel, betroffene Zustände/Größen) und erst nach seinem ausdrücklichen OK auf `main` übernehmen. Ohne sichtbare Änderung (reine Logik/Doku) kurz sagen, dass es nichts zu sehen gibt, und trotzdem auf OK warten.
+
 ## Stack
 React 19 + Vite + TypeScript, vite-plugin-pwa (autoUpdate, precache), Vitest. Keine UI-/Chart-Libraries – Balken in CSS. `base: './'` für GitHub Pages (Deploy via `.github/workflows/deploy.yml`, Push auf `main`).
 
