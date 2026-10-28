@@ -63,6 +63,17 @@ await page.evaluate(() => {
   localStorage.setItem('finanz-app:v1', JSON.stringify(data))
 })
 await page.reload()
+// App-Sperre ist Pflicht: die Klartext-Daten oben übernimmt die Einrichtung in den Tresor (wie in smoke.mjs `runSetup`)
+const PW = 'Perf-Passwort-2026!'
+await page.locator('main.setup-screen').waitFor()
+await page.fill('#lock-pw', PW); await page.fill('#lock-pw2', PW)
+await page.locator('main.setup-screen').getByRole('button', { name: 'Weiter', exact: true }).click()
+await page.getByTestId('recovery-key').waitFor()
+await page.getByRole('checkbox', { name: /Ich habe den Schlüssel sicher notiert/ }).check()
+await page.locator('main.setup-screen').getByRole('button', { name: 'Weiter', exact: true }).click()
+await page.locator('main.setup-screen').getByRole('heading', { name: /Finanzklar ist geschützt|Face ID hinzufügen\?/ }).waitFor({ timeout: 60000 })
+if (await page.getByRole('heading', { name: 'Face ID hinzufügen?' }).count()) await page.getByRole('button', { name: 'Überspringen' }).click()
+await page.getByRole('button', { name: 'Fertig' }).click()
 await page.getByRole('navigation', { name: 'Hauptnavigation' }).waitFor()
 
 // ---------- Messfunktionen im Seitenkontext ----------
