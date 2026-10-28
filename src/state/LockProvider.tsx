@@ -166,8 +166,10 @@ export function LockProvider({ children }: { children: ReactNode }) {
     recordSuccess()
     lastActive.current = Date.now()
     setPending(null)
-    setUnlocked({ session, repo: new EncryptedRepository(session.dek) })
+    // the greeting is set first and in the same batch as the app: the lock screen is replaced by the app and the
+    // (opaque) greeting in one commit, so the start page is never on screen without it
     if (viaFaceId) setGreeting(greetingText(data.settings.displayName))
+    setUnlocked({ session, repo: new EncryptedRepository(session.dek) })
     haptic()
   }
 

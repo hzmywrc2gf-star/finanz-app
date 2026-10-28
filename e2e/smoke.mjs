@@ -41,7 +41,7 @@ async function addTx({ kind = 'Ausgabe', amount, category, date, note, account }
   await page.getByRole('button', { name: 'Sichern' }).click()
 }
 // Zeilen der Start-Übersicht und die Unterseiten dahinter (Start → Alle Buchungen / Bargeld / Verträge)
-// Push/Pop dauern ~300 ms; währenddessen liegen Übersicht und Unterseite gleichzeitig im DOM
+// Push/Pop dauern ~450 ms; währenddessen liegen Übersicht und Unterseite gleichzeitig im DOM
 const settled = (p = page) => p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
 const hubRow = (name) => page.getByRole('button', { name: new RegExp(`^${name}`) })
 async function openStartPage(name) {
@@ -928,7 +928,14 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Start-Übersicht: Kontostand −223,10 €, „Bargeld 0,00 € · Gesamt −223,10 €“, Zeilen „Alle Buchungen 11“, „Bargeld 0,00 €“, „Verträge Keine“ (je ≥ 44 px), keine „Letzte Buchungen“')
 
   // --- Alle Buchungen ---
-  await hubRow('Alle Buchungen').click(); await settled()
+  const tPush = Date.now()
+  await hubRow('Alle Buchungen').click()
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: `${SHOTS}/53-push-mitte.png` })
+  await settled()
+  const pushMs = Date.now() - tPush
+  if (pushMs < 400 || pushMs > 600) throw new Error('Push dauert ' + pushMs + ' ms (erwartet 400–600 ms)')
+  ok(`Push in eine Unterseite dauert ${pushMs} ms (iOS-Navigationskurve, 450 ms)`)
   must(await page.locator('h1').innerText(), 'Alle Buchungen', 'Titel Unterseite')
   must(await page.getByRole('button', { name: 'Zurück', exact: true }).innerText(), 'Start', 'Zurück-Knopf zeigt „Start“')
   if ((await page.getByRole('button', { name: 'Zurück', exact: true }).boundingBox()).height < 44) throw new Error('Zurück-Knopf < 44 px')
@@ -2767,8 +2774,20 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await B.screenshot({ path: `${SHOTS}/50-sperrbildschirm-dunkel.png` })
   await B.emulateMedia({ colorScheme: 'light' })
   await B.evaluate(() => { window.__greetTexts = []; new MutationObserver(() => { const g = document.querySelector('.greeting h1'); if (g && !window.__greetTexts.includes(g.textContent)) window.__greetTexts.push(g.textContent) }).observe(document.body, { childList: true, subtree: true, characterData: true }) })
+  // rAF-Schleife: in jedem Bild Begrüßung (Deckkraft) und Startseite (Kontostand) festhalten
+  await B.evaluate(() => {
+    window.__frames = []
+    const loop = () => {
+      const g = document.querySelector('.greeting')
+      const h = document.querySelector('.greeting h1')
+      window.__frames.push({ app: !!document.querySelector('[data-testid="balance"]'), g: g ? Number(getComputedStyle(g).opacity) : null, h: h ? Number(getComputedStyle(h).opacity) : null })
+      if (window.__frames.length < 1500) requestAnimationFrame(loop)
+    }
+    requestAnimationFrame(loop)
+  })
   await faceBtn.click()
   await B.locator('.greeting').waitFor({ timeout: 15000 })
+  await B.screenshot({ path: `${SHOTS}/52-begruessung-erstes-bild.png` })
   must(await B.locator('.greeting').evaluate((el) => getComputedStyle(el).animationDuration), '2.5s', 'Begrüßung dauert 2,5 s')
   const tIn = Date.now()
   await sleep(300)
@@ -2783,6 +2802,24 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const greetMs = Date.now() - tIn + 300
   if (greetMs < 1800 || greetMs > 3800) throw new Error('Begrüßung dauert ' + greetMs + ' ms')
   await waitOpen(B)
+  // nie die Startseite ohne deckende Begrüßung: vom ersten Bild der Begrüßung an bis zum Ausblenden Deckkraft 1
+  {
+    const frames = await B.evaluate(() => window.__frames)
+    const withApp = frames.filter((f) => f.app)
+    const last = frames.map((f) => f.g !== null).lastIndexOf(true)
+    const bare = frames.slice(0, last + 1).filter((f) => f.app && f.g === null).length // Startseite im Bild, Begrüßung noch nicht (oder zwischendurch) nicht
+    const first = frames.findIndex((f) => f.g !== null)
+    const hs = frames.filter((f) => f.h !== null).map((f) => f.h)
+    if (first < 0) throw new Error('Begrüßung nie im Bild gesehen')
+    if (frames.slice(0, first).some((f) => f.app)) throw new Error('Startseite vor der Begrüßung im Bild')
+    // während der Einblendphase (erste ~300 ms) und der Haltephase bis zum Ausblenden voll deckend
+    const early = frames.slice(first).filter((f) => f.g !== null).slice(0, 60)
+    if (early.some((f) => f.g !== 1)) throw new Error('Begrüßung beim Einblenden nicht deckend: ' + JSON.stringify(early.slice(0, 5)))
+    if (!hs.some((h) => h === 1)) throw new Error('Titel blendet nicht ein: ' + hs.slice(0, 5))
+    if (!(hs[0] < 1)) throw new Error('Titel startet nicht unter 1: ' + hs[0])
+    must(bare, 0, 'Startseite nie ohne Begrüßung im Bild')
+    ok(`Begrüßung: vom ersten Bild an deckend (Deckkraft 1 in den ersten ${early.length} Bildern, Titel startet bei ${hs[0].toFixed(2)} und steigt auf 1), Startseite nie ohne Begrüßung (${withApp.length} Bilder mit Startseite im DOM)`)
+  }
   must(await bal(B), '1.990,00 €', 'B: Daten nach Face ID')
   ok(`Face ID entsperren: Begrüßung „Moin, Felix“ blendet 0,35 s ein, hält 1,7 s und blendet nach insgesamt 2,5 s (gemessen ${(greetMs / 1000).toFixed(1)} s) wieder aus, danach Startseite mit 1.990,00 €`)
   // keine Begrüßung bei Tabwechsel

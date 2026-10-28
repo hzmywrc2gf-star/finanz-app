@@ -1594,7 +1594,9 @@ button.row:is(:active, [data-pressed]) {
   white-space: normal;
 }
 
-/* Begrüßung nach Face ID: einblenden 0,35 s, halten 1,7 s, ausblenden 0,45 s (2,5 s); Antippen beendet sie früher */
+/* Begrüßung nach Face ID: der Hintergrund ist ab dem ersten Bild deckend (die Startseite darf nie durchscheinen).
+   Nur der Titel blendet ein (0,35 s); nach 2,05 s blendet die ganze Fläche in 0,45 s aus (2,5 s insgesamt).
+   Antippen beendet sie früher. */
 .greeting {
   position: fixed;
   inset: 0;
@@ -1612,15 +1614,10 @@ button.row:is(:active, [data-pressed]) {
   font-size: 40px;
   font-weight: 700;
   letter-spacing: 0.37px;
+  animation: greeting-text 0.35s ease-out both;
 }
 @keyframes greeting {
-  0% {
-    opacity: 0;
-    animation-timing-function: ease-out;
-  }
-  14% {
-    opacity: 1;
-  }
+  0%,
   82% {
     opacity: 1;
     animation-timing-function: ease-in;
@@ -1629,10 +1626,21 @@ button.row:is(:active, [data-pressed]) {
     opacity: 0;
   }
 }
-/* Bewegung reduzieren: nur Überblendung, insgesamt 1,5 s */
+@keyframes greeting-text {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* Bewegung reduzieren: deckender Hintergrund sofort, Titel nur per Überblendung, insgesamt 1,5 s */
 @media (prefers-reduced-motion: reduce) {
   .greeting {
     animation-duration: 1.5s;
+  }
+  .greeting h1 {
+    animation-duration: 0.2s;
   }
 }
 

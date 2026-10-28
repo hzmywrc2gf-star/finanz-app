@@ -1,31 +1,30 @@
 # Graph Report - finanz-app  (2026-10-28)
 
 ## Corpus Check
-- 96 files · ~74,584 words
+- 96 files · ~75,029 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 3 file(s) not represented in the graph (top: (none) 2, .css 1)
 
 ## Summary
-- 794 nodes · 2362 edges · 21 communities (20 shown, 1 thin omitted)
+- 795 nodes · 2364 edges · 17 communities (16 shown, 1 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 102 edges (avg confidence: 0.94)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9285a8db`
+- Built from commit: `62ba389f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - SettingsPage.tsx
 - actions.ts
-- StartPage.tsx
-- StartPage.tsx
+- Projektkontext: finanz-app („Finanzklar“)
+- dates.ts
 - package.json
 - smoke.mjs
-- types.ts
+- FinanceContext.tsx
 - deploy.yml
 - gesture.ts
-- backup.ts
 - perf.mjs
 - compilerOptions
 - compilerOptions
@@ -33,10 +32,7 @@
 - tsconfig.json
 - vault.ts
 - LockProvider.tsx
-- backup.ts
-- crypto.ts
-- createVault
-- bytesToBase64
+- types.ts
 
 ## God Nodes (most connected - your core abstractions)
 1. `react` - 40 edges
@@ -51,10 +47,10 @@
 10. `StartPage` - 25 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `Technik` --references--> `FinanceRepository`  [INFERRED]
+  README.md → src/data/repository.ts
 - `Verschlüsselung (Teil A: Krypto-Kern + verschlüsselte Backups; Teil B: App-Sperre mit Passwort, Wiederherstellungsschlüssel und Face ID)` --references--> `BackupExportSheet()`  [INFERRED]
   CLAUDE.md → src/components/BackupExportSheet.tsx
-- `Verschlüsselung (Teil A: Krypto-Kern + verschlüsselte Backups; Teil B: App-Sperre mit Passwort, Wiederherstellungsschlüssel und Face ID)` --references--> `BackupImportSheet()`  [INFERRED]
-  CLAUDE.md → src/components/BackupImportSheet.tsx
 - `Regeln` --references--> `ConfirmDialog()`  [INFERRED]
   CLAUDE.md → src/components/ConfirmDialog.tsx
 - `Teil B: App-Sperre (optional, standardmäßig aus)` --references--> `LockScreen()`  [INFERRED]
@@ -65,47 +61,43 @@
 ## Import Cycles
 - None detected.
 
-## Communities (21 total, 1 thin omitted)
+## Communities (17 total, 1 thin omitted)
 
 ### Community 0 - "SettingsPage.tsx"
 Cohesion: 0.07
-Nodes (38): AppLockSettings(), addFaceId(), generateKey(), removeFaceId(), AUTO_LOCK_CHOICES, AUTO_LOCK_LABEL, ChangePasswordSheet(), submit() (+30 more)
+Nodes (45): AppLockSettings(), addFaceId(), generateKey(), removeFaceId(), AUTO_LOCK_CHOICES, AUTO_LOCK_LABEL, ChangePasswordSheet(), submit() (+37 more)
 
 ### Community 1 - "actions.ts"
-Cohesion: 0.10
-Nodes (45): exportJSON(), mutate(), sample(), item(), tx(), withBudget(), createDefaultData(), withTx() (+37 more)
+Cohesion: 0.06
+Nodes (47): exportJSON(), mutate(), sample(), tx(), withBudget(), bookDue(), Interval, TransferDirection (+39 more)
 
-### Community 2 - "StartPage.tsx"
-Cohesion: 0.07
-Nodes (59): App(), AppContent(), FormState, StartNav, subOf(), Fab(), base, BudgetIcon() (+51 more)
+### Community 2 - "Projektkontext: finanz-app („Finanzklar“)"
+Cohesion: 0.13
+Nodes (13): Backlog (nicht in v1), ECC-Bausteine (`.claude/agents`, `.claude/skills`), Projektgraph (Graphify), Projektkontext: finanz-app („Finanzklar“), Prüfen, Stack, Auf dem iPhone installieren, Finanzklar – persönliche Haushalts-App (+5 more)
 
-### Community 3 - "StartPage.tsx"
-Cohesion: 0.07
-Nodes (72): vitest, RepeatIcon(), SwapIcon(), LedgerList, TransferRow, TransactionList, TransactionRow, BudgetItem (+64 more)
+### Community 3 - "dates.ts"
+Cohesion: 0.08
+Nodes (56): Fab(), base, BudgetIcon(), CashIcon(), ChevronLeft(), ChevronRight(), ClearIcon(), ContractIcon() (+48 more)
 
 ### Community 4 - "package.json"
 Cohesion: 0.07
-Nodes (35): dependencies, react@^19.3.1, react-dom@^19.3.1, devDependencies, oxlint@^1.89.0, sharp@^0.35.5, @types/node@^24.19.2, @types/react@^19.3.0 (+27 more)
+Nodes (36): dependencies, react@^19.3.1, react-dom@^19.3.1, devDependencies, oxlint@^1.89.0, sharp@^0.35.5, @types/node@^24.19.2, @types/react@^19.3.0 (+28 more)
 
 ### Community 5 - "smoke.mjs"
 Cohesion: 0.08
 Nodes (26): addTx(), balance(), bodyText(), { chromium, devices }, countIn(), errors, expectNoText(), expectText() (+18 more)
 
-### Community 6 - "types.ts"
-Cohesion: 0.10
-Nodes (49): react, BackupExportSheet(), submit(), BackupImportSheet(), submit(), BudgetForm(), save(), submit() (+41 more)
+### Community 6 - "FinanceContext.tsx"
+Cohesion: 0.07
+Nodes (84): react, App(), AppContent(), FormState, StartNav, subOf(), BudgetForm(), save() (+76 more)
 
 ### Community 7 - "deploy.yml"
 Cohesion: 0.07
 Nodes (30): runs-on, steps, concurrency, cancel-in-progress, group, environment, needs, runs-on (+22 more)
 
 ### Community 8 - "gesture.ts"
-Cohesion: 0.08
-Nodes (65): Architektur, Regeln, react-dom, Sheet(), Phase, StartStack(), SubView, SwipePane() (+57 more)
-
-### Community 9 - "backup.ts"
-Cohesion: 0.09
-Nodes (5): Interval, ContractBookingInput, RecurringInput, TransferInput, FinanceApi
+Cohesion: 0.07
+Nodes (68): Architektur, Regeln, RepeatIcon(), TrashIcon(), Phase, StackAnim, StartStack(), SubView (+60 more)
 
 ### Community 10 - "perf.mjs"
 Cohesion: 0.09
@@ -124,28 +116,16 @@ Cohesion: 0.33
 Nodes (5): plugins, rules, react/only-export-components, react/rules-of-hooks, $schema
 
 ### Community 15 - "vault.ts"
-Cohesion: 0.09
-Nodes (26): AUTO_LOCK_OPTIONS, b64(), Bytes, canonical(), DATA_AAD, DEFAULT_AUTO_LOCK, ERR_PASSKEY, ERR_PASSWORD (+18 more)
+Cohesion: 0.06
+Nodes (75): Verschlüsselung (Teil A: Krypto-Kern + verschlüsselte Backups; Teil B: App-Sperre mit Passwort, Wiederherstellungsschlüssel und Face ID), BackupImportSheet(), submit(), decodeBackupFile(), AUTO_LOCK_OPTIONS, b64(), Bytes, canonical() (+67 more)
 
 ### Community 16 - "LockProvider.tsx"
-Cohesion: 0.05
-Nodes (51): Backlog (nicht in v1), ECC-Bausteine (`.claude/agents`, `.claude/skills`), Projektgraph (Graphify), Projektkontext: finanz-app („Finanzklar“), Prüfen, Stack, Teil B: App-Sperre (optional, standardmäßig aus), Auf dem iPhone installieren (+43 more)
+Cohesion: 0.08
+Nodes (40): Teil B: App-Sperre (optional, standardmäßig aus), Greeting(), EncryptedRepository, STORAGE_KEY, Attempts, ATTEMPTS_KEY, BASE_WAIT_MS, FREE_ATTEMPTS (+32 more)
 
-### Community 17 - "backup.ts"
-Cohesion: 0.19
-Nodes (14): fail(), isAccount(), isDirection(), isInterval(), isKind(), isObj(), MAX_NAME_LENGTH, parseBackup() (+6 more)
-
-### Community 18 - "crypto.ts"
-Cohesion: 0.16
-Nodes (23): Verschlüsselung (Teil A: Krypto-Kern + verschlüsselte Backups; Teil B: App-Sperre mit Passwort, Wiederherstellungsschlüssel und Face ID), Bytes, decryptBytes(), decryptJSON(), encryptBytes(), ENVELOPE_FORMAT, ENVELOPE_VERSION, generateDataKey() (+15 more)
-
-### Community 19 - "createVault"
-Cohesion: 0.24
-Nodes (16): createVault(), extractableDek(), info(), loadData(), loadRaw(), replaceSlot(), setPasswordWith(), unlockWithPasskey() (+8 more)
-
-### Community 20 - "bytesToBase64"
-Cohesion: 0.33
-Nodes (7): encryptData(), saveData(), kdfSlotFor(), randomBytes(), utf8(), wrapSlot(), bytesToBase64()
+### Community 17 - "types.ts"
+Cohesion: 0.07
+Nodes (42): vitest, SwapIcon(), TransferRow, fail(), isAccount(), isDirection(), isInterval(), isKind() (+34 more)
 
 ## Knowledge Gaps
 - **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
@@ -153,17 +133,17 @@ Nodes (7): encryptData(), saveData(), kdfSlotFor(), randomBytes(), utf8(), wrapS
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `types.ts` to `SettingsPage.tsx`, `StartPage.tsx`, `StartPage.tsx`, `package.json`, `gesture.ts`, `LockProvider.tsx`?**
+- **Why does `react` connect `FinanceContext.tsx` to `SettingsPage.tsx`, `dates.ts`, `package.json`, `gesture.ts`, `vault.ts`, `LockProvider.tsx`, `types.ts`?**
   _High betweenness centrality (0.125) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `useFinance()` (e.g. with `Architektur` and `Regeln`) actually correct?**
   _`useFinance()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Should `SettingsPage.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.07259528130671507 - nodes in this community are weakly interconnected._
-- **Why does `submit()` connect `types.ts` to `StartPage.tsx`, `perf.mjs`, `StartPage.tsx`?**
+  _Cohesion score 0.06820119352088662 - nodes in this community are weakly interconnected._
+- **Why does `submit()` connect `FinanceContext.tsx` to `perf.mjs`, `dates.ts`?**
   _High betweenness centrality (0.085) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `haptic()` (e.g. with `Regeln` and `Teil B: App-Sperre (optional, standardmäßig aus)`) actually correct?**
   _`haptic()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Should `actions.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.09948979591836735 - nodes in this community are weakly interconnected._
-- **Why does `start()` connect `perf.mjs` to `types.ts`?**
-  _High betweenness centrality (0.084) - this node is a cross-community bridge._
+  _Cohesion score 0.05714285714285714 - nodes in this community are weakly interconnected._
+- **Why does `start()` connect `perf.mjs` to `FinanceContext.tsx`?**
+  _High betweenness centrality (0.083) - this node is a cross-community bridge._

@@ -4,6 +4,9 @@ import { releaseCurve, releaseDuration } from '../domain/gesture'
 /** iOS-like ease-out used for pushes, pops and spring-backs. */
 export const EASE_IOS = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
 
+/** iOS navigation (UINavigationController push/pop) curve: soft start, long gentle landing. */
+export const EASE_NAV = 'cubic-bezier(0.32, 0.72, 0, 1)'
+
 /**
  * Duration and timing function for the animation after a release: the iOS curve, started at the finger speed
  * (`distance` left to travel in px, `velocity` towards the target in px/ms; see `releaseDuration`).

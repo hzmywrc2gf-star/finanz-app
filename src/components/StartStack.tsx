@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { BACK_FRACTION, animationMs, isEdgeStart, parallaxPercent, swipeDecision } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
-import { EASE_IOS, afterTransition, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
+import { EASE_IOS, EASE_NAV, afterTransition, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
 import type { StartView } from '../pages/StartPage'
 
 /** How a view change reaches the screen: `animate` = push/pop, `instant` = no motion, `done` = a swipe already finished it. */
@@ -12,7 +12,8 @@ type SubView = Exclude<StartView, 'hub'>
 /** idle = at rest; push/pop = button transition; drag = finger on the edge swipe (and the settle after release). */
 type Phase = 'idle' | 'push' | 'pop' | 'drag'
 
-const PUSH_MS = 300
+/** Duration of a button/row push and the Zurück-button pop (ms); tune here. Swipe-back uses the finger speed instead. */
+const PUSH_MS = 450
 
 /**
  * The start tab as an iOS navigation stack: the hub plus one sub-page on top. At rest only one of them is
@@ -127,7 +128,7 @@ export function StartStack({
       window.scrollTo(0, 0)
     }
     paint(pushing ? 1 : 0, fade)
-    void settle(pushing ? 0 : 1, ms, fade).then((current) => {
+    void settle(pushing ? 0 : 1, ms, fade, EASE_NAV).then((current) => {
       if (!current) return
       if (!pushing) setSub(null)
       setPhase('idle')
