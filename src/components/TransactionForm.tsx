@@ -4,6 +4,7 @@ import type { Account, Kind, Transaction } from '../domain/types'
 import type { TransactionInput } from '../state/actions'
 import { todayISO } from '../domain/dates'
 import { centsToInputString, parseEuroInput } from '../domain/money'
+import { haptic } from '../lib/haptics'
 import { useFinance } from '../state/FinanceContext'
 import { Sheet } from './Sheet'
 import { SegmentedControl } from './SegmentedControl'
@@ -81,6 +82,7 @@ export function TransactionForm({
       if (booking) booking.onSubmit(input)
       else if (transaction) updateTransaction(transaction.id, input)
       else addTransaction(input)
+      haptic()
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.')
@@ -168,11 +170,12 @@ export function TransactionForm({
       {confirmDelete && transaction && (
         <ConfirmDialog
           title="Buchung löschen?"
-          message="Diese Aktion kann nicht rückgängig gemacht werden."
+          message="Direkt danach kannst du das Löschen noch rückgängig machen."
           confirmLabel="Löschen"
           danger
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
+            haptic()
             deleteTransaction(transaction.id)
             onClose()
           }}

@@ -4,7 +4,7 @@ import { bookDue, pendingConfirmations } from '../domain/recurring'
 import {
   addCategory, addRecurring, bookNextNow, confirmOccurrence, skipOccurrence, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
   addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
-  updateTransaction, updateTransfer,
+  restoreTransaction, restoreTransfer, updateTransaction, updateTransfer,
 } from './actions'
 import type { RecurringInput } from './actions'
 
@@ -305,5 +305,33 @@ describe('transfers and start cash', () => {
     expect(setStartCash(base(), 2000).settings).toEqual({ startBalanceCents: 0, startCashCents: 2000 })
     expect(setStartCash(base(), -500).settings.startCashCents).toBe(-500)
     expect(() => setStartCash(base(), 1.5)).toThrow()
+  })
+})
+
+describe('undo of a delete', () => {
+  it('restoreTransaction puts back the exact object', () => {
+    const tx = { ...input, id: 'r1', createdAt: 77, recurringId: 'rule-9', account: 'bargeld' as const, note: 'Brot' }
+    const withTx = { ...base(), transactions: [tx] }
+    const deleted = deleteTransaction(withTx, 'r1')
+    expect(deleted.transactions).toHaveLength(0)
+    const restored = restoreTransaction(deleted, tx)
+    expect(restored.transactions).toEqual([tx])
+    expect(restored.transactions[0]).toBe(tx)
+    expect(deleted.transactions).toHaveLength(0) // input stays untouched
+  })
+  it('restoreTransaction rejects an id that already exists', () => {
+    const d = addTransaction(base(), input, meta)
+    expect(() => restoreTransaction(d, d.transactions[0])).toThrow('Die Buchung existiert bereits.')
+  })
+  it('restoreTransfer puts back the exact object', () => {
+    const tr = { id: 't1', direction: 'withdrawal' as const, amountCents: 5000, date: '2026-10-20', note: 'ATM', createdAt: 42 }
+    const deleted = deleteTransfer({ ...base(), transfers: [tr] }, 't1')
+    const restored = restoreTransfer(deleted, tr)
+    expect(restored.transfers).toEqual([tr])
+    expect(restored.transfers[0]).toBe(tr)
+  })
+  it('restoreTransfer rejects an id that already exists', () => {
+    const d = addTransfer(base(), { direction: 'deposit', amountCents: 100, date: '2026-10-27' }, { id: 't2', createdAt: 1 })
+    expect(() => restoreTransfer(d, d.transfers[0])).toThrow('Die Umbuchung existiert bereits.')
   })
 })

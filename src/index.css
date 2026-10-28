@@ -22,6 +22,7 @@
   --seg-active: #ffffff;
   --radius: 15px;
   --tabbar-h: 56px;
+  --delete-bg: #d70015;
   color-scheme: light dark;
 }
 
@@ -208,6 +209,86 @@ button.row:active,
   transition: none;
 }
 
+/* Swipe to delete: the content slides left over a red action (iOS Mail); the button is only reachable while it shows */
+.swipe-li {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.swipe-content {
+  position: relative;
+  background: var(--card);
+}
+.swipe-action {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--delete-bg);
+}
+.swipe-action button {
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.swipe-li[data-swipe='closed'] .swipe-action {
+  visibility: hidden;
+}
+.swipe-li[data-swipe='drag'] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Undo toast after a delete, above the tab bar and the FAB, below sheets */
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  margin: 0 auto;
+  max-width: 568px;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 4px 4px 16px;
+  min-height: 48px;
+  border-radius: 14px;
+  background: #2c2c2e;
+  color: #fff;
+  font-size: 15px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.toast button {
+  min-height: 44px;
+  padding: 0 14px;
+  color: #64a8ff;
+  font-weight: 600;
+  font-size: 15px;
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+:root[data-theme='dark'] .toast {
+  background: #3a3a3c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .toast {
+    background: #3a3a3c;
+  }
+}
+
 /* Month/Budget pages: horizontal swipe changes the month, vertical scrolling stays with the browser */
 .swipe-pane {
   touch-action: pan-y;
@@ -291,7 +372,7 @@ button.row:active,
   text-align: left;
   position: relative;
 }
-.list > li + li > .row::before,
+.list > li + li .row::before,
 .list > li + li > .row-static::before {
   content: '';
   position: absolute;
@@ -665,6 +746,7 @@ button.row:active {
   .sheet,
   .dialog,
   .tab-fade,
+  .toast,
   .backdrop-dim {
     animation: fade 0.12s ease !important;
   }

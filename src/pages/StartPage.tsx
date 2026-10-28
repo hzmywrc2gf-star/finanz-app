@@ -7,6 +7,7 @@ import { budgetAlerts } from '../domain/budget'
 import { builtInId } from '../domain/defaults'
 import type { PendingConfirmation } from '../domain/recurring'
 import { monthlyEquivalent, pendingConfirmations, recurringTitle, upcoming } from '../domain/recurring'
+import { haptic } from '../lib/haptics'
 import { useFinance } from '../state/FinanceContext'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { TransactionForm } from '../components/TransactionForm'
@@ -228,6 +229,7 @@ export function StartPage({
           confirmLabel="Überspringen"
           onCancel={() => setSkipping(null)}
           onConfirm={() => {
+            haptic()
             skipOccurrence(skipping.rule.id, skipping.date)
             setSkipping(null)
           }}

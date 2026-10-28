@@ -4,11 +4,14 @@ import { TRANSFER_LABELS, groupByMonth } from '../domain/ledger'
 import type { LedgerEntry } from '../domain/ledger'
 import { formatCents } from '../domain/money'
 import { SwapIcon } from './Icons'
+import { useFinance } from '../state/FinanceContext'
+import { SwipeRow } from './SwipeRow'
 import { TransactionRow } from './TransactionList'
 
 function TransferRow({ transfer: t, onSelect }: { transfer: Transfer; onSelect: (t: Transfer) => void }) {
+  const { deleteTransfer } = useFinance()
   return (
-    <li>
+    <SwipeRow label={TRANSFER_LABELS[t.direction]} onDelete={() => deleteTransfer(t.id)}>
       <button className="row" onClick={() => onSelect(t)}>
         <span className="transfer-icon">
           <SwapIcon />
@@ -22,7 +25,7 @@ function TransferRow({ transfer: t, onSelect }: { transfer: Transfer; onSelect: 
         </span>
         <span className="row-amount num">{formatCents(t.amountCents)}</span>
       </button>
-    </li>
+    </SwipeRow>
   )
 }
 

@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AppData, Kind } from '../domain/types'
+import type { AppData, Kind, Transaction, Transfer } from '../domain/types'
 import type { FinanceRepository } from '../data/repository'
 import { LocalStorageRepository } from '../data/localStorageRepo'
 import { todayISO } from '../domain/dates'
 import { bookDue } from '../domain/recurring'
+import { haptic } from '../lib/haptics'
+import { UndoToast } from '../components/UndoToast'
 import * as A from './actions'
 import type { ContractBookingInput, RecurringInput, TransactionInput, TransferInput } from './actions'
 
@@ -41,6 +43,9 @@ export interface FinanceApi {
 /** How often due recurring bookings are re-checked while the app stays open. */
 const REBOOK_INTERVAL_MS = 60 * 60 * 1000
 
+/** The most recent delete, kept for "Rückgängig" (only one step back). */
+type Undo = { id: number; item: { kind: 'transaction'; value: Transaction } | { kind: 'transfer'; value: Transfer } }
+
 const FinanceContext = createContext<FinanceApi | null>(null)
 
 const defaultRepo = new LocalStorageRepository()
@@ -56,6 +61,8 @@ export function FinanceProvider({
 }) {
   const [data, setData] = useState<AppData | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [undo, setUndo] = useState<Undo | null>(null)
+  const undoSeq = useRef(0)
   const ref = useRef<AppData | null>(null)
 
   useEffect(() => {
@@ -119,12 +126,20 @@ export function FinanceProvider({
       saveError,
       addTransaction: (i) => apply((d) => A.addTransaction(d, i)),
       updateTransaction: (id, i) => apply((d) => A.updateTransaction(d, id, i)),
-      deleteTransaction: (id) => apply((d) => A.deleteTransaction(d, id)),
+      deleteTransaction: (id) => {
+        const value = ref.current?.transactions.find((t) => t.id === id)
+        apply((d) => A.deleteTransaction(d, id))
+        if (value) setUndo({ id: ++undoSeq.current, item: { kind: 'transaction', value } })
+      },
       setStartBalance: (c) => apply((d) => A.setStartBalance(d, c)),
       setStartCash: (c) => apply((d) => A.setStartCash(d, c)),
       addTransfer: (i) => apply((d) => A.addTransfer(d, i)),
       updateTransfer: (id, i) => apply((d) => A.updateTransfer(d, id, i)),
-      deleteTransfer: (id) => apply((d) => A.deleteTransfer(d, id)),
+      deleteTransfer: (id) => {
+        const value = ref.current?.transfers.find((t) => t.id === id)
+        apply((d) => A.deleteTransfer(d, id))
+        if (value) setUndo({ id: ++undoSeq.current, item: { kind: 'transfer', value } })
+      },
       addCategory: (k, n) => apply((d) => A.addCategory(d, k, n)),
       renameCategory: (id, n) => apply((d) => A.renameCategory(d, id, n)),
       deleteCategory: (id) => apply((d) => A.deleteCategory(d, id)),
@@ -137,12 +152,40 @@ export function FinanceProvider({
       skipOccurrence: (id, date) => apply((d) => A.skipOccurrence(d, id, date)),
       bookNextNow: (id, i) => apply((d) => A.bookNextNow(d, id, i)),
       // an older backup may already have occurrences due
-      replaceAll: (nd) => apply(() => bookDue(nd, todayISO())),
+      replaceAll: (nd) => {
+        apply(() => bookDue(nd, todayISO()))
+        setUndo(null)
+      },
     }
   }, [data, saveError, apply])
 
+  const undoDelete = () => {
+    if (!undo) return
+    haptic()
+    try {
+      const { item } = undo
+      apply((d) => (item.kind === 'transaction' ? A.restoreTransaction(d, item.value) : A.restoreTransfer(d, item.value)))
+    } catch {
+      // already back (or data replaced): nothing to restore
+    }
+    setUndo(null)
+  }
+  const expireUndo = useCallback(() => setUndo(null), [])
+
   if (!api) return null
-  return <FinanceContext.Provider value={api}>{children}</FinanceContext.Provider>
+  return (
+    <FinanceContext.Provider value={api}>
+      {children}
+      {undo && (
+        <UndoToast
+          id={undo.id}
+          message={undo.item.kind === 'transaction' ? 'Buchung gelöscht' : 'Umbuchung gelöscht'}
+          onUndo={undoDelete}
+          onExpire={expireUndo}
+        />
+      )}
+    </FinanceContext.Provider>
+  )
 }
 
 export function useFinance(): FinanceApi {

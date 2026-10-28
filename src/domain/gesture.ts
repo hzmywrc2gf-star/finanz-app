@@ -23,6 +23,12 @@ export const MONTH_MAX_FRACTION = 0.4
 export const PARALLAX_PERCENT = 30
 /** How far a sheet may be pulled up (rubber band). */
 export const SHEET_PULL_UP_PX = 80
+/** Width of the red "Löschen" action behind a swiped list row. */
+export const ROW_ACTION_PX = 80
+/** Released past this share of the action width, a row stays open (otherwise it springs closed). */
+export const ROW_OPEN_FRACTION = 0.5
+/** Dragged beyond this share of the row width, releasing deletes the row immediately. */
+export const ROW_DELETE_FRACTION = 0.6
 /** Velocity is measured over the last 100 ms before release. */
 const VELOCITY_WINDOW_MS = 100
 /** With "reduce motion" nothing slides; changes become a quick fade of at most this long. */
@@ -78,6 +84,22 @@ export function rubberBand(offset: number, limit: number): number {
 
 /** Percent offset of the page underneath; `progress` 0 = sub-page fully open, 1 = fully gone. */
 export const parallaxPercent = (progress: number): number => PARALLAX_PERCENT * (Math.min(1, Math.max(0, progress)) - 1)
+
+export type RowOutcome = 'open' | 'close' | 'delete'
+
+/**
+ * What a released row swipe does. `offset` is where the row content stands (0 = closed, -ROW_ACTION_PX = open,
+ * more negative = further left), `velocity` the finger speed in px/ms (negative = leftwards), `width` the row width.
+ */
+export function rowSwipeOutcome({ offset, velocity, width }: { offset: number; velocity: number; width: number }): RowOutcome {
+  const open = Math.max(0, -offset)
+  if (open > width * ROW_DELETE_FRACTION) return 'delete'
+  // a fast flick to the left that already passed the action button deletes; a short one only opens
+  if (velocity < -FLICK_VELOCITY && open > ROW_ACTION_PX) return 'delete'
+  if (velocity < -FLICK_VELOCITY && open > FLICK_MIN_PX) return 'open'
+  if (velocity > FLICK_VELOCITY) return 'close'
+  return open > ROW_ACTION_PX * ROW_OPEN_FRACTION ? 'open' : 'close'
+}
 
 /** Swipe left (negative) shows the next month, swipe right the previous one. */
 export const monthStep = (dx: number): 1 | -1 => (dx < 0 ? 1 : -1)

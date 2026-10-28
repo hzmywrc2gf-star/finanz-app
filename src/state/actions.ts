@@ -76,6 +76,12 @@ export function deleteTransaction(data: AppData, id: string): AppData {
   return { ...data, transactions: data.transactions.filter((t) => t.id !== id) }
 }
 
+/** Undo of a delete: puts the exact booking back (same id, createdAt, recurringId, account). */
+export function restoreTransaction(data: AppData, tx: Transaction): AppData {
+  if (data.transactions.some((t) => t.id === tx.id)) throw new Error('Die Buchung existiert bereits.')
+  return { ...data, transactions: [...data.transactions, tx] }
+}
+
 export function setStartBalance(data: AppData, cents: number): AppData {
   if (!Number.isSafeInteger(cents)) throw new Error('Ungültiger Betrag.')
   return { ...data, settings: { ...data.settings, startBalanceCents: cents } }
@@ -137,6 +143,12 @@ export function updateTransfer(data: AppData, id: string, input: TransferInput):
 
 export function deleteTransfer(data: AppData, id: string): AppData {
   return { ...data, transfers: data.transfers.filter((t) => t.id !== id) }
+}
+
+/** Undo of a delete: puts the exact transfer back. */
+export function restoreTransfer(data: AppData, tr: Transfer): AppData {
+  if (data.transfers.some((t) => t.id === tr.id)) throw new Error('Die Umbuchung existiert bereits.')
+  return { ...data, transfers: [...data.transfers, tr] }
 }
 
 function validateCategoryName(

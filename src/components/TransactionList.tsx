@@ -1,9 +1,11 @@
 import type { Category, Transaction } from '../domain/types'
 import { formatShortDay } from '../domain/dates'
 import { formatSigned } from '../domain/money'
+import { useFinance } from '../state/FinanceContext'
 import { RepeatIcon } from './Icons'
+import { SwipeRow } from './SwipeRow'
 
-/** One booking row; cash bookings get a small "Bar" badge unless `hideBadge` (cash page). */
+/** One booking row (swipe left to delete, with undo); cash bookings get a small "Bar" badge unless `hideBadge` (cash page). */
 export function TransactionRow({
   transaction: t,
   categoryName,
@@ -15,8 +17,9 @@ export function TransactionRow({
   hideBadge?: boolean
   onSelect: (t: Transaction) => void
 }) {
+  const { deleteTransaction } = useFinance()
   return (
-    <li>
+    <SwipeRow label={categoryName} onDelete={() => deleteTransaction(t.id)}>
       <button className="row" onClick={() => onSelect(t)}>
         <span
           className="dot"
@@ -42,7 +45,7 @@ export function TransactionRow({
           {formatSigned(t.amountCents, t.kind)}
         </span>
       </button>
-    </li>
+    </SwipeRow>
   )
 }
 

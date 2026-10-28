@@ -4,6 +4,7 @@ import type { Transfer, TransferDirection } from '../domain/types'
 import { todayISO } from '../domain/dates'
 import { TRANSFER_LABELS } from '../domain/ledger'
 import { centsToInputString, parseEuroInput } from '../domain/money'
+import { haptic } from '../lib/haptics'
 import { useFinance } from '../state/FinanceContext'
 import { Sheet } from './Sheet'
 import { SegmentedControl } from './SegmentedControl'
@@ -46,6 +47,7 @@ export function TransferForm({
     try {
       if (transfer) updateTransfer(transfer.id, input)
       else addTransfer(input)
+      haptic()
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.')
@@ -113,11 +115,12 @@ export function TransferForm({
       {confirmDelete && transfer && (
         <ConfirmDialog
           title="Umbuchung löschen?"
-          message="Diese Aktion kann nicht rückgängig gemacht werden."
+          message="Direkt danach kannst du das Löschen noch rückgängig machen."
           confirmLabel="Löschen"
           danger
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
+            haptic()
             deleteTransfer(transfer.id)
             onClose()
           }}

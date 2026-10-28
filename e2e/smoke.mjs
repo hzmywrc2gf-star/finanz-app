@@ -1763,6 +1763,353 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
 }
 
+// ---------- Wischen zum Löschen, Rückgängig-Toast, Haptik (echte Touch-Events per CDP, frischer Kontext) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
+  const mk = async (extra = {}) => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', ...extra })
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+    return { c, p }
+  }
+  const sessions = new WeakMap()
+  const cdpOf = async (p) => { if (!sessions.has(p)) sessions.set(p, await p.context().newCDPSession(p)); return sessions.get(p) }
+  async function swipe(p, { x0, y0, x1, y1, steps = 10, durationMs = 300 }) {
+    const cdp = await cdpOf(p)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] })
+    for (let i = 1; i <= steps; i++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + ((x1 - x0) * i) / steps, y: y0 + ((y1 - y0) * i) / steps }] })
+      await sleep(durationMs / steps)
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+  const tapAt = async (p, x, y) => {
+    const cdp = await cdpOf(p)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+    await sleep(40)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+  const nav = (p, name) => p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
+  const idle = (p) => p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
+  const stored = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const text = async (p) => nbsp(await p.locator('body').innerText())
+  async function bal(p) {
+    await nav(p, 'Start').click(); await idle(p)
+    return (await text(p)).match(/Kontostand\s*\n?\s*([-−]?[\d.]+,\d\d €)/)?.[1]
+  }
+  async function addTx(p, { kind = 'Ausgabe', amount, category, date, note }) {
+    await p.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await p.getByRole('button', { name: kind, exact: true }).click()
+    await p.fill('#tx-amount', amount)
+    if (date) await p.fill('#tx-date', date)
+    await p.selectOption('#tx-cat', { label: category })
+    if (note) await p.fill('#tx-note', note)
+    await p.getByRole('button', { name: 'Sichern' }).click()
+    await p.getByRole('dialog').waitFor({ state: 'detached' })
+  }
+  async function seed(p) {
+    await p.goto(URL)
+    await nav(p, 'Einstellungen').click()
+    await p.fill('#start-balance', '1000')
+    await p.getByRole('button', { name: 'Speichern' }).click()
+    await nav(p, 'Start').click()
+    await addTx(p, { kind: 'Einnahme', amount: '2.500,00', category: 'Gehalt', date: '2026-10-05', note: 'Oktober' })
+    await addTx(p, { amount: '800', category: 'Fixkosten', date: '2026-10-01', note: 'Miete' })
+    await addTx(p, { amount: '45,99', category: 'Lebensmittel', date: '2026-10-10', note: 'Einkauf' })
+    await addTx(p, { amount: '12,01', category: 'Mobilität', date: '2026-10-12', note: 'Bahn' })
+    await addTx(p, { amount: '20', category: 'Freizeit', date: '2026-10-20', note: 'Kino' })
+    for (let i = 1; i <= 8; i++) await addTx(p, { amount: '1', category: 'Sonstiges', date: `2026-10-${10 + i}`, note: `Kleinkram ${i}` })
+  }
+  const SEED_BAL = '2.614,00 €' // 1000 + 2500 − 800 − 45,99 − 12,01 − 20 − 8
+  const row = (p, t) => p.locator('.swipe-li', { hasText: t }).first()
+  const waitState = (p, t, s) => p.waitForFunction(([t, s]) => [...document.querySelectorAll('.swipe-li')].some((li) => li.textContent.includes(t) && li.getAttribute('data-swipe') === s && li.querySelector('.swipe-content').style.transition === ''), [t, s])
+  const toast = (p) => p.getByRole('status').filter({ hasText: 'gelöscht' })
+  // Wischt eine Zeile nach links um `dx` px (Start 20 px vom rechten Rand der Zeile)
+  async function swipeRow(p, t, dx, opts = {}) {
+    const loc = row(p, t)
+    await loc.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+    await sleep(100)
+    const b = await loc.boundingBox()
+    const x0 = b.x + b.width - 20
+    await swipe(p, { x0, y0: b.y + b.height / 2, x1: x0 - dx, y1: b.y + b.height / 2, ...opts })
+    return b
+  }
+  const openBookings = async (p) => { await nav(p, 'Start').click(); await idle(p); await p.getByRole('button', { name: /^Alle Buchungen/ }).click(); await idle(p); await p.getByRole('button', { name: 'Zurück', exact: true }).waitFor() }
+
+  // ---- Hauptkontext ----
+  const { c, p } = await mk()
+  await seed(p)
+  must(await bal(p), SEED_BAL, 'Kontostand nach dem Anlegen')
+  await openBookings(p)
+
+  // 1) Antippen-Rest: kurz halb öffnen -> Löschen-Knopf, Löschen, Rückgängig
+  const kino = (await stored(p)).transactions.find((t) => t.note === 'Kino')
+  const b0 = await swipeRow(p, 'Kino', 60)
+  await waitState(p, 'Kino', 'open')
+  const offsetOpen = (await row(p, 'Kino').locator('.swipe-content').boundingBox()).x - b0.x
+  if (Math.abs(offsetOpen + 80) > 1) throw new Error('Offene Zeile steht bei ' + offsetOpen + ' px statt −80')
+  const delBtn = p.getByRole('button', { name: 'Löschen: Freizeit' })
+  await delBtn.waitFor()
+  must(await p.getByRole('button', { name: /^Löschen: / }).count(), 1, 'Nur ein sichtbarer Löschen-Knopf (geschlossene Zeilen verborgen)')
+  must(await p.getByRole('dialog').count(), 0, 'Wischen öffnet kein Sheet')
+  await p.screenshot({ path: `${SHOTS}/39-zeile-offen.png` })
+  ok('Alle Buchungen: 60 px nach links (mehr als die Hälfte der 80 px) lässt „Kino“ offen stehen (Inhalt bei −80 px), roter „Löschen: Freizeit“-Knopf sichtbar, geschlossene Zeilen haben keinen erreichbaren Knopf')
+
+  await delBtn.click()
+  await row(p, 'Kino').waitFor({ state: 'detached' })
+  await toast(p).waitFor()
+  must(nbsp(await toast(p).innerText()).replace(/\s+/g, ' '), 'Buchung gelöscht Rückgängig', 'Toast-Text')
+  await sleep(400) // Einblend-Animation abwarten
+  await p.screenshot({ path: `${SHOTS}/40-toast-rueckgaengig.png` })
+  must((await stored(p)).transactions.some((t) => t.id === kino.id), false, 'Kino aus dem Speicher entfernt')
+  must(await bal(p), '2.634,00 €', 'Kontostand nach Löschen (+20,00 €)')
+  ok('Tippen auf „Löschen“: Zeile verschwindet, Toast „Buchung gelöscht“ mit „Rückgängig“ (role=status), Kontostand genau +20,00 € = 2.634,00 €')
+
+  await p.getByRole('button', { name: 'Rückgängig' }).click()
+  await toast(p).waitFor({ state: 'detached' })
+  const afterUndo = (await stored(p)).transactions.find((t) => t.id === kino.id)
+  must(JSON.stringify(afterUndo), JSON.stringify(kino), 'Wiederhergestellte Buchung')
+  must(await bal(p), SEED_BAL, 'Kontostand nach Rückgängig')
+  await openBookings(p)
+  await row(p, 'Kino').waitFor()
+  ok('„Rückgängig“: Buchung zurück mit gleicher id/createdAt/Notiz im Speicher, Kontostand wieder exakt 2.614,00 €, Toast weg')
+
+  // 2) Kurz wischen federt zurück, nichts wird gelöscht
+  const nTx = (await stored(p)).transactions.length
+  await swipeRow(p, 'Kino', 25)
+  await waitState(p, 'Kino', 'closed')
+  must((await stored(p)).transactions.length, nTx, 'Kurzes Wischen löscht nichts')
+  must(await toast(p).count(), 0, 'Kein Toast nach kurzem Wischen')
+  must(await p.getByRole('dialog').count(), 0, 'Kurzes Wischen öffnet kein Sheet')
+  ok('Kurzes Wischen (25 px, unter der Hälfte) federt zurück: Zeile geschlossen, nichts gelöscht, kein Sheet')
+
+  // 3) Langes Wischen löscht sofort; schneller Flick über den Knopf hinaus ebenfalls
+  const bDel = await swipeRow(p, 'Bahn', 260)
+  await row(p, 'Bahn').waitFor({ state: 'detached' })
+  await toast(p).waitFor()
+  must(await bal(p), '2.626,01 €', 'Kontostand nach langem Wischen (+12,01 €)')
+  ok(`Langes Wischen (260 px = ${Math.round((260 / bDel.width) * 100)} % der Zeilenbreite) löscht sofort: Zeile weg, Toast, Kontostand +12,01 € = 2.626,01 €`)
+  await p.getByRole('button', { name: 'Rückgängig' }).click()
+  await openBookings(p)
+  await swipeRow(p, 'Einkauf', 110, { steps: 4, durationMs: 60 })
+  await row(p, 'Einkauf').waitFor({ state: 'detached' })
+  must(await bal(p), '2.659,99 €', 'Kontostand nach Flick (+45,99 €)')
+  ok('Schneller Flick nach links (110 px in 60 ms, über den Knopf hinaus) löscht sofort; der Toast gehört nur zum jüngsten Löschen')
+  await p.getByRole('button', { name: 'Rückgängig' }).click()
+  must(await bal(p), SEED_BAL, 'Kontostand nach zweitem Rückgängig')
+  await openBookings(p)
+
+  // 4) Senkrecht ziehen scrollt, öffnet nichts
+  await p.evaluate(() => window.scrollTo(0, 0))
+  const b4 = await row(p, 'Kleinkram 3').boundingBox()
+  await swipe(p, { x0: b4.x + 200, y0: Math.min(b4.y + 20, 700), x1: b4.x + 205, y1: Math.max(b4.y - 200, 60), steps: 12, durationMs: 350 })
+  await sleep(200)
+  if ((await p.evaluate(() => window.scrollY)) < 50) throw new Error('Senkrechtes Ziehen auf einer Zeile hat nicht gescrollt')
+  must(await p.locator('.swipe-li:not([data-swipe="closed"])').count(), 0, 'Senkrechtes Ziehen öffnet keine Zeile')
+  ok('Senkrechtes Ziehen auf einer Zeile scrollt die Liste und öffnet keine Zeile')
+
+  // 5) Antippen einer offenen Zeile schließt sie, öffnet nicht das Sheet; immer nur eine offen
+  await p.evaluate(() => window.scrollTo(0, 0))
+  await swipeRow(p, 'Miete', 60)
+  await waitState(p, 'Miete', 'open')
+  const mb = await row(p, 'Miete').boundingBox()
+  await tapAt(p, mb.x + 40, mb.y + mb.height / 2)
+  await waitState(p, 'Miete', 'closed')
+  must(await p.getByRole('dialog').count(), 0, 'Antippen der offenen Zeile öffnet kein Sheet')
+  await row(p, 'Miete').getByRole('button').first().click()
+  await p.getByRole('dialog').waitFor()
+  await p.keyboard.press('Escape'); await p.getByRole('dialog').waitFor({ state: 'detached' })
+  ok('Antippen einer offenen Zeile schließt sie ohne Sheet; eine geschlossene Zeile öffnet danach wieder normal das Bearbeiten-Sheet')
+
+  await swipeRow(p, 'Miete', 60); await waitState(p, 'Miete', 'open')
+  await swipeRow(p, 'Kleinkram 1', 60); await waitState(p, 'Kleinkram 1', 'open')
+  await waitState(p, 'Miete', 'closed')
+  must(await p.locator('.swipe-li[data-swipe="open"]').count(), 1, 'Nur eine offene Zeile')
+  // nach rechts ziehen schließt
+  const kk = await row(p, 'Kleinkram 1').boundingBox()
+  await swipe(p, { x0: kk.x + 100, y0: kk.y + kk.height / 2, x1: kk.x + 200, y1: kk.y + kk.height / 2 })
+  await waitState(p, 'Kleinkram 1', 'closed')
+  ok('Nur eine Zeile ist offen (zweite öffnen schließt die erste); Ziehen nach rechts schließt eine offene Zeile')
+  // Tippen daneben schließt, Scrollen schließt
+  await p.evaluate(() => window.scrollTo(0, 0))
+  await swipeRow(p, 'Kino', 60); await waitState(p, 'Kino', 'open')
+  const mh = await p.locator('.month-head').first().boundingBox()
+  await tapAt(p, mh.x + mh.width / 2, mh.y + mh.height / 2) // auf die Monatsüberschrift
+  await waitState(p, 'Kino', 'closed')
+  must(await p.getByRole('dialog').count(), 0, 'Tippen daneben öffnet kein Sheet')
+  await swipeRow(p, 'Kino', 60); await waitState(p, 'Kino', 'open')
+  await p.evaluate(() => window.scrollBy(0, 40))
+  await waitState(p, 'Kino', 'closed')
+  ok('Tippen außerhalb und Scrollen schließen eine offene Zeile')
+
+  // 6) Kanten-Wischen zurück hat Vorrang, auch wenn es auf einer Zeile beginnt
+  await p.evaluate(() => window.scrollTo(0, 0))
+  const eb = await row(p, 'Kino').boundingBox()
+  await swipe(p, { x0: 6, y0: eb.y + eb.height / 2, x1: 260, y1: eb.y + eb.height / 2 })
+  await p.locator('h1', { hasText: 'Finanzklar' }).waitFor(); await idle(p)
+  must(await p.getByRole('button', { name: 'Zurück', exact: true }).count(), 0, 'Zurück-Knopf weg')
+  ok('Kanten-Wischen (x = 6 px) beginnend auf einer Zeile navigiert zurück und startet kein Zeilen-Wischen')
+
+  // 7) Bargeld: Umbuchung per Wischen löschen
+  await p.getByRole('button', { name: /^Bargeld/ }).click(); await idle(p)
+  await p.getByRole('button', { name: 'Abhebung', exact: true }).click()
+  await p.fill('#tr-amount', '100')
+  await p.getByRole('button', { name: 'Sichern' }).click()
+  await p.getByRole('dialog').waitFor({ state: 'detached' })
+  const cash = () => p.getByTestId('cash-balance').innerText().then(nbsp)
+  must(await cash(), '100,00 €', 'Bargeld nach Abhebung')
+  await swipeRow(p, 'Abhebung', 60)
+  await waitState(p, 'Abhebung', 'open')
+  await p.getByRole('button', { name: 'Löschen: Abhebung' }).click()
+  await row(p, 'Abhebung').waitFor({ state: 'detached' })
+  must(nbsp(await p.getByRole('status').innerText()).replace(/\s+/g, ' '), 'Umbuchung gelöscht Rückgängig', 'Toast Umbuchung')
+  must(await cash(), '0,00 €', 'Bargeld nach Löschen')
+  const trId = (await stored(p)).transfers.length
+  must(trId, 0, 'Umbuchung gelöscht')
+  await p.getByRole('button', { name: 'Rückgängig' }).click()
+  await row(p, 'Abhebung').waitFor()
+  must(await cash(), '100,00 €', 'Bargeld nach Rückgängig')
+  must((await stored(p)).transfers.length, 1, 'Umbuchung zurück')
+  ok('Bargeld: Umbuchung „Abhebung“ per Wischen + „Löschen“ entfernt (Bargeld 100,00 € → 0,00 €, Toast „Umbuchung gelöscht“), „Rückgängig“ stellt sie her (100,00 €)')
+
+  // 8) Monat: Zeilen-Wischen ändert den Monat nicht, Wischen außerhalb schon
+  await nav(p, 'Monat').click()
+  const label = () => p.locator('.week-nav .label').innerText().then((s) => s.trim())
+  must(await label(), 'Oktober 2026', 'Monat vorher')
+  const paneIdle = () => p.waitForFunction(() => { const el = document.querySelector('.swipe-pane'); return el && el.style.transform === '' && !el.hasAttribute('data-dragging') && el.style.opacity === '' })
+  await swipeRow(p, 'Kleinkram 4', 60)
+  await waitState(p, 'Kleinkram 4', 'open')
+  await sleep(300)
+  must(await label(), 'Oktober 2026', 'Monat nach Zeilen-Wischen (offen)')
+  await swipeRow(p, 'Kleinkram 5', 260)
+  await row(p, 'Kleinkram 5').waitFor({ state: 'detached' })
+  await sleep(300)
+  must(await label(), 'Oktober 2026', 'Monat nach Zeilen-Wischen (löschen)')
+  must(await toast(p).count(), 1, 'Toast auf der Monat-Seite')
+  await p.getByRole('button', { name: 'Rückgängig' }).click()
+  await row(p, 'Kleinkram 5').waitFor()
+  ok('Monat: Wischen auf einer Buchungszeile öffnet/löscht die Zeile, der Monat bleibt „Oktober 2026“; Rückgängig stellt sie wieder her')
+  // „Größte Ausgaben“
+  await swipeRow(p, 'Miete', 260)
+  await row(p, 'Miete').waitFor({ state: 'detached' })
+  await sleep(300)
+  must(await label(), 'Oktober 2026', 'Monat nach Wischen in „Größte Ausgaben“')
+  must((await stored(p)).transactions.some((t) => t.note === 'Miete'), false, 'Miete gelöscht')
+  await p.getByRole('button', { name: 'Rückgängig' }).click()
+  must((await stored(p)).transactions.some((t) => t.note === 'Miete'), true, 'Miete zurück')
+  ok('Monat „Größte Ausgaben“: Zeilen-Wischen löscht ebenfalls (Monat bleibt Oktober 2026), Rückgängig stellt „Miete“ wieder her')
+  await p.evaluate(() => window.scrollTo(0, 0))
+  await paneIdle()
+  const sb = await p.locator('.summary').first().boundingBox()
+  await swipe(p, { x0: sb.x + sb.width - 30, y0: sb.y + sb.height / 2, x1: sb.x + 40, y1: sb.y + sb.height / 2 })
+  for (let i = 0; i < 30 && (await label()) !== 'November 2026'; i++) await sleep(100)
+  must(await label(), 'November 2026', 'Monat wischen außerhalb von Zeilen')
+  await paneIdle()
+  ok('Monat: Wischen auf der Zusammenfassung (nicht auf einer Zeile) wechselt weiterhin den Monat (November 2026)')
+  await p.getByRole('button', { name: 'Aktueller Monat' }).click()
+
+  // 9) Toast verschwindet nach 5 s
+  await nav(p, 'Start').click(); await idle(p)
+  await openBookings(p)
+  await swipeRow(p, 'Kleinkram 6', 260)
+  await row(p, 'Kleinkram 6').waitFor({ state: 'detached' })
+  await toast(p).waitFor()
+  await p.clock.fastForward(4000)
+  must(await toast(p).count(), 1, 'Toast nach 4 s noch da')
+  await p.clock.fastForward(1200)
+  await toast(p).waitFor({ state: 'detached' })
+  ok('Toast verschwindet nach 5 s von selbst (Uhr: nach 4 s noch da, nach 5,2 s weg); das Löschen bleibt bestehen')
+
+  // 10) Löschen im Sheet bleibt mit Bestätigung, Toast + Rückgängig auch dort
+  await row(p, 'Kleinkram 7').getByRole('button').first().click()
+  await p.getByRole('button', { name: 'Buchung löschen' }).click()
+  await p.getByRole('alertdialog').getByRole('button', { name: /Löschen/ }).click()
+  await row(p, 'Kleinkram 7').waitFor({ state: 'detached' })
+  await toast(p).waitFor()
+  await p.getByRole('button', { name: 'Rückgängig' }).click()
+  await row(p, 'Kleinkram 7').waitFor()
+  ok('Löschen im Bearbeiten-Sheet (mit Bestätigung) zeigt ebenfalls den Toast, „Rückgängig“ stellt die Buchung her')
+
+  // Zeile hat die Dunkel-Variante
+  await nav(p, 'Einstellungen').click()
+  await p.getByRole('button', { name: 'Dunkel', exact: true }).click()
+  await openBookings(p)
+  await swipeRow(p, 'Kino', 60)
+  await waitState(p, 'Kino', 'open')
+  await p.screenshot({ path: `${SHOTS}/41-zeile-offen-dunkel.png` })
+  ok('Dunkel: offene Zeile mit rotem Löschen-Knopf (Screenshot)')
+  await c.close()
+
+  // ---- Haptik: navigator.vibrate aufzeichnen ----
+  {
+    const { c: ch, p: ph } = await mk()
+    await ph.addInitScript(() => {
+      window.__vibes = []
+      Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true })
+    })
+    await ph.goto(URL)
+    const vibes = () => ph.evaluate(() => window.__vibes.length)
+    must(await vibes(), 0, 'Kein Vibrieren beim Start')
+    await addTx(ph, { amount: '5', category: 'Sonstiges', note: 'Haptik' })
+    must(await vibes(), 1, 'Vibration beim Speichern')
+    must(await ph.evaluate(() => window.__vibes[0]), 10, 'Dauer 10 ms')
+    await ph.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await ph.getByRole('button', { name: 'Abbrechen' }).click()
+    await ph.getByRole('dialog').waitFor({ state: 'detached' })
+    must(await vibes(), 1, 'Abbrechen vibriert nicht')
+    await ph.getByRole('button', { name: /^Alle Buchungen/ }).click(); await idle(ph)
+    await swipeRow(ph, 'Haptik', 260)
+    await row(ph, 'Haptik').waitFor({ state: 'detached' })
+    must(await vibes(), 2, 'Vibration beim Löschen per Wischen')
+    await ph.getByRole('button', { name: 'Rückgängig' }).click()
+    must(await vibes(), 3, 'Vibration bei Rückgängig')
+    ok('Haptik: navigator.vibrate(10) beim Speichern, Löschen per Wischen und Rückgängig (3 Aufrufe), nicht beim Abbrechen')
+    await ch.close()
+  }
+  // ---- Haptik-Fallback: ohne vibrate (iOS) wird ein verstecktes Switch-Element umgeschaltet ----
+  {
+    const { c: cf, p: pf } = await mk()
+    await pf.addInitScript(() => { Object.defineProperty(navigator, 'vibrate', { value: undefined, configurable: true }) })
+    await pf.goto(URL)
+    must(await pf.locator('input[switch]').count(), 0, 'Switch erst bei Bedarf')
+    await addTx(pf, { amount: '5', category: 'Sonstiges', note: 'Haptik' })
+    const sw = await pf.evaluate(() => {
+      const input = document.querySelector('label[data-haptic] input[switch]')
+      const label = input?.closest('label')
+      return input && { hidden: label.getAttribute('aria-hidden'), tab: input.tabIndex, checked: input.checked, display: getComputedStyle(label).display, focused: document.activeElement === input }
+    })
+    if (!sw || sw.hidden !== 'true' || sw.tab !== -1 || sw.display === 'none' || sw.focused) throw new Error('Fallback-Element falsch: ' + JSON.stringify(sw))
+    must(sw.checked, true, 'Switch umgeschaltet')
+    await addTx(pf, { amount: '6', category: 'Sonstiges', note: 'Haptik 2' })
+    must(await pf.locator('input[switch]').count(), 1, 'Nur ein Switch')
+    must(await pf.evaluate(() => document.querySelector('input[switch]').checked), false, 'Switch wieder umgeschaltet')
+    ok('Haptik ohne navigator.vibrate (iOS-Fallback): ein verstecktes <label><input type=checkbox switch> (aria-hidden, tabindex −1, nicht display:none, ohne Fokus) wird bei jedem Speichern umgeschaltet')
+    await cf.close()
+  }
+  // ---- Bewegung reduzieren ----
+  {
+    const { c: cr, p: pr } = await mk({ reducedMotion: 'reduce' })
+    await pr.goto(URL)
+    await addTx(pr, { amount: '7', category: 'Sonstiges', note: 'Reduziert' })
+    await addTx(pr, { amount: '8', category: 'Sonstiges', note: 'Reduziert 2' })
+    await pr.getByRole('button', { name: /^Alle Buchungen/ }).click(); await idle(pr)
+    await pr.evaluate(() => { window.__runs = 0; document.addEventListener('transitionrun', () => window.__runs++, true) })
+    await swipeRow(pr, 'Reduziert 2', 60)
+    await waitState(pr, 'Reduziert 2', 'open')
+    must(await pr.evaluate(() => window.__runs), 0, 'Reduziert: keine Slide-Animation beim Öffnen')
+    await pr.getByRole('button', { name: 'Löschen: Sonstiges' }).click()
+    await row(pr, 'Reduziert 2').waitFor({ state: 'detached', timeout: 2000 })
+    await swipeRow(pr, 'Reduziert', 260)
+    await pr.locator('.swipe-li', { hasText: 'Reduziert' }).first().waitFor({ state: 'detached', timeout: 2000 }).catch(() => {})
+    must((await stored(pr)).transactions.length, 0, 'Reduziert: beide gelöscht')
+    ok('Bewegung reduzieren: Zeile öffnet ohne Slide-Animation, Löschen per Knopf und per langem Wischen funktioniert (Überblendung)')
+    await cr.close()
+  }
+}
+
 await browser.close()
 if (errors.length) { console.error('Konsolenfehler:\n' + errors.join('\n')); process.exit(1) }
 console.log(`\nAlle ${step} Prüfungen bestanden, keine Konsolenfehler.`)

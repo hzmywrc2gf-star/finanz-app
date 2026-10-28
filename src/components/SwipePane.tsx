@@ -11,7 +11,7 @@ import {
   swipeDecision,
 } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
-import { EASE_IOS, afterTransition, isFormField, modalOpen, reducedMotion } from '../lib/motion'
+import { EASE_IOS, afterTransition, inSwipeRow, isFormField, modalOpen, reducedMotion } from '../lib/motion'
 
 const OUT_MS = 160
 const IN_MS = 240
@@ -36,8 +36,8 @@ export function SwipePane({ onStep, children }: { onStep: (step: 1 | -1) => void
 
   useDragGesture(ref, {
     axis: 'x',
-    // the left screen edge belongs to the back swipe of the sub-pages
-    canStart: (e) => !busy.current && !isEdgeStart(e.clientX) && !isFormField(e.target) && !modalOpen(),
+    // the left screen edge belongs to the back swipe of the sub-pages, a drag that begins on a booking row to the row
+    canStart: (e) => !busy.current && !isEdgeStart(e.clientX) && !isFormField(e.target) && !inSwipeRow(e.target) && !modalOpen(),
     onStart: () => {
       const el = ref.current
       if (!el) return

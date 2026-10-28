@@ -6,10 +6,13 @@ import {
   monthStep,
   parallaxPercent,
   releaseVelocity,
+  rowSwipeOutcome,
   rubberBand,
   swipeDecision,
   BACK_FRACTION,
   MONTH_FRACTION,
+  ROW_ACTION_PX,
+  ROW_DELETE_FRACTION,
   SHEET_FRACTION,
 } from './gesture'
 
@@ -118,5 +121,30 @@ describe('helpers', () => {
     expect(animationMs(300, false)).toBe(300)
     expect(animationMs(300, true)).toBe(120)
     expect(animationMs(80, true)).toBe(80)
+  })
+})
+
+describe('row swipe outcome', () => {
+  const width = 360
+  const still = 0
+  it('stays open when released past half of the action, otherwise springs closed', () => {
+    expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX * 0.5 - 1, velocity: still, width })).toBe('open')
+    expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX * 0.5, velocity: still, width })).toBe('close')
+    expect(rowSwipeOutcome({ offset: -10, velocity: still, width })).toBe('close')
+    expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX, velocity: still, width })).toBe('open')
+  })
+  it('deletes beyond 60 % of the row width', () => {
+    expect(rowSwipeOutcome({ offset: -width * ROW_DELETE_FRACTION, velocity: still, width })).toBe('open')
+    expect(rowSwipeOutcome({ offset: -width * ROW_DELETE_FRACTION - 1, velocity: still, width })).toBe('delete')
+    expect(rowSwipeOutcome({ offset: -width, velocity: still, width })).toBe('delete')
+  })
+  it('a fast flick left deletes only beyond the action, otherwise it opens', () => {
+    expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX - 20, velocity: -1, width })).toBe('delete')
+    expect(rowSwipeOutcome({ offset: -50, velocity: -1, width })).toBe('open')
+    expect(rowSwipeOutcome({ offset: -20, velocity: -1, width })).toBe('close')
+  })
+  it('a flick to the right closes an open row', () => {
+    expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX, velocity: 0.8, width })).toBe('close')
+    expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX + 15, velocity: 0.2, width })).toBe('open')
   })
 })

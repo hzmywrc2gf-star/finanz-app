@@ -35,3 +35,7 @@ export const isInteractive = (target: EventTarget | null): boolean =>
 
 /** A sheet or dialog is open: page-level gestures stay out of the way. */
 export const modalOpen = (): boolean => document.querySelector('[aria-modal="true"]') !== null
+
+/** Rows with a swipe-to-delete action own their horizontal drags; page-level swipes (month change) stay out. */
+export const inSwipeRow = (target: EventTarget | null): boolean =>
+  target instanceof Element && target.closest('[data-swipe-row]') !== null
