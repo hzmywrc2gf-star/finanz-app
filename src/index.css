@@ -1,28 +1,42 @@
 :root {
-  --bg: #f2f2f7;
+  --bg: #f4f6f8;
   --card: #ffffff;
-  --card-2: #f2f2f7;
-  --text: #000000;
-  --text-2: rgba(60, 60, 67, 0.6);
-  --sep: rgba(60, 60, 67, 0.18);
-  --accent: #007aff;
-  --income: #34c759;
-  --income-text: #248a3d;
-  --expense: #ff3b30;
-  --expense-text: #d70015;
-  --ok: #34c759;
-  --ok-text: #248a3d;
-  --warn: #ff9500;
-  --warn-text: #c93400;
+  --card-2: #f1f5f9;
+  --text: #1e293b;
+  --text-2: #5b6b80;
+  --sep: rgba(30, 41, 59, 0.14);
+  /* Links und Textknöpfe; Hauptknöpfe nutzen --btn-bg (Schiefer), Grün steht für Wachstum */
+  --accent: #047857;
+  --income: #059669;
+  --income-text: #047857;
+  --expense: #dc2626;
+  --expense-text: #dc2626;
+  --ok: #059669;
+  --ok-text: #047857;
+  --warn: #d97706;
+  --warn-text: #b45309;
   --over: var(--expense);
   --over-text: var(--expense-text);
-  --tabbar-bg: rgba(249, 249, 249, 0.86);
-  --backdrop: rgba(0, 0, 0, 0.4);
-  --seg-bg: rgba(118, 118, 128, 0.12);
+  --tabbar-bg: rgba(255, 255, 255, 0.86);
+  --backdrop: rgba(15, 23, 42, 0.4);
+  --seg-bg: rgba(100, 116, 139, 0.14);
   --seg-active: #ffffff;
+  --btn-bg: #1e293b;
+  --btn-text: #ffffff;
+  --tab-active: #1e293b;
+  --tab-inactive: #64748b;
+  --switch-on: #059669;
+  --toast-bg: #1e293b;
+  --toast-text: #ffffff;
+  --toast-action: #34d399;
+  --tile-1: #1e293b;
+  --tile-1-fg: #ffffff;
+  --tile-2: #059669;
+  --tile-3: #64748b;
+  --tile-ring: transparent;
   --radius: 15px;
   --tabbar-h: 56px;
-  --delete-bg: #d70015;
+  --delete-bg: #dc2626;
   color-scheme: light dark;
 }
 
@@ -37,49 +51,67 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #000000;
-    --card: #1c1c1e;
-    --card-2: #2c2c2e;
-    --text: #ffffff;
-    --text-2: rgba(235, 235, 245, 0.6);
-    --sep: rgba(84, 84, 88, 0.6);
-    --accent: #0a84ff;
-    --income: #30d158;
-    --income-text: #30d158;
-    --expense: #ff453a;
-    --expense-text: #ff6961;
-    --ok: #30d158;
-    --ok-text: #30d158;
-    --warn: #ff9f0a;
-    --warn-text: #ffb340;
-    --tabbar-bg: rgba(29, 29, 31, 0.86);
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-2: #273449;
+    --text: #f1f5f9;
+    --text-2: #94a3b8;
+    --sep: rgba(148, 163, 184, 0.22);
+    --accent: #34d399;
+    --income: #34d399;
+    --income-text: #34d399;
+    --expense: #f87171;
+    --expense-text: #f87171;
+    --ok: #34d399;
+    --ok-text: #34d399;
+    --warn: #fbbf24;
+    --warn-text: #fbbf24;
+    --tabbar-bg: rgba(30, 41, 59, 0.86);
     --backdrop: rgba(0, 0, 0, 0.6);
-    --seg-bg: rgba(118, 118, 128, 0.24);
-    --seg-active: #636366;
+    --seg-bg: rgba(148, 163, 184, 0.2);
+    --seg-active: #334155;
+    --btn-bg: #f1f5f9;
+    --btn-text: #0f172a;
+    --tab-active: #f1f5f9;
+    --tab-inactive: #94a3b8;
+    --toast-bg: #273449;
+    --toast-text: #f1f5f9;
+    --tile-1: #334155;
+    --tile-1-fg: #f1f5f9;
+    --tile-ring: rgba(148, 163, 184, 0.28);
   }
 }
 
 /* Erzwungen dunkel bei hellem System: dieselben Werte (nur hier dupliziert, CSS kann Media-Query und Attribut nicht teilen) */
 :root[data-theme='dark'] {
-  --bg: #000000;
-  --card: #1c1c1e;
-  --card-2: #2c2c2e;
-  --text: #ffffff;
-  --text-2: rgba(235, 235, 245, 0.6);
-  --sep: rgba(84, 84, 88, 0.6);
-  --accent: #0a84ff;
-  --income: #30d158;
-  --income-text: #30d158;
-  --expense: #ff453a;
-  --expense-text: #ff6961;
-  --ok: #30d158;
-  --ok-text: #30d158;
-  --warn: #ff9f0a;
-  --warn-text: #ffb340;
-  --tabbar-bg: rgba(29, 29, 31, 0.86);
+  --bg: #0f172a;
+  --card: #1e293b;
+  --card-2: #273449;
+  --text: #f1f5f9;
+  --text-2: #94a3b8;
+  --sep: rgba(148, 163, 184, 0.22);
+  --accent: #34d399;
+  --income: #34d399;
+  --income-text: #34d399;
+  --expense: #f87171;
+  --expense-text: #f87171;
+  --ok: #34d399;
+  --ok-text: #34d399;
+  --warn: #fbbf24;
+  --warn-text: #fbbf24;
+  --tabbar-bg: rgba(30, 41, 59, 0.86);
   --backdrop: rgba(0, 0, 0, 0.6);
-  --seg-bg: rgba(118, 118, 128, 0.24);
-  --seg-active: #636366;
+  --seg-bg: rgba(148, 163, 184, 0.2);
+  --seg-active: #334155;
+  --btn-bg: #f1f5f9;
+  --btn-text: #0f172a;
+  --tab-active: #f1f5f9;
+  --tab-inactive: #94a3b8;
+  --toast-bg: #273449;
+  --toast-text: #f1f5f9;
+  --tile-1: #334155;
+  --tile-1-fg: #f1f5f9;
+  --tile-ring: rgba(148, 163, 184, 0.28);
 }
 
 * {
@@ -262,8 +294,8 @@ button.row:is(:active, [data-pressed]),
   padding: 4px 4px 4px 16px;
   min-height: 48px;
   border-radius: 14px;
-  background: #2c2c2e;
-  color: #fff;
+  background: var(--toast-bg);
+  color: var(--toast-text);
   font-size: 15px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -271,7 +303,7 @@ button.row:is(:active, [data-pressed]),
 .toast button {
   min-height: 44px;
   padding: 0 14px;
-  color: #64a8ff;
+  color: var(--toast-action);
   font-weight: 600;
   font-size: 15px;
 }
@@ -279,14 +311,6 @@ button.row:is(:active, [data-pressed]),
   from {
     transform: translateY(12px);
     opacity: 0;
-  }
-}
-:root[data-theme='dark'] .toast {
-  background: #3a3a3c;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .toast {
-    background: #3a3a3c;
   }
 }
 
@@ -552,8 +576,8 @@ button.row:is(:active, [data-pressed]) {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
+  background: var(--btn-bg);
+  color: var(--btn-text);
   display: grid;
   place-items: center;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
@@ -590,7 +614,7 @@ button.row:is(:active, [data-pressed]) {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  color: var(--text-2);
+  color: var(--tab-inactive);
   font-size: 10px;
   font-weight: 500;
   min-height: 44px;
@@ -599,7 +623,7 @@ button.row:is(:active, [data-pressed]) {
   white-space: nowrap;
 }
 .tab[aria-current='page'] {
-  color: var(--accent);
+  color: var(--tab-active);
 }
 
 /* Sheet */
@@ -836,8 +860,8 @@ button.row:is(:active, [data-pressed]) {
   width: 100%;
   min-height: 50px;
   border-radius: 13px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--btn-bg);
+  color: var(--btn-text);
   font-size: 17px;
   font-weight: 600;
   margin-top: 16px;
@@ -1180,15 +1204,17 @@ button.row:is(:active, [data-pressed]) {
   display: grid;
   place-items: center;
   color: #fff;
+  box-shadow: inset 0 0 0 1px var(--tile-ring);
 }
 .menu-icon.blue {
-  background: var(--accent);
+  background: var(--tile-1);
+  color: var(--tile-1-fg);
 }
 .menu-icon.green {
-  background: var(--income);
+  background: var(--tile-2);
 }
 .menu-icon.orange {
-  background: var(--warn);
+  background: var(--tile-3);
 }
 .row-value {
   flex: none;
@@ -1342,8 +1368,8 @@ button.row:is(:active, [data-pressed]) {
   font-weight: 600;
 }
 .confirm-actions button.primary {
-  background: var(--accent);
-  color: #fff;
+  background: var(--btn-bg);
+  color: var(--btn-text);
 }
 .confirm-actions button:is(:active, [data-pressed]) {
   opacity: 0.7;
@@ -1375,7 +1401,7 @@ button.row:is(:active, [data-pressed]) {
   transition: transform 0.2s ease;
 }
 .field input.switch:checked {
-  background: var(--income);
+  background: var(--switch-on);
 }
 .field input.switch:checked::after {
   transform: translateX(20px);
@@ -1467,7 +1493,8 @@ button.row:is(:active, [data-pressed]) {
 }
 .lock-icon {
   border-radius: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  /* feiner Rand: im Dunkeln hebt sich die Schiefer-Kachel sonst kaum vom Hintergrund ab */
+  box-shadow: 0 0 0 1px var(--tile-ring), 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 .lock-face {
   display: flex;
@@ -1654,4 +1681,5 @@ html[data-privacy] #privacy-cover {
   width: 96px;
   height: 96px;
   border-radius: 22px;
+  box-shadow: 0 0 0 1px var(--tile-ring);
 }

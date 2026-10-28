@@ -550,16 +550,16 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await tab('Budgets').click()
   await mustRow('Lebensmittel', 'Lebensmittel | 320,00 € von 400,00 € | noch 80,00 € | 80,0 %', 'Lebensmittel 80 %')
   let remaining = row('Lebensmittel').getByText('noch 80,00 €')
-  if ((await css(remaining, 'color')) !== 'rgb(201, 52, 0)') throw new Error('Warn-Textfarbe falsch: ' + (await css(remaining, 'color')))
+  if ((await css(remaining, 'color')) !== 'rgb(180, 83, 9)') throw new Error('Warn-Textfarbe falsch: ' + (await css(remaining, 'color')))
   const fill = row('Lebensmittel').locator('.bar-fill')
-  if ((await css(fill, 'backgroundColor')) !== 'rgb(255, 149, 0)' || (await fill.evaluate((el) => el.style.width)) !== '80%') throw new Error('Warn-Balken falsch')
-  ok('Genau 80 % (320,00 € von 400,00 €): Status warn, „noch 80,00 €“ in #C93400, Balken #FF9500 mit 80 % Breite')
+  if ((await css(fill, 'backgroundColor')) !== 'rgb(217, 119, 6)' || (await fill.evaluate((el) => el.style.width)) !== '80%') throw new Error('Warn-Balken falsch')
+  ok('Genau 80 % (320,00 € von 400,00 €): Status warn, „noch 80,00 €“ in #B45309, Balken #D97706 mit 80 % Breite')
 
 
   // Start-Hinweis (warn), Tippen öffnet den Budgets-Tab
   await tab('Start').click()
   const alertCard = page.getByRole('button', { name: /80,0 % verbraucht/ })
-  if ((await css(alertCard.getByText('80,0 % verbraucht · noch 80,00 €'), 'color')) !== 'rgb(201, 52, 0)') throw new Error('Start-Hinweis: Warnfarbe falsch')
+  if ((await css(alertCard.getByText('80,0 % verbraucht · noch 80,00 €'), 'color')) !== 'rgb(180, 83, 9)') throw new Error('Start-Hinweis: Warnfarbe falsch')
   const startTxt = await bodyText()
   if (startTxt.indexOf('BUDGETS') < startTxt.indexOf('Kontostand') || startTxt.indexOf('BUDGETS') > startTxt.indexOf('Alle Buchungen')) throw new Error('Budget-Karte steht an der falschen Stelle')
   await alertCard.click()
@@ -573,11 +573,11 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await tab('Budgets').click()
   await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 23,10 € drüber | 105,8 %', 'Lebensmittel drüber')
   remaining = row('Lebensmittel').getByText('23,10 € drüber')
-  if ((await css(remaining, 'color')) !== 'rgb(215, 0, 21)') throw new Error('Over-Textfarbe falsch: ' + (await css(remaining, 'color')))
-  if ((await css(fill, 'backgroundColor')) !== 'rgb(255, 59, 48)' || (await fill.evaluate((el) => el.style.width)) !== '100%') throw new Error('Over-Balken falsch')
+  if ((await css(remaining, 'color')) !== 'rgb(220, 38, 38)') throw new Error('Over-Textfarbe falsch: ' + (await css(remaining, 'color')))
+  if ((await css(fill, 'backgroundColor')) !== 'rgb(220, 38, 38)' || (await fill.evaluate((el) => el.style.width)) !== '100%') throw new Error('Over-Balken falsch')
   await tab('Start').click()
   await expectText('105,8 % · 23,10 € drüber')
-  ok('Über Budget (423,10 € von 400,00 €): „23,10 € drüber“ in #D70015, Balken rot und auf 100 % gekappt, Start-Hinweis „105,8 % · 23,10 € drüber“')
+  ok('Über Budget (423,10 € von 400,00 €): „23,10 € drüber“ in #DC2626, Balken rot und auf 100 % gekappt, Start-Hinweis „105,8 % · 23,10 € drüber“')
 
   // Monatsnavigation
   await tab('Budgets').click()
@@ -605,8 +605,8 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const tt = nbsp(await totalCard.innerText()).trim().replace(/\s*\n\s*/g, ' | ')
   if (tt !== 'Gesamt | noch 156,90 € | 2.043,10 € von 2.200,00 €') throw new Error('Gesamt-Karte: ' + tt)
   if (nbsp(await totalCard.getByRole('progressbar').getAttribute('aria-valuetext')) !== '92,9 % verbraucht') throw new Error('Gesamt-Progressbar')
-  if ((await css(row('Freizeit').locator('.bar-fill'), 'backgroundColor')) !== 'rgb(52, 199, 89)') throw new Error('Ok-Balken falsch')
-  if ((await css(row('Freizeit').getByText('noch 80,00 €'), 'color')) !== 'rgb(36, 138, 61)') throw new Error('Ok-Textfarbe falsch')
+  if ((await css(row('Freizeit').locator('.bar-fill'), 'backgroundColor')) !== 'rgb(5, 150, 105)') throw new Error('Ok-Balken falsch')
+  if ((await css(row('Freizeit').getByText('noch 80,00 €'), 'color')) !== 'rgb(4, 120, 87)') throw new Error('Ok-Textfarbe falsch')
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: `${SHOTS}/12-budgets.png`, fullPage: true })
   await tab('Start').click()
@@ -660,7 +660,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const after = (title) => page.locator('.section-title', { hasText: title }).locator('xpath=following-sibling::*[1]')
   const css = (loc, prop) => loc.evaluate((el, p) => getComputedStyle(el)[p], prop)
   const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
-  const GREEN = 'rgb(36, 138, 61)', RED = 'rgb(215, 0, 21)'
+  const GREEN = 'rgb(4, 120, 87)', RED = 'rgb(220, 38, 38)'
   const noOverflow = async (what) => {
     if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error(`${what}: horizontaler Überlauf`)
   }
@@ -685,7 +685,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await css(page.locator('.summary .v').nth(0), 'color'), GREEN, 'Einnahmen grün')
   must(await css(page.locator('.summary .v').nth(1), 'color'), RED, 'Ausgaben rot')
   must(await css(page.locator('.summary .v').nth(2), 'color'), GREEN, 'Saldo ≥ 0 grün')
-  must(await css(page.locator('.summary-extra .bar-head').nth(1), 'color'), 'rgba(60, 60, 67, 0.6)', 'wiederkehrend gedämpft')
+  must(await css(page.locator('.summary-extra .bar-head').nth(1), 'color'), 'rgb(91, 107, 128)', 'wiederkehrend gedämpft')
   ok('Monat Oktober 2026: Einnahmen 2.500,00 €, Ausgaben 2.073,10 €, Saldo 426,90 € (grün), Sparquote 17,1 %, davon wiederkehrend 800,00 € (gedämpft); deckt sich mit localStorage')
 
   // Vergleich zum Vormonat (September: Einnahmen 0, Ausgaben 850,00, Saldo −850,00)
@@ -711,7 +711,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const [bMai, bAug, bOkt] = [await bars(0), await bars(3), await bars(5)]
   if (bMai[0].h !== 0 || bMai[1].h !== 0) throw new Error('Nullmonat zeigt einen Balken')
   if (bAug[0].h !== 0 || bAug[1].h <= 0) throw new Error('August: Einnahmen 0 → kein Balken, Ausgaben vorhanden')
-  if (!(bOkt[0].x < bOkt[1].x) || bOkt[0].bg !== 'rgb(52, 199, 89)' || bOkt[1].bg !== 'rgb(255, 59, 48)') throw new Error('Reihenfolge/Farben Einnahmen links, Ausgaben rechts: ' + JSON.stringify(bOkt))
+  if (!(bOkt[0].x < bOkt[1].x) || bOkt[0].bg !== 'rgb(5, 150, 105)' || bOkt[1].bg !== 'rgb(220, 38, 38)') throw new Error('Reihenfolge/Farben Einnahmen links, Ausgaben rechts: ' + JSON.stringify(bOkt))
   if (bOkt[0].r !== '4px') throw new Error('Balken nicht oben gerundet')
   // gemeinsame Achse 0..3.000 €: 2.500 → 83,3 % und 2.073,10 → 69,1 % der Plot-Höhe (140 px)
   if (Math.abs(bOkt[0].h - 140 * 2500 / 3000) > 1 || Math.abs(bOkt[1].h - 140 * 2073.1 / 3000) > 1) throw new Error('Balkenhöhen passen nicht zur gemeinsamen Achse: ' + JSON.stringify(bOkt))
@@ -720,7 +720,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if ((await cols.nth(0).boundingBox()).width < 44) throw new Error('Trefferfläche < 44 px')
   const legend = nbsp(await page.locator('.legend').innerText()).replace(/\s+/g, ' ')
   must(legend, 'Einnahmen Ausgaben', 'Legende')
-  must(await css(page.locator('.legend span').nth(0), 'color'), 'rgb(0, 0, 0)', 'Legendentext in Normalfarbe')
+  must(await css(page.locator('.legend span').nth(0), 'color'), 'rgb(30, 41, 59)', 'Legendentext in Normalfarbe')
   ok('Verlauf: 6 Gruppen Mai–Okt (Okt fett), Einnahmen links grün / Ausgaben rechts rot, Nullmonate ohne Balken, Höhen auf gemeinsamer Achse 0–3.000 €, Treffer ≥ 44 px, Legende')
 
   // Callout
@@ -846,7 +846,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await css(page.locator('.summary .v').nth(2), 'color'), RED, 'Saldo < 0 rot')
   must(flat(await page.locator('.summary-extra').innerText()), 'davon wiederkehrend | 800,00 €', 'Sparquote bei Einnahmen 0 ausgeblendet')
   must((await rows()).join(' // '), 'Einnahmen | Vormonat 0,00 € | ±0,00 € // Ausgaben | Vormonat 800,00 € | ▲+50,00 € // Saldo | Vormonat −800,00 € | ▼−50,00 €', 'Vergleich September')
-  must(await css(cmp().locator('.row-amount').nth(0), 'color'), 'rgba(60, 60, 67, 0.6)', '±0 gedämpft')
+  must(await css(cmp().locator('.row-amount').nth(0), 'color'), 'rgb(91, 107, 128)', '±0 gedämpft')
   must(await css(cmp().locator('.row-amount').nth(2), 'color'), RED, 'Saldo schlechter = schlecht')
   await expectText('ggü. August 2026'); await expectNoText('Einnahmen nach Kategorie')
   must((await catRows('Ausgaben nach Kategorie')).join(' // '), 'Fixkosten | 800,00 €94,1 % // Freizeit ▲ 50,00 € | 50,00 €5,9 %', 'Kategorien September (Fixkosten unverändert ohne Delta)')
@@ -875,10 +875,10 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: `${SHOTS}/20-monat-dark.png`, fullPage: true })
-  must(await css(page.locator('.trend-bar').nth(10), 'backgroundColor'), 'rgb(48, 209, 88)', 'Dark: Einnahmen #30D158')
-  must(await css(page.locator('.trend-bar').nth(11), 'backgroundColor'), 'rgb(255, 69, 58)', 'Dark: Ausgaben #FF453A')
+  must(await css(page.locator('.trend-bar').nth(10), 'backgroundColor'), 'rgb(52, 211, 153)', 'Dark: Einnahmen #34D399')
+  must(await css(page.locator('.trend-bar').nth(11), 'backgroundColor'), 'rgb(248, 113, 113)', 'Dark: Ausgaben #F87171')
   await page.emulateMedia({ colorScheme: 'light' })
-  ok('Dark Mode: Balkenfarben Einnahmen #30D158 / Ausgaben #FF453A')
+  ok('Dark Mode: Balkenfarben Einnahmen #34D399 / Ausgaben #F87171')
 
   // Persistenz nach Neuladen
   await page.reload(); await tab('Monat').click()
@@ -893,7 +893,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
   const css = (loc, prop) => loc.evaluate((el, p) => getComputedStyle(el)[p], prop)
   const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
-  const RED = 'rgb(215, 0, 21)', INK = 'rgb(0, 0, 0)'
+  const RED = 'rgb(220, 38, 38)', INK = 'rgb(30, 41, 59)'
   const noOverflow = async (what) => {
     if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error(`${what}: horizontaler Überlauf`)
   }
@@ -1922,28 +1922,28 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
       }).observe(document, { childList: true, subtree: true })
     })
     await p.goto(URL)
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Hell: Hintergrund')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell: Hintergrund')
     await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
     await sleep(300) // Tab-Einblenden abwarten
     await p.screenshot({ path: `${SHOTS}/36-einstellungen-darstellung.png` })
     mustEq(await p.getByRole('group', { name: 'Darstellung' }).getByRole('button', { name: 'Automatisch' }).getAttribute('aria-pressed'), 'true', 'Standard Automatisch')
     await pick(p, 'Dunkel')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'Dunkel erzwungen: Hintergrund')
-    mustEq(await css(p, '.card', 'backgroundColor'), 'rgb(28, 28, 30)', 'Dunkel erzwungen: Karte')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'Dunkel erzwungen: Hintergrund')
+    mustEq(await css(p, '.card', 'backgroundColor'), 'rgb(30, 41, 59)', 'Dunkel erzwungen: Karte')
     mustEq(await p.evaluate(() => document.documentElement.dataset.theme), 'dark', 'data-theme')
     mustEq(await p.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark', 'color-scheme')
     mustEq(await p.evaluate(() => localStorage.getItem('finanz-app:theme')), 'dark', 'Key')
     const m = await metas(p)
-    if (!m.every((x) => x === '#000000')) throw new Error('theme-color bei Dunkel: ' + m)
+    if (!m.every((x) => x === '#0F172A')) throw new Error('theme-color bei Dunkel: ' + m)
     await tabOn(p, 'Start').click()
-    mustEq(await css(p, 'h1', 'color'), 'rgb(255, 255, 255)', 'Dunkel: Text')
+    mustEq(await css(p, 'h1', 'color'), 'rgb(241, 245, 249)', 'Dunkel: Text')
     await sleep(300)
     await p.screenshot({ path: `${SHOTS}/37-dunkel-erzwungen.png` })
     await p.reload()
     await p.locator('h1').first().waitFor()
     mustEq(await p.evaluate(() => window.__themeAtMount), 'dark', 'Thema vor dem ersten Rendern')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'Nach Neuladen: Hintergrund')
-    ok('Darstellung: Dunkel bei hellem System sofort wirksam (Hintergrund #000, Karte #1C1C1E, Text hell, color-scheme dark, theme-color #000000), nach Neuladen weiter dunkel und data-theme schon vor dem ersten Rendern gesetzt')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'Nach Neuladen: Hintergrund')
+    ok('Darstellung: Dunkel bei hellem System sofort wirksam (Hintergrund #0F172A, Karte #1E293B, Text hell, color-scheme dark, theme-color #0F172A), nach Neuladen weiter dunkel und data-theme schon vor dem ersten Rendern gesetzt')
 
     // Monat-Diagramm in den dunklen Farbvarianten, Datensicherung ohne Darstellung
     await tabOn(p, 'Start').click()
@@ -1953,9 +1953,9 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.getByRole('dialog').waitFor({ state: 'detached' })
     await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Monat', exact: true }).click()
     await p.locator('.trend-bar').first().waitFor({ state: 'attached' })
-    mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(48, 209, 88)', 'Dunkel: Einnahmen-Balken')
-    mustEq(await css(p, '.trend-bar:nth-child(2)', 'backgroundColor'), 'rgb(255, 69, 58)', 'Dunkel: Ausgaben-Balken')
-    ok('Darstellung: Monat-Diagramm nutzt unter erzwungenem Dunkel #30D158 / #FF453A')
+    mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(52, 211, 153)', 'Dunkel: Einnahmen-Balken')
+    mustEq(await css(p, '.trend-bar:nth-child(2)', 'backgroundColor'), 'rgb(248, 113, 113)', 'Dunkel: Ausgaben-Balken')
+    ok('Darstellung: Monat-Diagramm nutzt unter erzwungenem Dunkel #34D399 / #F87171')
     await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
     const dl = await plainExport(p)
     const backup = fs.readFileSync(await dl.path(), 'utf8')
@@ -1966,13 +1966,13 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await pick(p, 'Automatisch')
     mustEq(await p.evaluate(() => document.documentElement.hasAttribute('data-theme')), false, 'data-theme entfernt')
     mustEq(await p.evaluate(() => localStorage.getItem('finanz-app:theme')), null, 'Key entfernt')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Automatisch + System hell')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Automatisch + System hell')
     await p.emulateMedia({ colorScheme: 'dark' })
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'Automatisch + System dunkel')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'Automatisch + System dunkel')
     await p.emulateMedia({ colorScheme: 'light' })
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Automatisch + wieder hell')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Automatisch + wieder hell')
     const ms = await p.evaluate(() => [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => [m.media, m.content]))
-    mustEq(JSON.stringify(ms), JSON.stringify([['(prefers-color-scheme: light)', '#F2F2F7'], ['(prefers-color-scheme: dark)', '#000000']]), 'theme-color-Metas bei Automatisch')
+    mustEq(JSON.stringify(ms), JSON.stringify([['(prefers-color-scheme: light)', '#F4F6F8'], ['(prefers-color-scheme: dark)', '#0F172A']]), 'theme-color-Metas bei Automatisch')
     ok('Darstellung: Automatisch folgt dem System live (emulateMedia hell ↔ dunkel), data-theme entfernt, beide theme-color-Metas wiederhergestellt')
     await c.close()
   }
@@ -1981,13 +1981,13 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   {
     const { c, p } = await mk('dark')
     await p.goto(URL)
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'System dunkel: Hintergrund')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'System dunkel: Hintergrund')
     await pick(p, 'Hell')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Hell erzwungen: Hintergrund')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell erzwungen: Hintergrund')
     mustEq(await css(p, '.card', 'backgroundColor'), 'rgb(255, 255, 255)', 'Hell erzwungen: Karte')
     mustEq(await p.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'light', 'color-scheme')
     const m = await metas(p)
-    if (!m.every((x) => x === '#F2F2F7')) throw new Error('theme-color bei Hell: ' + m)
+    if (!m.every((x) => x === '#F4F6F8')) throw new Error('theme-color bei Hell: ' + m)
     await tabOn(p, 'Start').click()
     await p.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
     await p.fill('#tx-amount', '50')
@@ -1995,13 +1995,13 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.getByRole('dialog').waitFor({ state: 'detached' })
     await tabOn(p, 'Monat').click()
     await p.locator('.trend-bar').first().waitFor({ state: 'attached' })
-    mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(52, 199, 89)', 'Hell: Einnahmen-Balken')
+    mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(5, 150, 105)', 'Hell: Einnahmen-Balken')
     await sleep(300)
     await p.screenshot({ path: `${SHOTS}/38-hell-erzwungen.png` })
     await p.reload()
     await p.locator('h1').first().waitFor()
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Hell nach Neuladen')
-    ok('Darstellung: Hell bei dunklem System sofort wirksam und persistent (Hintergrund #F2F2F7, Karte weiß, Balken #34C759, theme-color #F2F2F7)')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell nach Neuladen')
+    ok('Darstellung: Hell bei dunklem System sofort wirksam und persistent (Hintergrund #F4F6F8, Karte weiß, Balken #059669, theme-color #F4F6F8)')
     await c.close()
   }
 }

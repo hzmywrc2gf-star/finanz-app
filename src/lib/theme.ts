@@ -6,7 +6,7 @@ export type ThemePref = 'system' | 'light' | 'dark'
 export const THEME_KEY = 'finanz-app:theme'
 
 const PREFS: readonly ThemePref[] = ['system', 'light', 'dark']
-const CHROME_COLOR = { light: '#F2F2F7', dark: '#000000' } as const
+const CHROME_COLOR = { light: '#F4F6F8', dark: '#0F172A' } as const
 
 /** Welches Erscheinungsbild gilt tatsächlich? Nur „Automatisch“ folgt dem System. */
 export function resolveTheme(pref: ThemePref, systemDark: boolean): 'light' | 'dark' {
