@@ -30,6 +30,8 @@ React 19 + Vite + TypeScript, vite-plugin-pwa (autoUpdate, precache), Vitest. Ke
 - `graphify-out/GRAPH_REPORT.md` (Überblick: Kern-Abstraktionen, Module, Zusammenhänge) und `graphify-out/graph.json` (vollständiger Code-Graph) liegen im Repo. Neue Chats: zuerst den Report lesen statt alle Dateien zu öffnen; gezielt abfragen mit `graphify query "<Frage>"`, `graphify explain "<Symbol>"`, `graphify path "A" "B"`.
 - Installation (falls nicht vorhanden): `uv tool install graphifyy` oder `pip install graphifyy` (Quelle: github.com/Graphify-Labs/graphify).
 - Nach Code-Änderungen vor dem Commit aktualisieren – offline, ohne KI-Dienst: `GRAPHIFY_BACKEND=none graphify update .`
+- Ist `graphify` nicht installiert (`command -v graphify` leer, z. B. in einer frischen Cloud-Sitzung), vor dem Aktualisieren neu installieren: `uv tool install graphifyy`, sonst `pip install graphifyy` (bei Bedarf in einem venv). Erst danach `update` ausführen.
+- Lässt sich der Graph nicht aktualisieren (Installation oder `update` schlägt fehl), gilt `GRAPH_REPORT.md` als möglicherweise veraltet: Aussagen daraus (Symbole, Dateien, Zusammenhänge) vor dem Verwenden gegen den echten Code prüfen (Datei öffnen bzw. per Suche bestätigen) und dem Nutzer melden, dass der Graph nicht aktualisiert wurde. Stand prüfen: „Built from commit“ im Report mit `git rev-parse HEAD` vergleichen.
 
 ## Prüfen
 `npm test` · `npm run build` · `npm run preview` + `npm run e2e` (Playwright, 71 Durchklick-Prüfungen inkl. Offline, Verträge, Budgets, Monatsauswertung, Start-Übersicht, Alle Buchungen mit Suche, Bargeld/Umbuchungen, manuelle Verträge (Bestätigen/Überspringen/Jetzt buchen), Migration v3→v4 und v4→v5 und Datumswechsel per `page.clock`).
