@@ -10,10 +10,14 @@ const TAP_OUT_MS = 150
 export function Greeting({ text, onDone }: { text: string; onDone: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const leaving = useRef(false)
+  const tapTimer = useRef(0)
   // the CSS animation normally ends it; the timer is only a safety net (e.g. animations switched off)
   useEffect(() => {
     const timer = window.setTimeout(onDone, 3000)
-    return () => window.clearTimeout(timer)
+    return () => {
+      window.clearTimeout(timer)
+      window.clearTimeout(tapTimer.current)
+    }
   }, [onDone])
 
   const leave = useCallback(() => {
@@ -24,11 +28,11 @@ export function Greeting({ text, onDone }: { text: string; onDone: () => void })
     const current = getComputedStyle(el).opacity
     el.style.animation = 'none'
     el.style.opacity = current
-    el.style.pointerEvents = 'none'
+    // pointer events stay on until unmount: iOS hit-tests the click at touch end, it must not reach the app below
     void el.offsetWidth
     el.style.transition = `opacity ${TAP_OUT_MS}ms ease-out`
     el.style.opacity = '0'
-    window.setTimeout(onDone, TAP_OUT_MS + 20)
+    tapTimer.current = window.setTimeout(onDone, TAP_OUT_MS + 20)
   }, [onDone])
 
   return (
@@ -37,6 +41,10 @@ export function Greeting({ text, onDone }: { text: string; onDone: () => void })
       className="greeting"
       role="status"
       onPointerDown={leave}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
       onAnimationEnd={(e) => e.target === e.currentTarget && onDone()}
     >
       <h1>{text}</h1>

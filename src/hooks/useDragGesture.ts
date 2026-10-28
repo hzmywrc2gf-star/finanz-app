@@ -60,6 +60,11 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
     }
     const move = (e: PointerEvent) => {
       if (state === 'idle' || e.pointerId !== id) return
+      // a mouse released outside the element never sends pointerup here: treat a buttonless move as cancel
+      if (e.pointerType === 'mouse' && e.buttons === 0) {
+        end(e, true)
+        return
+      }
       const dx = e.clientX - x0
       const dy = e.clientY - y0
       const main = horizontal() ? dx : dy

@@ -65,6 +65,10 @@ React 19 + Vite + TypeScript, vite-plugin-pwa (autoUpdate, precache), Vitest. Ke
 - **UI** (Einstellungen → „App-Sperre“, `AppLockSettings.tsx`, `LockSetupSheet.tsx`): Aus = Erklärung + „App-Sperre einrichten“ (Sheet in 4 Schritten: Passwort ≥ 10 Zeichen mit Stärkehinweis Schwach/Mittel/Stark und Warnung, Schlüssel groß/monospace mit „Kopieren“ + Pflicht-Haken, „Face ID hinzufügen?“ nur wenn `isPasskeyPrfLikelySupported`, Fertig; Hinweis auf verschlüsseltes Backup vorher). An = „Automatisch sperren“ (Segmented), „Face ID“ (Hinzufügen/Entfernen), „Passwort ändern“, „Neuen Wiederherstellungsschlüssel erzeugen“ (erst Rückfrage), „Jetzt sperren“, „App-Sperre ausschalten“ (ConfirmDialog, dann Passwort). Backups funktionieren unverändert (Export aus dem Speicher, Import wird verschlüsselt gespeichert). Haptik beim erfolgreichen Entsperren (nur nach einer Nutzeraktion, `haptic()` prüft `navigator.userActivation`) und beim Abschluss der Einrichtung.
 - **Nur auf einem echten iPhone prüfbar**: ob Safari/iOS 18 die PRF-Erweiterung im Standalone-PWA liefert, ob `get` ohne Tippen (Auto-Start) erlaubt ist, wie sich der Face-ID-Dialog auf `visibilitychange` auswirkt, ob der App-Umschalter-Schnappschuss den Sichtschutz zeigt, und das Verhalten von Passkey-Synchronisierung über iCloud (derselbe Passkey auf mehreren Geräten).
 
+## ECC-Bausteine (`.claude/agents`, `.claude/skills`)
+- Ausgewählte Agenten/Skills aus everything-claude-code (MIT), Details und Lizenz in `.claude/ECC-NOTICE.md`.
+- Regel (Nutzerwunsch): nur einsetzen, was für die aktuelle Aufgabe Sinn ergibt – nie routinemäßig alle. Kleine Änderungen ohne ECC-Agent; `react-reviewer`/`typescript-reviewer`/`code-reviewer` nur vor dem Merge bei nennenswertem Code; `security-reviewer` nur bei Verschlüsselung/Sperre/Backup/Import; `performance-optimizer` nur bei messbarem Ruckeln (`e2e/perf.mjs`); `a11y-architect` nur bei UI-Umbauten; `planner` für größere Schritte.
+
 ## Projektgraph (Graphify)
 - `graphify-out/GRAPH_REPORT.md` (Überblick: Kern-Abstraktionen, Module, Zusammenhänge) und `graphify-out/graph.json` (vollständiger Code-Graph) liegen im Repo. Neue Chats: zuerst den Report lesen statt alle Dateien zu öffnen; gezielt abfragen mit `graphify query "<Frage>"`, `graphify explain "<Symbol>"`, `graphify path "A" "B"`.
 - Installation (falls nicht vorhanden): `uv tool install graphifyy` oder `pip install graphifyy` (Quelle: github.com/Graphify-Labs/graphify).
@@ -78,6 +82,7 @@ Performance: `node e2e/perf.mjs` (nicht Teil von `npm run e2e`; braucht `npm run
 E2E-Hinweis: Push/Pop und Sheet-Schließen laufen animiert; vor Folgeprüfungen `settled()` (Stack `data-phase` = idle) bzw. `waitFor({ state: 'detached' })` abwarten statt fester Pausen (Übersicht und Unterseite liegen sonst kurz gleichzeitig im DOM).
 
 ## Backlog (nicht in v1)
+- Excel-Listen importieren (Nutzerwunsch): `.xlsx` und `.csv` (eigene Tabellen und/oder Bank-CSV), Vorschau mit anpassbarer Spaltenzuordnung (Datum, Betrag, Kategorie, Notiz), Zuordnung merken; Quelle (eigene Tabelle vs. Bank) und Dateiart beim Nutzer klären, bevor geplant wird.
 - Investitionen, Depot-Übersicht: Positionen manuell (Name/ISIN, Stückzahl, Kaufkurs), Kurs manuell nachtragen, Wert + Gewinn/Verlust; offline, keine Kurs-APIs (CORS, inoffizielle Quellen).
 - Investitionen, Sparpläne: Vertrag Konto → Depot, zählt wie eine Umbuchung nicht als Ausgabe.
 - Sparziele, Sync Handy/PC.
