@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centsToInputString, formatCents, formatDelta, formatPercent, formatSigned, parseEuroInput } from './money'
+import { centsToInputString, formatCents, formatDelta, formatPercent, formatWholeEuros, formatSigned, parseEuroInput } from './money'
 
 const nb = ' '
 
@@ -59,5 +59,16 @@ describe('formatDelta', () => {
     expect(formatDelta(12000)).toBe('+120,00\u00a0€')
     expect(formatDelta(-3550)).toBe('−35,50\u00a0€')
     expect(formatDelta(0)).toBe('±0,00\u00a0€')
+  })
+})
+
+describe('formatWholeEuros', () => {
+  it('rounds to whole euros with German grouping', () => {
+    expect(formatWholeEuros(400240)).toBe('4.002 €')
+    expect(formatWholeEuros(1152911)).toBe('11.529 €')
+    expect(formatWholeEuros(1176655)).toBe('11.767 €')
+    expect(formatWholeEuros(0)).toBe('0 €')
+    expect(formatWholeEuros(-24)).toBe('0 €')
+    expect(formatWholeEuros(-12345)).toBe('−123 €')
   })
 })

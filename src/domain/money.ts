@@ -90,3 +90,9 @@ export function parseEuroInput(
   if (cents > MAX_CENTS) return null
   return negative ? -cents : cents
 }
+
+/** Whole euros for chart labels: 400240 -> "4.002 €" (rounded half up, non-breaking space before €). */
+export function formatWholeEuros(cents: number): string {
+  const euros = Math.round(cents / 100) || 0 // `|| 0` turns -0 into 0
+  return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(euros).replace('-', '−')} €`
+}
