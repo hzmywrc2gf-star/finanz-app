@@ -1,8 +1,8 @@
 /* Pastell-Entwurf Finanzklar. Alle Farben als Variablen; Dunkel über data-theme="dark". Statisches Mockup, keine App-Dateien. */
 :root {
-  --bg: #F4F6F8; --top: #E6ECF5; --card: #FFFFFF; --text: #1E293B; --text-2: #5B6B80;
+  --bg: #F4F6F8; --top: #ECEAF7; --card: #FFFFFF; --text: #1E293B; --text-2: #5B6B80;
   --sep: rgba(30,41,59,.10); --chip: rgba(255,255,255,.72); --chip-solid: #FFFFFF;
-  --lav: #ECEAFB; --sky: #E3EDFA; --sage: #E6F0EA; --sand: #F5EEE2;
+  --lav: #ECEAFB; --sky: #E3EDFA; --sage: #E8EDF2; --sand: #F5EEE2;
   --btn-bg: #1E293B; --btn-text: #FFFFFF; --ink-soft: rgba(30,41,59,.08);
   --income-text: #047857; --expense-text: #DC2626; --expense-text-t: #C81E1E; /* -t: auf Pastellflächen (Kontrast ≥ 4,5) */
   --ok: #475569; --ok-hi: #64748B; --warn: #B95F05; --warn-hi: #C96F08; --warn-text: #A84E06; --over: #C2410C; --over-hi: #CC4A12; --over-text: #B8390A;
@@ -13,9 +13,9 @@
   color-scheme: light;
 }
 :root[data-theme='dark'] {
-  --bg: #0F172A; --top: #1C2849; --card: #1E293B; --text: #F1F5F9; --text-2: #94A3B8;
+  --bg: #0F172A; --top: #22264A; --card: #1E293B; --text: #F1F5F9; --text-2: #94A3B8;
   --sep: rgba(148,163,184,.20); --chip: rgba(255,255,255,.09); --chip-solid: #334155;
-  --lav: #262A45; --sky: #1F2E44; --sage: #22322C; --sand: #33302A;
+  --lav: #282C47; --sky: #1F2E44; --sage: #253140; --sand: #2E2E36;
   --btn-bg: #F1F5F9; --btn-text: #0F172A; --ink-soft: rgba(241,245,249,.10);
   --income-text: #34D399; --expense-text: #F87171; --expense-text-t: #F87171;
   --ok: #94A3B8; --ok-hi: #CBD5E1; --warn: #FBBF24; --warn-hi: #FCD66B; --warn-text: #FBBF24; --over: #FB923C; --over-hi: #FDB27A; --over-text: #FB923C;

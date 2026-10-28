@@ -30,12 +30,12 @@ Generiert von `scripts/kontraste.mjs`. Text ≥ 4,5:1 (große Schrift ≥ 24 px 
 | Betrag Ausgabe #C81E1E | Himmel | 4.85:1 | 4.5:1 | ok |
 | Warn-Text #A84E06 | Himmel | 4.73:1 | 4.5:1 | ok |
 | Über-Text #B8390A | Himmel | 4.90:1 | 4.5:1 | ok |
-| Haupttext #1E293B | Salbei | 12.55:1 | 4.5:1 | ok |
-| Sekundärtext #5B6B80 | Salbei | 4.67:1 | 4.5:1 | ok |
-| Beitrag Einnahme #047857 | Salbei | 4.70:1 | 4.5:1 | ok |
-| Betrag Ausgabe #C81E1E | Salbei | 4.92:1 | 4.5:1 | ok |
-| Warn-Text #A84E06 | Salbei | 4.80:1 | 4.5:1 | ok |
-| Über-Text #B8390A | Salbei | 4.97:1 | 4.5:1 | ok |
+| Haupttext #1E293B | Nebel | 12.42:1 | 4.5:1 | ok |
+| Sekundärtext #5B6B80 | Nebel | 4.62:1 | 4.5:1 | ok |
+| Beitrag Einnahme #047857 | Nebel | 4.66:1 | 4.5:1 | ok |
+| Betrag Ausgabe #C81E1E | Nebel | 4.10:1 | 4.5:1 | **FEHLER** |
+| Warn-Text #A84E06 | Nebel | 4.74:1 | 4.5:1 | ok |
+| Über-Text #B8390A | Nebel | 4.91:1 | 4.5:1 | ok |
 | Haupttext #1E293B | Sand | 12.69:1 | 4.5:1 | ok |
 | Sekundärtext #5B6B80 | Sand | 4.72:1 | 4.5:1 | ok |
 | Beitrag Einnahme #047857 | Sand | 4.76:1 | 4.5:1 | ok |
@@ -56,23 +56,23 @@ Generiert von `scripts/kontraste.mjs`. Text ≥ 4,5:1 (große Schrift ≥ 24 px 
 |---|---|---|---|
 | ok neutral #475569 | Lavendel | 6.40:1 | ok |
 | ok neutral #475569 | Himmel | 6.41:1 | ok |
-| ok neutral #475569 | Salbei | 6.50:1 | ok |
+| ok neutral #475569 | Nebel | 6.43:1 | ok |
 | ok neutral #475569 | Sand | 6.57:1 | ok |
 | warn #B95F05 | Lavendel | 3.77:1 | ok |
 | warn #B95F05 | Himmel | 3.78:1 | ok |
-| warn #B95F05 | Salbei | 3.83:1 | ok |
+| warn #B95F05 | Nebel | 3.79:1 | ok |
 | warn #B95F05 | Sand | 3.87:1 | ok |
 | warn (heller Verlaufsende) #C96F08 | Lavendel | 3.08:1 | ok |
 | warn (heller Verlaufsende) #C96F08 | Himmel | 3.08:1 | ok |
-| warn (heller Verlaufsende) #C96F08 | Salbei | 3.13:1 | ok |
+| warn (heller Verlaufsende) #C96F08 | Nebel | 3.09:1 | ok |
 | warn (heller Verlaufsende) #C96F08 | Sand | 3.16:1 | ok |
 | über #C2410C | Lavendel | 4.37:1 | ok |
 | über #C2410C | Himmel | 4.38:1 | ok |
-| über #C2410C | Salbei | 4.44:1 | ok |
+| über #C2410C | Nebel | 4.40:1 | ok |
 | über #C2410C | Sand | 4.49:1 | ok |
 | über (Verlaufsende) #CC4A12 | Lavendel | 3.89:1 | ok |
 | über (Verlaufsende) #CC4A12 | Himmel | 3.90:1 | ok |
-| über (Verlaufsende) #CC4A12 | Salbei | 3.95:1 | ok |
+| über (Verlaufsende) #CC4A12 | Nebel | 3.91:1 | ok |
 | über (Verlaufsende) #CC4A12 | Sand | 4.00:1 | ok |
 
 ## Dunkel
@@ -81,42 +81,42 @@ Generiert von `scripts/kontraste.mjs`. Text ≥ 4,5:1 (große Schrift ≥ 24 px 
 |---|---|---|---|---|
 | Haupttext #F1F5F9 | Hintergrund | 16.30:1 | 4.5:1 | ok |
 | Sekundärtext #94A3B8 | Hintergrund | 6.96:1 | 4.5:1 | ok |
-| Haupttext #F1F5F9 | Verlauf oben (Spitze) | 13.23:1 | 4.5:1 | ok |
-| Sekundärtext #94A3B8 | Verlauf oben (Spitze) | 5.65:1 | 4.5:1 | ok |
+| Haupttext #F1F5F9 | Verlauf oben (Spitze) | 13.27:1 | 4.5:1 | ok |
+| Sekundärtext #94A3B8 | Verlauf oben (Spitze) | 5.67:1 | 4.5:1 | ok |
 | Haupttext #F1F5F9 | Karte | 13.35:1 | 4.5:1 | ok |
 | Sekundärtext #94A3B8 | Karte | 5.71:1 | 4.5:1 | ok |
 | Beitrag Einnahme #34D399 | Karte | 7.61:1 | 4.5:1 | ok |
 | Betrag Ausgabe #F87171 | Karte | 5.29:1 | 4.5:1 | ok |
 | Warn-Text #FBBF24 | Karte | 8.76:1 | 4.5:1 | ok |
 | Über-Text #FB923C | Karte | 6.46:1 | 4.5:1 | ok |
-| Haupttext #F1F5F9 | Lavendel | 12.78:1 | 4.5:1 | ok |
-| Sekundärtext #94A3B8 | Lavendel | 5.46:1 | 4.5:1 | ok |
-| Beitrag Einnahme #34D399 | Lavendel | 7.28:1 | 4.5:1 | ok |
-| Betrag Ausgabe #F87171 | Lavendel | 5.06:1 | 4.5:1 | ok |
-| Warn-Text #FBBF24 | Lavendel | 8.39:1 | 4.5:1 | ok |
-| Über-Text #FB923C | Lavendel | 6.19:1 | 4.5:1 | ok |
+| Haupttext #F1F5F9 | Lavendel | 12.44:1 | 4.5:1 | ok |
+| Sekundärtext #94A3B8 | Lavendel | 5.31:1 | 4.5:1 | ok |
+| Beitrag Einnahme #34D399 | Lavendel | 7.09:1 | 4.5:1 | ok |
+| Betrag Ausgabe #F87171 | Lavendel | 4.92:1 | 4.5:1 | ok |
+| Warn-Text #FBBF24 | Lavendel | 8.16:1 | 4.5:1 | ok |
+| Über-Text #FB923C | Lavendel | 6.02:1 | 4.5:1 | ok |
 | Haupttext #F1F5F9 | Himmel | 12.51:1 | 4.5:1 | ok |
 | Sekundärtext #94A3B8 | Himmel | 5.34:1 | 4.5:1 | ok |
 | Beitrag Einnahme #34D399 | Himmel | 7.13:1 | 4.5:1 | ok |
 | Betrag Ausgabe #F87171 | Himmel | 4.95:1 | 4.5:1 | ok |
 | Warn-Text #FBBF24 | Himmel | 8.21:1 | 4.5:1 | ok |
 | Über-Text #FB923C | Himmel | 6.05:1 | 4.5:1 | ok |
-| Haupttext #F1F5F9 | Salbei | 12.28:1 | 4.5:1 | ok |
-| Sekundärtext #94A3B8 | Salbei | 5.25:1 | 4.5:1 | ok |
-| Beitrag Einnahme #34D399 | Salbei | 7.00:1 | 4.5:1 | ok |
-| Betrag Ausgabe #F87171 | Salbei | 4.86:1 | 4.5:1 | ok |
-| Warn-Text #FBBF24 | Salbei | 8.06:1 | 4.5:1 | ok |
-| Über-Text #FB923C | Salbei | 5.95:1 | 4.5:1 | ok |
-| Haupttext #F1F5F9 | Sand | 12.00:1 | 4.5:1 | ok |
-| Sekundärtext #94A3B8 | Sand | 5.13:1 | 4.5:1 | ok |
-| Beitrag Einnahme #34D399 | Sand | 6.84:1 | 4.5:1 | ok |
-| Betrag Ausgabe #F87171 | Sand | 4.75:1 | 4.5:1 | ok |
-| Warn-Text #FBBF24 | Sand | 7.88:1 | 4.5:1 | ok |
-| Über-Text #FB923C | Sand | 5.81:1 | 4.5:1 | ok |
+| Haupttext #F1F5F9 | Nebel | 12.04:1 | 4.5:1 | ok |
+| Sekundärtext #94A3B8 | Nebel | 5.14:1 | 4.5:1 | ok |
+| Beitrag Einnahme #34D399 | Nebel | 6.86:1 | 4.5:1 | ok |
+| Betrag Ausgabe #F87171 | Nebel | 4.77:1 | 4.5:1 | ok |
+| Warn-Text #FBBF24 | Nebel | 7.90:1 | 4.5:1 | ok |
+| Über-Text #FB923C | Nebel | 5.83:1 | 4.5:1 | ok |
+| Haupttext #F1F5F9 | Sand | 12.29:1 | 4.5:1 | ok |
+| Sekundärtext #94A3B8 | Sand | 5.25:1 | 4.5:1 | ok |
+| Beitrag Einnahme #34D399 | Sand | 7.00:1 | 4.5:1 | ok |
+| Betrag Ausgabe #F87171 | Sand | 4.87:1 | 4.5:1 | ok |
+| Warn-Text #FBBF24 | Sand | 8.06:1 | 4.5:1 | ok |
+| Über-Text #FB923C | Sand | 5.95:1 | 4.5:1 | ok |
 | Chip-Text #F1F5F9 | Chip (9 % Weiß auf #1F2E44) | 9.45:1 | 4.5:1 | ok |
 | Pillen-Text #CBD5E1 | Chip (9 % Weiß auf #1F2E44) | 6.97:1 | 4.5:1 | ok |
-| Chip-Text #F1F5F9 | Chip (9 % Weiß auf #262A45) | 9.67:1 | 4.5:1 | ok |
-| Soft-Pille „Überspringen“ #F1F5F9 | Chip (9 % Weiß auf #262A45) | 9.67:1 | 4.5:1 | ok |
+| Chip-Text #F1F5F9 | Chip (9 % Weiß auf #282C47) | 9.41:1 | 4.5:1 | ok |
+| Soft-Pille „Überspringen“ #F1F5F9 | Chip (9 % Weiß auf #282C47) | 9.41:1 | 4.5:1 | ok |
 | Hauptknopf-Text #0F172A | Hauptknopf #F1F5F9 | 16.30:1 | 4.5:1 | ok |
 | Tab inaktiv #94A3B8 | Tab-Leiste (Karte) | 5.71:1 | 4.5:1 | ok |
 | Haupttext Tab aktiv | Tab-Leiste | 10.62:1 | 4.5:1 | ok |
@@ -125,25 +125,25 @@ Generiert von `scripts/kontraste.mjs`. Text ≥ 4,5:1 (große Schrift ≥ 24 px 
 
 | Balken | auf | Verhältnis | Ergebnis |
 |---|---|---|---|
-| ok neutral #94A3B8 | Lavendel | 5.46:1 | ok |
+| ok neutral #94A3B8 | Lavendel | 5.31:1 | ok |
 | ok neutral #94A3B8 | Himmel | 5.34:1 | ok |
-| ok neutral #94A3B8 | Salbei | 5.25:1 | ok |
-| ok neutral #94A3B8 | Sand | 5.13:1 | ok |
-| warn #FBBF24 | Lavendel | 8.39:1 | ok |
+| ok neutral #94A3B8 | Nebel | 5.14:1 | ok |
+| ok neutral #94A3B8 | Sand | 5.25:1 | ok |
+| warn #FBBF24 | Lavendel | 8.16:1 | ok |
 | warn #FBBF24 | Himmel | 8.21:1 | ok |
-| warn #FBBF24 | Salbei | 8.06:1 | ok |
-| warn #FBBF24 | Sand | 7.88:1 | ok |
-| warn (heller Verlaufsende) #FCD66B | Lavendel | 9.98:1 | ok |
+| warn #FBBF24 | Nebel | 7.90:1 | ok |
+| warn #FBBF24 | Sand | 8.06:1 | ok |
+| warn (heller Verlaufsende) #FCD66B | Lavendel | 9.71:1 | ok |
 | warn (heller Verlaufsende) #FCD66B | Himmel | 9.77:1 | ok |
-| warn (heller Verlaufsende) #FCD66B | Salbei | 9.59:1 | ok |
-| warn (heller Verlaufsende) #FCD66B | Sand | 9.37:1 | ok |
-| über #FB923C | Lavendel | 6.19:1 | ok |
+| warn (heller Verlaufsende) #FCD66B | Nebel | 9.40:1 | ok |
+| warn (heller Verlaufsende) #FCD66B | Sand | 9.59:1 | ok |
+| über #FB923C | Lavendel | 6.02:1 | ok |
 | über #FB923C | Himmel | 6.05:1 | ok |
-| über #FB923C | Salbei | 5.95:1 | ok |
-| über #FB923C | Sand | 5.81:1 | ok |
-| über (Verlaufsende) #FDB27A | Lavendel | 7.89:1 | ok |
+| über #FB923C | Nebel | 5.83:1 | ok |
+| über #FB923C | Sand | 5.95:1 | ok |
+| über (Verlaufsende) #FDB27A | Lavendel | 7.67:1 | ok |
 | über (Verlaufsende) #FDB27A | Himmel | 7.72:1 | ok |
-| über (Verlaufsende) #FDB27A | Salbei | 7.58:1 | ok |
-| über (Verlaufsende) #FDB27A | Sand | 7.41:1 | ok |
+| über (Verlaufsende) #FDB27A | Nebel | 7.43:1 | ok |
+| über (Verlaufsende) #FDB27A | Sand | 7.58:1 | ok |
 
-**Fehler/Warnungen gesamt: 0**
+**Fehler/Warnungen gesamt: 1**

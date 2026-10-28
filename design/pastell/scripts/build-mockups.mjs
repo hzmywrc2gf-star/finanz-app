@@ -86,12 +86,12 @@ w('start', page('Start oben', `<div class="page"><div class="titlebar"><h1 class
 const bud = (name, sub, pct, w, st) => `<div class="bud"><div class="bud-top"><div><div class="t">${name}</div><div class="s c-${st}">${sub}</div></div><span class="pct num c-${st}">${pct}</span></div><div class="bar ${st}"><i style="width:${Math.min(w, 100)}%"></i></div></div>`
 const upc = (t, s, a) => `<div class="row"><span class="ico">${I.repeat}</span><div class="main"><div class="t">${t}</div><div class="s">${s}</div></div><span class="amt expense num">${a}</span></div>`
 w('startunten', page('Start unten', `<div class="page scrolled snug">
-<section class="card section compact t-sand" aria-label="Budgets" style="margin-top:0"><div class="sec-head"><h2>Budgets</h2><span class="s muted" style="font-size:13px">Oktober</span></div>
+<section class="card section compact" aria-label="Budgets" style="margin-top:0"><div class="sec-head"><h2>Budgets</h2><span class="s muted" style="font-size:13px">Oktober</span></div>
 ${bud('Freizeit', '22,40 € drüber', '137,3 %', 100, 'over')}${bud('Lebensmittel', 'noch 23,45 €', '92,2 %', 92.2, 'warn')}${bud('Fixkosten', 'noch 120,01 €', '88,0 %', 88, 'warn')}</section>
 <section class="card section compact plain" aria-label="Demnächst fällig" style="padding-bottom:8px;margin-top:10px"><div class="sec-head"><h2>Demnächst fällig</h2></div>
 ${upc('Handyvertrag', 'Fr, 30.10.', eur(-1999))}${upc('Strom', 'So, 01.11.', eur(-6200))}${upc('Miete', 'Mo, 02.11.', eur(-86000))}</section>
 <div class="tiles compact"><button class="tile t-lav"><span class="ico">${I.list}</span><span><div class="l">Alle Buchungen</div><div class="v num">43</div></span></button>
-<button class="tile t-sage"><span class="ico">${I.cash}</span><span><div class="l">Bargeld</div><div class="v num">${eur(15000)}</div></span></button>
+<button class="tile t-sand"><span class="ico">${I.cash}</span><span><div class="l">Bargeld</div><div class="v num">${eur(15000)}</div></span></button>
 <button class="tile t-sky wide"><span class="ico">${I.doc}</span><span class="main"><div class="l">Verträge</div><div class="v num">5 · 971,89 €/Monat</div></span><span class="chev">${I.chev}</span></button></div></div>${tabbar('Start')}`, 'no-tint'))
 
 // ---- 4 Budgets ----
