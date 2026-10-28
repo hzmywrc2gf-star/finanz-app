@@ -21,6 +21,7 @@ Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, di
 - **Leichte Haptik**: kurzes Vibrieren/Tippen beim Speichern, Löschen und Rückgängig (Android; auf dem iPhone ab iOS 18, sonst stumm).
 - **Darstellung**: Automatisch (folgt dem iPhone), Hell oder Dunkel – Einstellungen → Darstellung, gilt sofort und wird nur auf diesem Gerät gemerkt (nicht in der Sicherung).
 - **Backup**: Export/Import aller Daten als JSON (Einstellungen → Datensicherung). Der Export ist standardmäßig mit Passwort verschlüsselt (AES-GCM-256, Schlüssel per PBKDF2-SHA-256 mit 600 000 Runden, nur Web Crypto des Browsers); ohne das Passwort lässt sich die Datei nicht wiederherstellen, es wird nirgends gespeichert. Unverschlüsselt exportieren geht nach einer Warnung; ältere Klartext-Backups lassen sich weiter importieren.
+- **App-Sperre** (optional): Einstellungen → App-Sperre. Dann liegen alle Daten nur noch verschlüsselt auf dem Gerät (AES-GCM-256, nur Web Crypto des Browsers) und Finanzklar fragt beim Öffnen nach Passwort, Wiederherstellungsschlüssel oder Face ID (Passkey, ab iOS 18). Sperrt sich nach 1 Minute Nichtbenutzung selbst (Sofort/1/5/15 Minuten wählbar), zeigt im App-Umschalter keine Beträge und begrüßt dich nach Face ID mit „Moin, <Name>“ (Name unter Einstellungen → Persönlich). Passwort **und** Wiederherstellungsschlüssel zu verlieren heißt: Daten weg – darum vorher ein verschlüsseltes Backup exportieren.
 - **Offline-fähig** und als App auf dem Home-Bildschirm installierbar.
 
 ## Starten
@@ -30,7 +31,7 @@ Voraussetzung: [Node.js](https://nodejs.org) 20 oder neuer.
 ```bash
 npm install
 npm run dev        # Entwicklungsserver auf http://localhost:5173
-npm test           # Unit-Tests (Geldformat, Datum, Kontostand, Monat, Backup)
+npm test           # Unit-Tests (Geldformat, Datum, Kontostand, Monat, Backup, Verschlüsselung, App-Sperre)
 npm run build      # Produktions-Build nach dist/
 npm run preview    # Build lokal ansehen auf http://localhost:4173
 npm run e2e        # Durchklick-Test (braucht laufendes `npm run preview` und Playwright)

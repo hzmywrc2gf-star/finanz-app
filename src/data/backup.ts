@@ -7,6 +7,9 @@ export function exportJSON(data: AppData): string {
   return JSON.stringify(data, null, 2)
 }
 
+/** Longest accepted greeting name. */
+export const MAX_NAME_LENGTH = 40
+
 const fail = (msg: string): never => {
   throw new Error(`Ungültige Sicherungsdatei: ${msg}`)
 }
@@ -22,10 +25,10 @@ const isDirection = (v: unknown): v is TransferDirection => v === 'withdrawal' |
 
 const isInterval = (v: unknown): v is Interval => v === 'monthly' || v === 'quarterly' || v === 'yearly'
 
-/** Strictly validates a parsed object of the current version (5); also used for stored data. Throws German Error. */
+/** Strictly validates a parsed object of the current version (6); also used for stored data. Throws German Error. */
 export function validateAppData(raw: unknown): AppData {
   if (!isObj(raw)) return fail('Kein gültiges Objekt.')
-  if (raw.version !== 5) return fail('Unbekannte Version.')
+  if (raw.version !== 6) return fail('Unbekannte Version.')
   if (!isObj(raw.settings)) return fail('Einstellungen fehlen.')
   const start = raw.settings.startBalanceCents
   if (typeof start !== 'number' || !Number.isSafeInteger(start)) {
@@ -34,6 +37,13 @@ export function validateAppData(raw: unknown): AppData {
   const startCash = raw.settings.startCashCents
   if (typeof startCash !== 'number' || !Number.isSafeInteger(startCash)) {
     return fail('Startbestand Bargeld ist keine ganze Zahl (Cent).')
+  }
+  let displayName: string | undefined
+  if (raw.settings.displayName !== undefined) {
+    const n = raw.settings.displayName
+    if (typeof n !== 'string' || n.length > MAX_NAME_LENGTH) return fail(`Der Name ist ungültig (höchstens ${MAX_NAME_LENGTH} Zeichen).`)
+    if (n.trim() !== n) return fail('Der Name hat überflüssige Leerzeichen.')
+    if (n) displayName = n
   }
   if (!Array.isArray(raw.categories)) return fail('Kategorien fehlen.')
   if (!Array.isArray(raw.transactions)) return fail('Buchungen fehlen.')
@@ -178,8 +188,8 @@ export function validateAppData(raw: unknown): AppData {
   }
 
   return {
-    version: 5,
-    settings: { startBalanceCents: start, startCashCents: startCash },
+    version: 6,
+    settings: { startBalanceCents: start, startCashCents: startCash, ...(displayName ? { displayName } : {}) },
     categories,
     transactions,
     recurring,

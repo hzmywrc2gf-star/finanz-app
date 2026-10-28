@@ -19,6 +19,8 @@ export interface FinanceApi {
   deleteTransaction(id: string): void
   setStartBalance(cents: number): void
   setStartCash(cents: number): void
+  /** Name for the greeting after Face ID unlock; empty removes it. */
+  setDisplayName(name: string): void
   addTransfer(input: TransferInput): void
   updateTransfer(id: string, input: TransferInput): void
   deleteTransfer(id: string): void
@@ -66,6 +68,12 @@ export function FinanceProvider({
   const ref = useRef<AppData | null>(null)
 
   useEffect(() => {
+    // The repository was swapped while running (app lock turned on or off): hand the data we already hold to the
+    // new one instead of reloading, so nothing changed in between is lost.
+    if (ref.current) {
+      repository.save(ref.current).catch(() => setSaveError(SAVE_ERROR))
+      return
+    }
     let cancelled = false
     repository.load().then((d) => {
       if (cancelled) return
@@ -133,6 +141,7 @@ export function FinanceProvider({
       },
       setStartBalance: (c) => apply((d) => A.setStartBalance(d, c)),
       setStartCash: (c) => apply((d) => A.setStartCash(d, c)),
+      setDisplayName: (n) => apply((d) => A.setDisplayName(d, n)),
       addTransfer: (i) => apply((d) => A.addTransfer(d, i)),
       updateTransfer: (id, i) => apply((d) => A.updateTransfer(d, id, i)),
       deleteTransfer: (id) => {

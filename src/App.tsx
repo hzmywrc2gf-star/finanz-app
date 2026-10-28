@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Transaction } from './domain/types'
-import { FinanceProvider } from './state/FinanceContext'
+import { LockProvider } from './state/LockProvider'
 import { StartStack } from './components/StartStack'
 import type { StackAnim } from './components/StartStack'
 import { TabBar } from './components/TabBar'
@@ -26,6 +26,14 @@ const subOf = (state: unknown): StartView => {
 }
 
 export default function App() {
+  return (
+    <LockProvider>
+      <AppContent />
+    </LockProvider>
+  )
+}
+
+function AppContent() {
   const [tab, setTab] = useState<TabId>('start')
   // The start tab has one level of sub-pages; tab changes always return to its root.
   const [nav, setNav] = useState<StartNav>({ view: 'hub', anim: 'instant' })
@@ -79,7 +87,7 @@ export default function App() {
   const back = () => goBack('animate')
 
   return (
-    <FinanceProvider>
+    <>
       <div key={tab} className="tab-fade">
         {tab === 'start' && (
           <StartStack
@@ -127,6 +135,6 @@ export default function App() {
           onClose={closeForm}
         />
       )}
-    </FinanceProvider>
+    </>
   )
 }

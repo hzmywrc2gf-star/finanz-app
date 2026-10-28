@@ -92,6 +92,14 @@ export function setStartCash(data: AppData, cents: number): AppData {
   return { ...data, settings: { ...data.settings, startCashCents: cents } }
 }
 
+/** Trimmed, at most 40 characters; empty removes the name. */
+export function setDisplayName(data: AppData, name: string): AppData {
+  const trimmed = name.trim()
+  if (trimmed.length > 40) throw new Error('Der Name darf höchstens 40 Zeichen haben.')
+  const settings = { startBalanceCents: data.settings.startBalanceCents, startCashCents: data.settings.startCashCents }
+  return { ...data, settings: trimmed ? { ...settings, displayName: trimmed } : settings }
+}
+
 export interface TransferInput {
   direction: TransferDirection
   amountCents: number

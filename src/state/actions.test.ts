@@ -4,7 +4,7 @@ import { bookDue, pendingConfirmations } from '../domain/recurring'
 import {
   addCategory, addRecurring, bookNextNow, confirmOccurrence, skipOccurrence, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
   addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
-  restoreTransaction, restoreTransfer, updateTransaction, updateTransfer,
+  restoreTransaction, restoreTransfer, setDisplayName, updateTransaction, updateTransfer,
 } from './actions'
 import type { RecurringInput } from './actions'
 
@@ -333,5 +333,15 @@ describe('undo of a delete', () => {
   it('restoreTransfer rejects an id that already exists', () => {
     const d = addTransfer(base(), { direction: 'deposit', amountCents: 100, date: '2026-10-27' }, { id: 't2', createdAt: 1 })
     expect(() => restoreTransfer(d, d.transfers[0])).toThrow('Die Umbuchung existiert bereits.')
+  })
+})
+
+describe('display name', () => {
+  it('trims, removes an empty name and limits the length', () => {
+    const d = createDefaultData()
+    expect(setDisplayName(d, '  Felix ').settings.displayName).toBe('Felix')
+    expect(setDisplayName(setDisplayName(d, 'Felix'), '   ').settings).not.toHaveProperty('displayName')
+    expect(setDisplayName(d, 'x'.repeat(40)).settings.displayName).toHaveLength(40)
+    expect(() => setDisplayName(d, 'x'.repeat(41))).toThrow(/40/)
   })
 })

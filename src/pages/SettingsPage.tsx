@@ -10,6 +10,7 @@ import type { AppData } from '../domain/types'
 import { useFinance } from '../state/FinanceContext'
 import { BackupExportSheet } from '../components/BackupExportSheet'
 import { BackupImportSheet } from '../components/BackupImportSheet'
+import { AppLockSettings } from '../components/AppLockSettings'
 import { CategoryManager } from '../components/CategoryManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SegmentedControl } from '../components/SegmentedControl'
@@ -23,7 +24,7 @@ const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
 ]
 
 export function SettingsPage() {
-  const { data, setStartBalance, setStartCash, replaceAll, saveError } = useFinance()
+  const { data, setStartBalance, setStartCash, setDisplayName, replaceAll, saveError } = useFinance()
   const [balance, setBalance] = useState(centsToInputString(data.settings.startBalanceCents))
   const [cash, setCash] = useState(centsToInputString(data.settings.startCashCents))
   const [balanceMsg, setBalanceMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -32,6 +33,8 @@ export function SettingsPage() {
   const [exporting, setExporting] = useState(false)
   const [confirmPlain, setConfirmPlain] = useState(false)
   const [encryptedFile, setEncryptedFile] = useState<string | null>(null)
+  const [name, setName] = useState(data.settings.displayName ?? '')
+  const [nameMsg, setNameMsg] = useState<string | null>(null)
   const [theme, setTheme] = useThemePref()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -48,6 +51,18 @@ export function SettingsPage() {
     setBalance(centsToInputString(cents))
     setCash(centsToInputString(cashCents))
     setBalanceMsg({ ok: true, text: 'Startguthaben gespeichert.' })
+  }
+
+  // Later (with sync) the name will come from the login instead of being typed here.
+  function saveName(e?: FormEvent) {
+    e?.preventDefault()
+    try {
+      setDisplayName(name)
+      setName(name.trim())
+      setNameMsg(null)
+    } catch (err) {
+      setNameMsg(err instanceof Error ? err.message : 'Name konnte nicht gespeichert werden.')
+    }
   }
 
   function exportPlain() {
@@ -119,6 +134,31 @@ export function SettingsPage() {
       </div>
       <div className="footnote">Automatisch folgt der Einstellung des iPhones.</div>
 
+      <div className="section-title">Persönlich</div>
+      <form className="card" onSubmit={saveName} noValidate>
+        <div className="field">
+          <label htmlFor="display-name">Dein Name</label>
+          <input
+            id="display-name"
+            autoComplete="given-name"
+            placeholder="Für die Begrüßung"
+            maxLength={40}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value)
+              setNameMsg(null)
+            }}
+            onBlur={() => saveName()}
+          />
+        </div>
+      </form>
+      {nameMsg && (
+        <div className="error" role="alert">
+          {nameMsg}
+        </div>
+      )}
+      <div className="footnote">Mit diesem Namen begrüßt dich Finanzklar, wenn du es mit Face ID entsperrst.</div>
+
       <div className="section-title">Startguthaben</div>
       <form className="card" onSubmit={saveBalance} noValidate>
         <div className="field">
@@ -168,6 +208,8 @@ export function SettingsPage() {
       </div>
 
       <CategoryManager />
+
+      <AppLockSettings onExportBackup={() => setExporting(true)} />
 
       <div className="section-title">Datensicherung</div>
       <div className="card btn-row">

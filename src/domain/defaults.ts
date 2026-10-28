@@ -31,7 +31,7 @@ export function createDefaultCategories(): Category[] {
 
 export function createDefaultData(): AppData {
   return {
-    version: 5,
+    version: 6,
     settings: { startBalanceCents: 0, startCashCents: 0 },
     categories: createDefaultCategories(),
     transactions: [],

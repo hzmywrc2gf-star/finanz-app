@@ -24,6 +24,8 @@ function hapticSwitch(): HTMLLabelElement {
 
 export function haptic(): void {
   try {
+    // before the first tap/key browsers refuse (and log) a vibration, e.g. after an automatic Face ID unlock
+    if (typeof navigator !== 'undefined' && navigator.userActivation && !navigator.userActivation.hasBeenActive) return
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate(10)
       return

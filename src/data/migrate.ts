@@ -2,7 +2,7 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
- * Brings stored/imported raw data to the current version (5). Pure; unknown shapes
+ * Brings stored/imported raw data to the current version (6). Pure; unknown shapes
  * are returned unchanged so validation can reject them with a proper message.
  */
 export function migrate(raw: unknown): unknown {
@@ -36,6 +36,10 @@ export function migrate(raw: unknown): unknown {
         ? data.recurring.map((r) => (isObj(r) ? { ...r, autoBook: true } : r))
         : data.recurring,
     }
+  }
+  if (isObj(data) && data.version === 5) {
+    // v5 -> v6: optional settings.displayName was added, nothing to convert
+    data = { ...data, version: 6 }
   }
   return data
 }

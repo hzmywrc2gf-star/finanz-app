@@ -5,9 +5,8 @@ import { todayISO } from '../domain/dates'
 import type { AppData } from '../domain/types'
 import { downloadTextFile } from '../lib/download'
 import { haptic } from '../lib/haptics'
+import { MIN_PASSWORD_LENGTH } from '../lib/password'
 import { Sheet } from './Sheet'
-
-export const MIN_PASSWORD_LENGTH = 10
 
 /** Password prompt for the encrypted backup. The password lives only in this component's state until the file is made. */
 export function BackupExportSheet({

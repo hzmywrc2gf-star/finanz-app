@@ -69,10 +69,15 @@ export interface Settings {
   startBalanceCents: number
   /** Cash on hand at the start, integer cents. */
   startCashCents: number
+  /**
+   * Name for the greeting after unlocking, trimmed, at most 40 characters; absent = none.
+   * Later (with sync) the name will come from the login instead.
+   */
+  displayName?: string
 }
 
 export interface AppData {
-  version: 5
+  version: 6
   settings: Settings
   categories: Category[]
   transactions: Transaction[]
