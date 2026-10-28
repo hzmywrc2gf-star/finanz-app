@@ -66,8 +66,104 @@ async function balance() {
   return t.match(/Kontostand\s*\n?\s*([-−]?[\d.]+,\d\d €)/)?.[1]
 }
 
+
+// ---------- App-Sperre ist Pflicht: Einrichtung, Entsperren, Tresor lesen ----------
+// Ohne Tresor zeigt die App nur den Einrichtungsbildschirm; mit Tresor zuerst den Sperrbildschirm. Ein Tresor aus der ersten
+// Einrichtung (leere Daten) wird gemerkt und per addInitScript in spätere Kontexte gelegt (nur wenn dort noch keiner ist),
+// dann genügt je Kontext ein Entsperren (1 PBKDF2-Ableitung statt der ganzen Einrichtung).
+const TEST_PW = 'Test-Passwort-2026!'
+const KEY_VAULT = 'finanz-app:vault'
+const SETUP = 'main.setup-screen'
+const LOCKED = 'main.lock-screen:not(.setup-screen)'
+const APPNAV = 'nav[aria-label="Hauptnavigation"]'
+let emptyVault = null
+async function runSetup(p, { password = TEST_PW } = {}) {
+  await p.fill('#lock-pw', password); await p.fill('#lock-pw2', password)
+  await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+  await p.getByTestId('recovery-key').waitFor()
+  await p.getByRole('checkbox', { name: /Ich habe den Schlüssel sicher notiert/ }).check()
+  await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+  await p.locator(SETUP).getByRole('heading', { name: /Finanzklar ist geschützt|Face ID hinzufügen\?/ }).waitFor({ timeout: 60000 })
+  if (await p.getByRole('heading', { name: 'Face ID hinzufügen?' }).count()) {
+    await p.getByRole('button', { name: 'Überspringen' }).click()
+    await p.getByRole('heading', { name: 'Finanzklar ist geschützt' }).waitFor()
+  }
+  await p.getByRole('button', { name: 'Fertig' }).click()
+}
+// wartet auf Einrichtung, Sperrbildschirm oder App; richtet ein bzw. entsperrt, bis die App offen ist
+async function ensureOpen(p, { password = TEST_PW } = {}) {
+  const any = p.locator(`${SETUP}, ${LOCKED}, ${APPNAV}`).first()
+  await any.waitFor({ timeout: 20000 })
+  if (await p.locator(SETUP).count()) await runSetup(p, { password })
+  else if (await p.locator(LOCKED).count()) {
+    await p.fill('#lock-secret', password)
+    await p.getByRole('button', { name: 'Mit Passwort entsperren' }).click()
+  }
+  await p.locator(APPNAV).waitFor({ timeout: 60000 })
+}
+const withVault = (p) => p.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v) }, [KEY_VAULT, emptyVault])
+// Zeitsprünge (page.clock) würden sonst die Auto-Sperre auslösen: gelegentliche Eingabe simulieren (nur in Tests mit Zeitsprung)
+const keepAlive = (p) => p.addInitScript(() => { setInterval(() => window.dispatchEvent(new Event('pointermove')), 500) })
+// wartet, bis die gespeicherten Daten die Bedingung erfüllen (Speichern läuft asynchron)
+async function storedWhen(p, pred, password = TEST_PW) {
+  for (let i = 0; i < 50; i++) { const d = await readStored(p, password); if (pred(d)) return d }
+  throw new Error('Gespeicherte Daten erreichen den erwarteten Stand nicht')
+}
+const reload = async (p, opts) => { await p.reload(); await ensureOpen(p, opts) }
+// Daten klar lesen (nur Test): Datenschlüssel einmal per Passwort entpacken und im Test merken, dann in Node entschlüsseln
+const deks = new Map()
+async function readStored(p, password = TEST_PW) {
+  let raw, v
+  for (let i = 0; i < 40; i++) { // laufende Speicherungen abwarten: der Tresor muss zweimal hintereinander gleich sein
+    const a = await p.evaluate((k) => localStorage.getItem(k), KEY_VAULT)
+    await p.waitForTimeout(60)
+    if (a && a === await p.evaluate((k) => localStorage.getItem(k), KEY_VAULT)) { raw = a; break }
+  }
+  if (!raw) throw new Error('Tresor nicht lesbar')
+  v = JSON.parse(raw)
+  const id = v.unlock.password.wrapped
+  if (!deks.has(id)) {
+    deks.set(id, await p.evaluate(async ({ pw, u }) => {
+      const b = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
+      const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw.normalize('NFC')), 'PBKDF2', false, ['deriveKey'])
+      const kek = await crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: b(u.kdf.salt), iterations: u.kdf.iterations }, km, { name: 'AES-GCM', length: 256 }, false, ['unwrapKey'])
+      const dek = await crypto.subtle.unwrapKey('raw', b(u.wrapped), kek, { name: 'AES-GCM', iv: b(u.iv) }, { name: 'AES-GCM' }, true, ['decrypt'])
+      return btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.exportKey('raw', dek))))
+    }, { pw: password.normalize('NFC'), u: v.unlock.password }))
+  }
+  const { webcrypto } = await import('node:crypto')
+  const key = await webcrypto.subtle.importKey('raw', Buffer.from(deks.get(id), 'base64'), 'AES-GCM', false, ['decrypt'])
+  const plain = await webcrypto.subtle.decrypt({ name: 'AES-GCM', iv: Buffer.from(v.data.iv, 'base64'), additionalData: new TextEncoder().encode('finanzklar-vault-v1') }, key, Buffer.from(v.data.ciphertext, 'base64'))
+  return JSON.parse(new TextDecoder().decode(plain))
+}
+
 await page.goto(URL)
 await page.evaluate(() => navigator.serviceWorker.ready)
+// Pflicht-Einrichtung: ohne Tresor nur der Einrichtungsbildschirm, keine App im DOM, kein Schließen/Überspringen
+await page.locator(SETUP).waitFor()
+await page.screenshot({ path: `${SHOTS}/1a-einrichtung-pflicht.png` })
+if (await page.locator(SETUP).getAttribute('aria-label') !== 'App-Sperre einrichten') throw new Error('Einrichtungsbildschirm ohne Label')
+if (await page.locator(APPNAV).count() || await page.getByTestId('balance').count() || await page.locator('main.app').count()) throw new Error('App im DOM ohne Einrichtung')
+if (await page.getByRole('button', { name: /Abbrechen|Schließen|Überspringen|Später/ }).count() || await page.getByRole('dialog').count()) throw new Error('Einrichtung lässt sich abbrechen')
+await page.keyboard.press('Escape')
+await page.mouse.click(5, 5)
+if (!(await page.locator(SETUP).isVisible()) || await page.locator(APPNAV).count()) throw new Error('Escape/Tippen umgeht die Einrichtung')
+if ((await bodyText()).includes('Backup exportieren')) throw new Error('Backup-Tipp ohne Daten')
+ok('Frischer Start ohne Daten: nur der Einrichtungsbildschirm („App-Sperre einrichten“), weder Tab-Leiste noch Kontostand im DOM, kein Abbrechen/Überspringen, Escape und Tippen daneben ändern nichts, kein Backup-Tipp')
+
+// Schritt 1: zu kurz / ungleich → Fehler, noch nichts gespeichert
+await page.fill('#lock-pw', 'kurz'); await page.fill('#lock-pw2', 'kurz')
+await page.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+await page.getByRole('alert').filter({ hasText: 'mindestens 10 Zeichen' }).waitFor()
+await page.fill('#lock-pw', TEST_PW); await page.fill('#lock-pw2', TEST_PW + 'x')
+await page.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+await page.getByRole('alert').filter({ hasText: 'stimmen nicht überein' }).waitFor()
+if (await page.getByTestId('recovery-key').count() || (await page.evaluate((k) => localStorage.getItem(k), KEY_VAULT)) !== null) throw new Error('Zu kurzes/ungleiches Passwort wurde angenommen')
+ok('Einrichtung Schritt 1: zu kurzes Passwort („mindestens 10 Zeichen“) und ungleiche Wiederholung („stimmen nicht überein“) werden abgelehnt, es geht nicht weiter, kein Tresor')
+
+await ensureOpen(page)
+emptyVault = await page.evaluate((k) => localStorage.getItem(k), KEY_VAULT)
+if (!emptyVault || await page.evaluate(() => localStorage.getItem('finanz-app:v1')) !== null) throw new Error('Nach der Einrichtung: Tresor fehlt oder Klartext vorhanden')
 await page.screenshot({ path: `${SHOTS}/1-start-leer.png` })
 if ((await balance()) !== '0,00 €') throw new Error('Startwert falsch: ' + (await balance()))
 ok('Start leer, Kontostand 0,00 €')
@@ -179,7 +275,7 @@ if (!/^Sonstiges \| .*Futter.* \| −30,00 €$/.test(futterText)) throw new Err
 ok('Kategorie mit Buchung gelöscht → Buchung landet in Sonstiges (Monat → Alle Buchungen: Sonstiges, Futter, −30,00 €)')
 
 // Persistenz
-await page.reload(); await tab('Start').click()
+await reload(page); await tab('Start').click()
 if ((await balance()) !== '2.600,00 €') throw new Error('Nach Reload: ' + (await balance()))
 ok('Daten nach Neuladen erhalten (Kontostand 2.600,00 €)')
 
@@ -211,7 +307,7 @@ ok('Ungültiges Backup abgelehnt; Import stellt Stand wieder her (2.600,00 €)'
 
 // ---------- Verschlüsselte Backups (Passwort-Sheets, AES-GCM + PBKDF2 600k) ----------
 {
-  const rawStore = () => page.evaluate(() => localStorage.getItem('finanz-app:v1'))
+  const rawStore = async () => JSON.stringify(await readStored(page))
   const pwSheet = () => page.getByRole('dialog', { name: 'Backup exportieren' })
   await tab('Einstellungen').click()
   const before = await rawStore()
@@ -331,7 +427,7 @@ ok('Ungültiges Backup abgelehnt; Import stellt Stand wieder her (2.600,00 €)'
 
 // Offline
 await ctx.setOffline(true)
-await page.reload()
+await page.reload(); await ensureOpen(page)
 await tab('Monat').click()
 await expectText('Oktober 2026'); await expectText('ALLE BUCHUNGEN'); await expectText('Futter')
 await ctx.setOffline(false)
@@ -492,7 +588,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 // Fixkosten im Oktober: manuelle Miete 800,00 (27.10.) + gebuchte Regel-Miete 01.10. 800,00 = 1.600,00 €.
 // Freizeit im Oktober: Kino 20,00 € (20.10.); das „Streaming“-Abo wurde nicht gebucht.
 {
-  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const stored = () => readStored(page)
   const octSum = async (catId) =>
     (await stored()).transactions.filter((t) => t.kind === 'expense' && t.categoryId === catId && t.date.startsWith('2026-10')).reduce((s, t) => s + t.amountCents, 0)
   const LEBENSMITTEL = 5000, FIXKOSTEN = 160000, FREIZEIT = 2000
@@ -625,7 +721,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await page.setViewportSize({ width: 390, height: 664 })
 
   // Persistenz
-  await page.reload()
+  await reload(page)
   await tab('Budgets').click()
   await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 23,10 € drüber | 105,8 %', 'Nach Reload')
   const st = await stored()
@@ -655,7 +751,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 // September: nur Miete-Regel 800,00 (↻); wir buchen zusätzlich Freizeit 50,00 (12.09.) → Ausgaben 850,00, Saldo −850,00
 // August: nur Miete-Regel 800,00 (↻)
 {
-  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const stored = () => readStored(page)
   const flat = (s) => nbsp(s).trim().replace(/\s*\n\s*/g, ' | ')
   const after = (title) => page.locator('.section-title', { hasText: title }).locator('xpath=following-sibling::*[1]')
   const css = (loc, prop) => loc.evaluate((el, p) => getComputedStyle(el)[p], prop)
@@ -881,7 +977,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Dark Mode: Balkenfarben Einnahmen #34D399 / Ausgaben #F87171')
 
   // Persistenz nach Neuladen
-  await page.reload(); await tab('Monat').click()
+  await reload(page); await tab('Monat').click()
   must(flat(await page.locator('.summary').innerText()), 'Einnahmen | 2.500,00 € | Ausgaben | 2.073,10 € | Saldo | 426,90 €', 'Nach Reload')
   ok('Monat nach Neuladen unverändert (Oktober 2026, 426,90 € Saldo)')
 }
@@ -890,7 +986,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 // Oktober 8 Buchungen, September 2 (Konzert, Miete ↻), August 1 (Miete ↻). Konto: 1.000 + 2.500 − 3 × 800 − 800 − 20 − 30 − 50 − 270 − 103,10 − 50 = −223,10.
 {
   const flat = (s) => nbsp(s).trim().replace(/\s*\n\s*/g, ' | ')
-  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const stored = () => readStored(page)
   const css = (loc, prop) => loc.evaluate((el, p) => getComputedStyle(el)[p], prop)
   const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
   const RED = 'rgb(220, 38, 38)', INK = 'rgb(30, 41, 59)'
@@ -1220,8 +1316,8 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   p7.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   p7.on('pageerror', (e) => errors.push(e.message))
   await p7.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
-  await p7.goto(URL)
-  const stored7 = () => p7.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')).recurring)
+  await withVault(p7); await p7.goto(URL); await ensureOpen(p7)
+  const stored7 = () => readStored(p7).then((d) => d.recurring)
   const sw7 = () => p7.getByRole('switch', { name: 'Enddatum' })
   const must7 = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
   await p7.getByRole('button', { name: /^Verträge/ }).click(); await settled(p7)
@@ -1284,14 +1380,14 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   p5.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   p5.on('pageerror', (e) => errors.push(e.message))
   await p5.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
-  await p5.goto(URL)
+  await withVault(p5); await p5.goto(URL); await ensureOpen(p5)
   const nav5 = (name) => p5.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
   const text5 = async () => nbsp(await p5.locator('body').innerText())
   const has5 = async (t) => { for (let i = 0; i < 20; i++) { if ((await text5()).includes(t)) return; await p5.waitForTimeout(100) } throw new Error(`Text nicht gefunden: "${t}"`) }
   const hasNot5 = async (t) => { await p5.waitForTimeout(150); if ((await text5()).includes(t)) throw new Error(`Text sollte fehlen: "${t}"`) }
   const bal5 = async () => { await nav5('Start').click(); return nbsp(await p5.getByTestId('balance').innerText()) }
   const mustBal5 = async (expected, what) => { const b = await bal5(); if (b !== expected) throw new Error(`${what}: erwartet ${expected}, war ${b}`) }
-  const stored5 = () => p5.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const stored5 = () => readStored(p5)
   const rec5 = () => p5.locator('[aria-label="wiederkehrend"]').count()
   const open5 = async () => { await nav5('Start').click(); await p5.getByRole('button', { name: /^Verträge/ }).click(); await p5.getByRole('button', { name: 'Zurück', exact: true }).waitFor(); await settled(p5) }
   async function rule5({ kind = 'Ausgabe', amount, category, note, day, start, manual = true }) {
@@ -1409,7 +1505,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p5.getByRole('button', { name: 'Abbrechen' }).first().click()
   await rule5({ amount: '5,00', category: 'Freizeit', note: 'Magazin', day: '1', start: '2026-10-01' })
   await p5.getByRole('alertdialog').getByRole('button', { name: 'Als offen anzeigen' }).click()
-  await p5.reload()
+  await reload(p5)
   await p5.getByTestId('balance').waitFor()
   await has5('Magazin'); await has5('fällig 01.10.')
   await mustBal5('2.110,00 €', 'Nach Neuladen')
@@ -1424,14 +1520,14 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   p6.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   p6.on('pageerror', (e) => errors.push(e.message))
   await p6.clock.install({ time: new Date('2026-10-28T10:00:00+01:00') })
-  await p6.goto(URL)
+  await withVault(p6); await keepAlive(p6); await p6.goto(URL); await ensureOpen(p6)
   const nav6 = (name) => p6.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
   const bal6 = async () => nbsp(await p6.locator('[data-testid="balance"]').innerText())
   const waitBal6 = async (expected) => {
     for (let i = 0; i < 30; i++) { if ((await bal6()) === expected) return; await p6.waitForTimeout(100) }
     throw new Error(`Jetzt buchen: Kontostand erwartet ${expected}, war ${await bal6()}`)
   }
-  const stored6 = () => p6.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const stored6 = () => readStored(p6)
   const body6 = async () => nbsp(await p6.locator('body').innerText())
   const tick6 = async () => { await p6.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await p6.waitForTimeout(250) }
   await nav6('Start').click()
@@ -1494,7 +1590,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   p3.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   p3.on('pageerror', (e) => errors.push(e.message))
   await p3.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
-  await p3.goto(URL)
+  const must3 = (a, b, w) => { if (a !== b) throw new Error(`${w}: ${a} ≠ ${b}`) }
   const cat = (kind, name, builtIn = false) => ({ id: `${kind}-${name.toLowerCase()}`, name, kind, builtIn })
   const oldData = {
     version: 3,
@@ -1506,8 +1602,11 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     transactions: [{ id: 'old1', kind: 'expense', amountCents: 4599, date: '2026-10-02', categoryId: 'expense-lebensmittel', note: 'Alt', createdAt: 1 }],
     recurring: [],
   }
-  await p3.evaluate((d) => localStorage.setItem('finanz-app:v1', JSON.stringify(d)), oldData)
-  await p3.reload()
+  // alter Klartext-Stand im Speicher (nur solange noch kein Tresor existiert): die Pflicht-Einrichtung übernimmt ihn migriert in den Tresor
+  await p3.addInitScript(([k, v, d]) => { if (!localStorage.getItem(v)) localStorage.setItem(k, d) }, ['finanz-app:v1', KEY_VAULT, JSON.stringify(oldData)])
+  await p3.goto(URL)
+  await p3.locator(SETUP).waitFor()
+  await ensureOpen(p3)
   await p3.getByTestId('balance').waitFor()
   const hub3 = nbsp(await p3.locator('body').innerText())
   if (!hub3.includes('954,01 €') || !hub3.includes('Bargeld 0,00 € · Gesamt 954,01 €')) throw new Error('Migration v3: Kontostand falsch: ' + hub3.slice(0, 200))
@@ -1516,11 +1615,12 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if ((await p3.getByRole('dialog').getByRole('button', { name: 'Konto', exact: true }).getAttribute('aria-pressed')) !== 'true') throw new Error('Migrierte Buchung liegt nicht auf dem Konto')
   await p3.getByRole('button', { name: 'Sichern' }).click() // speichert den migrierten Stand
   await p3.waitForTimeout(200)
-  const s3 = await p3.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const s3 = await readStored(p3)
+  must3(await p3.evaluate(() => localStorage.getItem('finanz-app:v1')), null, 'Klartext nach Einrichtung weg')
   if (s3.version !== 6 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
     throw new Error('Migration v3: gespeicherte Daten falsch ' + JSON.stringify(s3).slice(0, 300))
   await ctx3.close()
-  ok('Migration v3 → v4 beim Laden: Kontostand 954,01 €, „Bargeld 0,00 € · Gesamt 954,01 €“, alte Buchung liegt auf dem Konto, gespeichert als Version 6 (startCashCents 0, keine Umbuchungen)')
+  ok('Migration v3 → v4 beim Laden: Kontostand 954,01 €, „Bargeld 0,00 € · Gesamt 954,01 €“, alte Buchung liegt auf dem Konto, Einrichtung übernimmt die Daten in den Tresor, gespeichert als Version 6 (startCashCents 0, keine Umbuchungen)')
 }
 
 // ---------- Migration v4 → v5: bestehende Verträge buchen weiter automatisch ----------
@@ -1530,7 +1630,6 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   p4.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   p4.on('pageerror', (e) => errors.push(e.message))
   await p4.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
-  await p4.goto(URL)
   const cat = (kind, name, builtIn = false) => ({ id: `${kind}-${name.toLowerCase()}`, name, kind, builtIn })
   const old4 = {
     version: 4,
@@ -1543,15 +1642,18 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     recurring: [{ id: 'rm', kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: 'Miete', interval: 'monthly', dayOfMonth: 1, startDate: '2026-09-01', bookedThrough: '2026-10-01' }],
     transfers: [],
   }
-  await p4.evaluate((d) => localStorage.setItem('finanz-app:v1', JSON.stringify(d)), old4)
-  await p4.reload()
+  // alter Klartext-Stand im Speicher (nur solange noch kein Tresor existiert): die Pflicht-Einrichtung übernimmt ihn migriert in den Tresor
+  await p4.addInitScript(([k, v, d]) => { if (!localStorage.getItem(v)) localStorage.setItem(k, d) }, ['finanz-app:v1', KEY_VAULT, JSON.stringify(old4)])
+  await p4.goto(URL)
+  await p4.locator(SETUP).waitFor()
+  await ensureOpen(p4)
   await p4.getByTestId('balance').waitFor()
   await p4.getByRole('button', { name: /^Verträge/ }).click()
   await p4.getByRole('button', { name: /Miete/ }).click()
   if (!(await p4.getByRole('switch', { name: 'Automatisch buchen' }).isChecked())) throw new Error('Migrierter Vertrag müsste automatisch buchen')
   await p4.getByRole('button', { name: 'Sichern' }).click()
   await p4.waitForTimeout(200)
-  const s4m = await p4.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const s4m = await readStored(p4)
   if (s4m.version !== 6 || s4m.recurring[0].autoBook !== true) throw new Error('Migration v4: ' + JSON.stringify(s4m.recurring))
   await ctx4.close()
   ok('Migration v4 → v5 beim Laden: bestehender Vertrag „Miete“ hat „Automatisch buchen“ an, gespeichert als Version 6 mit autoBook true')
@@ -1564,13 +1666,13 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   p2.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   p2.on('pageerror', (e) => errors.push(e.message))
   await p2.clock.install({ time: new Date('2026-10-31T10:00:00+01:00') })
-  await p2.goto(URL)
+  await withVault(p2); await keepAlive(p2); await p2.goto(URL); await ensureOpen(p2)
   const bal2 = async () => nbsp(await p2.locator('[data-testid="balance"]').innerText())
   const waitBal = async (expected) => {
     for (let i = 0; i < 30; i++) { if ((await bal2()) === expected) return; await p2.waitForTimeout(100) }
     throw new Error(`Rollover: Kontostand erwartet ${expected}, war ${await bal2()}`)
   }
-  const stored = () => p2.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const stored = () => readStored(p2)
   const nav2 = (name) => p2.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
   await nav2('Start').click()
   await p2.getByRole('button', { name: /^Verträge/ }).click()
@@ -1604,7 +1706,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if (st.transactions.map((t) => t.date).join() !== '2026-11-01,2026-12-01') throw new Error('Rollover Dezember: ' + st.transactions.map((t) => t.date))
   ok('Rollover Monatswechsel (visibilitychange, 01.12.): Buchung für 01.12. genau einmal, Kontostand −20,00 €')
 
-  await p2.reload()
+  await reload(p2)
   await waitBal('−20,00 €')
   st = await stored()
   if (st.transactions.length !== 2) throw new Error('Rollover: Neuladen hat doppelt gebucht')
@@ -1731,7 +1833,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     pa.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
     pa.on('pageerror', (e) => errors.push(e.message))
     await pa.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
-    await pa.goto(URL)
+    await withVault(pa); await pa.goto(URL); await ensureOpen(pa)
     const tabA = (name) => tabOn(pa, name)
     const lenA = await pa.evaluate(() => history.length)
     await pa.getByRole('button', { name: /^Alle Buchungen/ }).click(); await settled(pa)
@@ -1760,7 +1862,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     must(await historyState(pa), null, 'Android: History nach Öffnen und System-Zurück')
     // übrig gebliebener Eintrag nach Neuladen wird verworfen; die App startet auf der Übersicht
     await pa.getByRole('button', { name: /^Verträge/ }).click(); await settled(pa)
-    await pa.reload()
+    await reload(pa)
     await waitH1(pa, 'Finanzklar'); await settled(pa)
     must(await historyState(pa), null, 'Android: Eintrag nach Neuladen verworfen')
     await ctxA.close()
@@ -1870,7 +1972,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     pr.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
     pr.on('pageerror', (e) => errors.push(e.message))
     await pr.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
-    await pr.goto(URL)
+    await withVault(pr); await pr.goto(URL); await ensureOpen(pr)
     await pr.getByRole('button', { name: /^Verträge/ }).click()
     await pr.getByRole('button', { name: 'Zurück', exact: true }).waitFor()
     const t0 = Date.now(); await settled(pr); const pushMs = Date.now() - t0
@@ -1904,6 +2006,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
     p.on('pageerror', (e) => errors.push(e.message))
     await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+    await withVault(p)
     return { c, p }
   }
   const css = (p, sel, prop) => p.locator(sel).first().evaluate((el, pr) => getComputedStyle(el)[pr], prop)
@@ -1921,7 +2024,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
         if (r && r.childElementCount) { window.__themeAtMount = document.documentElement.dataset.theme ?? 'none'; obs.disconnect() }
       }).observe(document, { childList: true, subtree: true })
     })
-    await p.goto(URL)
+    await p.goto(URL); await ensureOpen(p)
     mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell: Hintergrund')
     await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
     await sleep(300) // Tab-Einblenden abwarten
@@ -1939,7 +2042,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     mustEq(await css(p, 'h1', 'color'), 'rgb(241, 245, 249)', 'Dunkel: Text')
     await sleep(300)
     await p.screenshot({ path: `${SHOTS}/37-dunkel-erzwungen.png` })
-    await p.reload()
+    await reload(p)
     await p.locator('h1').first().waitFor()
     mustEq(await p.evaluate(() => window.__themeAtMount), 'dark', 'Thema vor dem ersten Rendern')
     mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'Nach Neuladen: Hintergrund')
@@ -1980,7 +2083,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   // 2) Systemdunkel: Hell erzwingen
   {
     const { c, p } = await mk('dark')
-    await p.goto(URL)
+    await p.goto(URL); await ensureOpen(p)
     mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'System dunkel: Hintergrund')
     await pick(p, 'Hell')
     mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell erzwungen: Hintergrund')
@@ -1998,7 +2101,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(5, 150, 105)', 'Hell: Einnahmen-Balken')
     await sleep(300)
     await p.screenshot({ path: `${SHOTS}/38-hell-erzwungen.png` })
-    await p.reload()
+    await reload(p)
     await p.locator('h1').first().waitFor()
     mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell nach Neuladen')
     ok('Darstellung: Hell bei dunklem System sofort wirksam und persistent (Hintergrund #F4F6F8, Karte weiß, Balken #059669, theme-color #F4F6F8)')
@@ -2016,6 +2119,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
     p.on('pageerror', (e) => errors.push(e.message))
     await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+    await withVault(p)
     return { c, p }
   }
   const sessions = new WeakMap()
@@ -2037,7 +2141,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
   const nav = (p, name) => p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
   const idle = (p) => p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
-  const stored = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const stored = (p) => readStored(p)
   const text = async (p) => nbsp(await p.locator('body').innerText())
   async function bal(p) {
     await nav(p, 'Start').click(); await idle(p)
@@ -2054,7 +2158,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.getByRole('dialog').waitFor({ state: 'detached' })
   }
   async function seed(p) {
-    await p.goto(URL)
+    await p.goto(URL); await ensureOpen(p)
     await nav(p, 'Einstellungen').click()
     await p.fill('#start-balance', '1000')
     await p.getByRole('button', { name: 'Speichern' }).click()
@@ -2318,7 +2422,8 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
       window.__vibes = []
       Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true })
     })
-    await ph.goto(URL)
+    await ph.goto(URL); await ensureOpen(ph)
+    await ph.evaluate(() => { window.__vibes.length = 0 }) // das Entsperren selbst vibriert (eigene Prüfung bei der App-Sperre)
     const vibes = () => ph.evaluate(() => window.__vibes.length)
     must(await vibes(), 0, 'Kein Vibrieren beim Start')
     await addTx(ph, { amount: '5', category: 'Sonstiges', note: 'Haptik' })
@@ -2341,8 +2446,9 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   {
     const { c: cf, p: pf } = await mk()
     await pf.addInitScript(() => { Object.defineProperty(navigator, 'vibrate', { value: undefined, configurable: true }) })
-    await pf.goto(URL)
-    must(await pf.locator('input[switch]').count(), 0, 'Switch erst bei Bedarf')
+    await pf.goto(URL); await ensureOpen(pf)
+    must(await pf.locator('input[switch]').count(), 1, 'Switch entsteht beim ersten Haptik-Aufruf (Entsperren)')
+    const sw0 = await pf.evaluate(() => document.querySelector('input[switch]').checked) // Entsperren hat ihn schon einmal umgeschaltet
     await addTx(pf, { amount: '5', category: 'Sonstiges', note: 'Haptik' })
     const sw = await pf.evaluate(() => {
       const input = document.querySelector('label[data-haptic] input[switch]')
@@ -2350,17 +2456,17 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
       return input && { hidden: label.getAttribute('aria-hidden'), tab: input.tabIndex, checked: input.checked, display: getComputedStyle(label).display, focused: document.activeElement === input }
     })
     if (!sw || sw.hidden !== 'true' || sw.tab !== -1 || sw.display === 'none' || sw.focused) throw new Error('Fallback-Element falsch: ' + JSON.stringify(sw))
-    must(sw.checked, true, 'Switch umgeschaltet')
+    must(sw.checked, !sw0, 'Switch umgeschaltet')
     await addTx(pf, { amount: '6', category: 'Sonstiges', note: 'Haptik 2' })
     must(await pf.locator('input[switch]').count(), 1, 'Nur ein Switch')
-    must(await pf.evaluate(() => document.querySelector('input[switch]').checked), false, 'Switch wieder umgeschaltet')
+    must(await pf.evaluate(() => document.querySelector('input[switch]').checked), sw0, 'Switch wieder umgeschaltet')
     ok('Haptik ohne navigator.vibrate (iOS-Fallback): ein verstecktes <label><input type=checkbox switch> (aria-hidden, tabindex −1, nicht display:none, ohne Fokus) wird bei jedem Speichern umgeschaltet')
     await cf.close()
   }
   // ---- Bewegung reduzieren ----
   {
     const { c: cr, p: pr } = await mk({ reducedMotion: 'reduce' })
-    await pr.goto(URL)
+    await pr.goto(URL); await ensureOpen(pr)
     await addTx(pr, { amount: '7', category: 'Sonstiges', note: 'Reduziert' })
     await addTx(pr, { amount: '8', category: 'Sonstiges', note: 'Reduziert 2' })
     await pr.getByRole('button', { name: /^Alle Buchungen/ }).click(); await idle(pr)
@@ -2388,7 +2494,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   p.on('pageerror', (e) => errors.push(e.message))
   await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
   await p.addInitScript(() => {
-    if (localStorage.getItem('finanz-app:v1')) return
+    if (localStorage.getItem('finanz-app:v1') || localStorage.getItem('finanz-app:vault')) return
     const cats = ['lebensmittel', 'fixkosten', 'mobilität', 'freizeit'].map((n) => ({ id: `expense-${n}`, name: n[0].toUpperCase() + n.slice(1), kind: 'expense', builtIn: false }))
     cats.push({ id: 'expense-sonstiges', name: 'Sonstiges', kind: 'expense', builtIn: true }, { id: 'income-gehalt', name: 'Gehalt', kind: 'income', builtIn: false }, { id: 'income-sonstiges', name: 'Sonstiges', kind: 'income', builtIn: true })
     const transactions = Array.from({ length: 96 }, (_, i) => {
@@ -2397,7 +2503,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     })
     localStorage.setItem('finanz-app:v1', JSON.stringify({ version: 6, settings: { startBalanceCents: 0, startCashCents: 0 }, categories: cats, transactions, recurring: [], transfers: [] }))
   })
-  await p.goto(URL)
+  await p.goto(URL); await ensureOpen(p)
   await p.getByRole('button', { name: /^Alle Buchungen/ }).click()
   await p.locator('.swipe-li').first().waitFor()
   await p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
@@ -2437,7 +2543,6 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const must = (a, b, what) => { if (a !== b) throw new Error(`${what}: ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`) }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   const KEY_PLAIN = 'finanz-app:v1'
-  const KEY_VAULT = 'finanz-app:vault'
   const PW1 = 'Sehr-geheim-2026!'
   const PW2 = 'Zweites-Passwort-2027#'
   const PW3 = 'Drittes-Passwort-2028$'
@@ -2463,7 +2568,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     }
     document.dispatchEvent(new Event('visibilitychange'))
   }, hidden)
-  const lockScreen = (p) => p.locator('main.lock-screen')
+  const lockScreen = (p) => p.locator(LOCKED)
   const waitLocked = (p) => lockScreen(p).waitFor({ timeout: 10000 })
   const waitOpen = (p) => p.getByTestId('balance').waitFor({ timeout: 20000 })
   const unlockPw = async (p, pw) => {
@@ -2482,17 +2587,12 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
   const expectTextOn = async (p, t) => { for (let i = 0; i < 100; i++) { if ((await text(p)).includes(t)) return; await sleep(100) } throw new Error(`Text nicht gefunden: "${t}"`) }
   const row = (p, name) => p.locator('button.row', { hasText: name })
-  const setupDlg = (p) => p.getByRole('dialog', { name: 'App-Sperre einrichten' })
-  // Einrichtung bis nach Schritt 2 (Passwort, Schlüssel notiert); gibt den Schlüssel zurück
+  // Einrichtungsbildschirm bis nach Schritt 2 (Passwort, Schlüssel angezeigt); gibt den Schlüssel zurück
   async function setupLock(p, pw, shots) {
-    await nav(p, 'Einstellungen').click()
-    await p.getByRole('button', { name: 'App-Sperre einrichten' }).click()
-    const dlg = setupDlg(p)
-    await dlg.waitFor()
-    await sleep(500)
+    await p.locator(SETUP).waitFor()
     await p.fill('#lock-pw', pw); await p.fill('#lock-pw2', pw)
     if (shots) await p.screenshot({ path: `${SHOTS}/45-sperre-einrichten-passwort.png` })
-    await dlg.getByRole('button', { name: 'Weiter', exact: true }).click()
+    await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
     const keyEl = p.getByTestId('recovery-key')
     await keyEl.waitFor()
     const key = (await keyEl.innerText()).trim()
@@ -2500,87 +2600,81 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     return key
   }
   const finishKeyStep = async (p) => {
-    const dlg = setupDlg(p)
-    await dlg.getByRole('checkbox', { name: /Ich habe den Schlüssel sicher notiert/ }).check()
-    await dlg.getByRole('button', { name: 'Weiter', exact: true }).click()
+    await p.getByRole('checkbox', { name: /Ich habe den Schlüssel sicher notiert/ }).check()
+    await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
   }
+  const doneStep = (p, timeout = 30000) => p.getByRole('heading', { name: 'Finanzklar ist geschützt' }).waitFor({ timeout })
 
-  // ===== A) Passwort, Wiederherstellungsschlüssel, Auto-Sperre, Backup, Ausschalten =====
+  // ===== A) Pflicht-Einrichtung, Passwort, Wiederherstellungsschlüssel, Auto-Sperre, Backup =====
   const { c: cA, p: A } = await mkCtx()
   await A.goto(URL)
-  await A.getByTestId('balance').waitFor()
-  await nav(A, 'Einstellungen').click()
-  await A.fill('#start-balance', '1000')
-  await A.getByRole('button', { name: 'Speichern' }).click()
-  await A.fill('#display-name', '  Felix  ')
-  await A.press('#display-name', 'Enter')
-  await sleep(200)
-  must((JSON.parse(await ls(A, KEY_PLAIN))).settings.displayName, 'Felix', 'Name gespeichert (getrimmt)')
-  await A.fill('#display-name', 'x'.repeat(40) + 'yy')
-  must(await A.inputValue('#display-name'), 'x'.repeat(40), 'Name auf 40 Zeichen begrenzt')
-  await A.fill('#display-name', 'Felix'); await A.locator('#start-balance').focus() // Blur speichert
-  await sleep(200)
-  must((JSON.parse(await ls(A, KEY_PLAIN))).settings.displayName, 'Felix', 'Name nach Blur')
-  await nav(A, 'Start').click()
-  await addTxP(A, { amount: '123,45', category: 'Gesundheit', note: 'Zahnarzt Geheim' })
-  must(await bal(A), '876,55 €', 'Kontostand vor der Sperre')
-  ok('Persönlich: „Dein Name“ (Felix) wird getrimmt gespeichert (Enter und Blur), max. 40 Zeichen; Testbuchung „Zahnarzt Geheim“ 123,45 € → 876,55 €')
-
-  // Einrichtung: Prüfungen im Schritt 1
-  await nav(A, 'Einstellungen').click()
-  await A.getByRole('button', { name: 'App-Sperre einrichten' }).click()
-  const dlgA = setupDlg(A)
-  await dlgA.waitFor(); await sleep(500)
-  await A.fill('#lock-pw', 'kurz'); await A.fill('#lock-pw2', 'kurz')
-  await dlgA.getByRole('button', { name: 'Weiter', exact: true }).click()
-  await A.getByRole('alert').filter({ hasText: 'mindestens 10 Zeichen' }).waitFor()
-  await A.fill('#lock-pw', PW1); await A.fill('#lock-pw2', PW1 + 'x')
-  await dlgA.getByRole('button', { name: 'Weiter', exact: true }).click()
-  await A.getByRole('alert').filter({ hasText: 'stimmen nicht überein' }).waitFor()
+  await A.locator(SETUP).waitFor()
+  // Einrichtung Schritt 1 (zu kurz / ungleich ist oben schon geprüft): Stärke und Warnung
   await expectTextOn(A, 'Wenn du Passwort UND Wiederherstellungsschlüssel verlierst, sind deine Daten verloren.')
   await A.fill('#lock-pw', 'abcdefghij'); must((await A.locator('.strength').innerText()).trim(), 'Schwach', 'Stärke schwach')
   await A.fill('#lock-pw', 'Abcdefgh1234'); must((await A.locator('.strength').innerText()).trim(), 'Mittel', 'Stärke mittel')
   await A.fill('#lock-pw', PW1); must((await A.locator('.strength').innerText()).trim(), 'Stark', 'Stärke stark')
   must(await ls(A, KEY_VAULT), null, 'vor dem Schlüssel-Schritt kein Tresor')
-  ok('App-Sperre einrichten, Schritt 1: zu kurz / ungleich abgelehnt, Stärke Schwach/Mittel/Stark, Warnung „Passwort UND Wiederherstellungsschlüssel“, noch nichts gespeichert')
-  await dlgA.getByRole('button', { name: 'Abbrechen' }).click()
-  await dlgA.waitFor({ state: 'detached' })
+  ok('Einrichtung Schritt 1: Stärkehinweis Schwach/Mittel/Stark, Warnung „Passwort UND Wiederherstellungsschlüssel“, noch nichts gespeichert')
 
-  // Einrichtung: Schlüssel-Schritt
+  // Schlüssel-Schritt
   const recoveryKey = await setupLock(A, PW1, true)
   if (!/^([0-9A-Z]{4}-){6}[0-9A-Z]{2}$/.test(recoveryKey)) throw new Error('Schlüsselformat: ' + recoveryKey)
-  const forwardBtn = dlgA.getByRole('button', { name: 'Weiter', exact: true })
+  const forwardBtn = A.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true })
   if (!(await forwardBtn.isDisabled())) throw new Error('Weiter ohne Bestätigung möglich')
   must(await ls(A, KEY_VAULT), null, 'im Schlüssel-Schritt noch kein Tresor')
   ok(`Schritt 2: Wiederherstellungsschlüssel ${recoveryKey.slice(0, 4)}-… (26 Zeichen, Vierergruppen) wird angezeigt; „Weiter“ gesperrt bis „Ich habe den Schlüssel sicher notiert“; noch kein Tresor`)
   await finishKeyStep(A)
-  await dlgA.getByText('App-Sperre ist aktiv').waitFor({ timeout: 30000 })
-  await dlgA.getByRole('button', { name: 'Fertig' }).click()
-  await dlgA.waitFor({ state: 'detached' })
+  await doneStep(A)
+  must(await A.locator(APPNAV).count(), 0, 'App erst nach „Fertig“')
+  await A.screenshot({ path: `${SHOTS}/46b-einrichtung-fertig.png` })
+  await A.getByRole('button', { name: 'Fertig' }).click()
+  await A.locator(APPNAV).waitFor()
   must(await ls(A, KEY_PLAIN), null, 'Klartext-Key nach Einrichtung')
   must(await ls(A, KEY_PLAIN + ':corrupt'), null, 'corrupt-Key')
   const vaultText = await ls(A, KEY_VAULT)
   const v = JSON.parse(vaultText)
   if (v.format !== 'finanzklar-vault' || v.version !== 1 || v.autoLockMinutes !== 1 || v.unlock.password.kdf.iterations !== 600000 || v.unlock.recovery.kdf.iterations !== 600000 || v.unlock.passkey) throw new Error('Tresor-Kopf: ' + vaultText.slice(0, 300))
-  for (const needle of ['Zahnarzt', 'Geheim', '12345', '123,45', '100000', 'Felix', 'Gesundheit', 'amountCents', 'transactions', PW1, recoveryKey]) if (vaultText.includes(needle)) throw new Error('Klartext im Tresor: ' + needle)
-  ok('Einrichtung fertig: localStorage hat keinen „finanz-app:v1“ mehr, der Tresor (finanzklar-vault v1, PBKDF2 600000 für Passwort und Schlüssel, Auto-Sperre 1) enthält weder Notiz, Betrag, Name noch Passwort')
-  await A.getByTestId('balance').waitFor().catch(() => {})
-  must(await bal(A), '876,55 €', 'Kontostand nach der Einrichtung')
+  for (const needle of [PW1, recoveryKey]) if (vaultText.includes(needle)) throw new Error('Passwort/Schlüssel im Tresor: ' + needle)
+  ok('Einrichtung fertig („Finanzklar ist geschützt“ → „Fertig“ öffnet die App): kein „finanz-app:v1“, Tresor (finanzklar-vault v1, PBKDF2 600000 für Passwort und Schlüssel, Auto-Sperre 1) enthält weder Passwort noch Schlüssel')
+
+  // Persönlich: Name, Startguthaben, Testbuchung – jetzt im Tresor
+  await nav(A, 'Einstellungen').click()
+  await A.fill('#start-balance', '1000')
+  await A.getByRole('button', { name: 'Speichern' }).click()
+  await A.fill('#display-name', '  Felix  ')
+  await A.press('#display-name', 'Enter')
+  await storedWhen(A, (d) => d.settings.displayName === 'Felix', PW1) // getrimmt
+  await A.fill('#display-name', 'x'.repeat(40) + 'yy')
+  must(await A.inputValue('#display-name'), 'x'.repeat(40), 'Name auf 40 Zeichen begrenzt')
+  await A.fill('#display-name', 'Felix'); await A.locator('#start-balance').focus() // Blur speichert
+  await storedWhen(A, (d) => d.settings.displayName === 'Felix', PW1)
+  await nav(A, 'Start').click()
+  await addTxP(A, { amount: '123,45', category: 'Gesundheit', note: 'Zahnarzt Geheim' })
+  must(await bal(A), '876,55 €', 'Kontostand vor der Sperre')
+  ok('Persönlich: „Dein Name“ (Felix) wird getrimmt gespeichert (Enter und Blur), max. 40 Zeichen; Testbuchung „Zahnarzt Geheim“ 123,45 € → 876,55 €')
   await addTxP(A, { amount: '1', category: 'Sonstiges', note: 'Nach Sperre' })
   must(await bal(A), '875,55 €', 'Kontostand nach neuer Buchung')
   must(await ls(A, KEY_PLAIN), null, 'neue Buchung schreibt keinen Klartext')
+  await readStored(A, PW1) // wartet, bis alles geschrieben ist
   const v2 = JSON.parse(await ls(A, KEY_VAULT))
+  const vaultText2 = JSON.stringify(v2)
+  for (const needle of ['Zahnarzt', 'Geheim', '12345', '123,45', '100000', 'Felix', 'Gesundheit', 'amountCents', 'transactions', 'Nach Sperre']) if (vaultText2.includes(needle)) throw new Error('Klartext im Tresor: ' + needle)
   if (v2.data.iv === v.data.iv || v2.data.ciphertext === v.data.ciphertext) throw new Error('IV/Chiffretext unverändert nach Speichern')
   if (JSON.stringify(v2.unlock) !== JSON.stringify(v.unlock)) throw new Error('Entsperr-Kopf hat sich beim Speichern geändert')
-  ok('Speichern nach der Einrichtung: neue Buchung (875,55 €) landet verschlüsselt im Tresor mit frischem IV, kein Klartext-Key')
+  ok('Speichern in der geschützten App: Buchungen (875,55 €) landen verschlüsselt im Tresor (weder Notiz, Betrag, Name noch Kategorie im Klartext) mit frischem IV, kein Klartext-Key, Entsperr-Kopf unverändert')
 
-  // Einstellungen im aktiven Zustand
+  // Einstellungen: Abschnitt „Sicherheit“, Ausschalten/Einrichten gibt es nicht mehr
   await nav(A, 'Einstellungen').click()
   await row(A, 'Passwort ändern').waitFor()
-  await A.getByText('App-Sperre', { exact: true }).evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 16))
+  await A.getByText('Sicherheit', { exact: true }).evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 16))
   await sleep(300)
-  await A.screenshot({ path: `${SHOTS}/49-einstellungen-app-sperre.png` })
-  ok('Einstellungen: Abschnitt „App-Sperre“ mit Auto-Sperre (Sofort / 1 Min. / 5 Min. / 15 Min.), Passwort ändern, Schlüssel erzeugen, Jetzt sperren, Ausschalten')
+  await A.screenshot({ path: `${SHOTS}/49-einstellungen-sicherheit.png` })
+  const tSet = (await text(A)).toLowerCase() // Abschnittstitel stehen in Großbuchstaben
+  for (const gone of ['App-Sperre ausschalten', 'App-Sperre einrichten']) if (tSet.includes(gone.toLowerCase())) throw new Error('Gibt es nicht mehr: ' + gone)
+  for (const here of ['Sicherheit', 'Automatisch sperren', 'Face ID', 'Passwort ändern', 'Neuen Wiederherstellungsschlüssel erzeugen', 'Jetzt sperren']) if (!tSet.includes(here.toLowerCase())) throw new Error('Fehlt in den Einstellungen: ' + here)
+  must(await A.getByRole('button', { name: /ausschalten|einrichten/i }).count(), 0, 'kein Knopf zum Ausschalten/Einrichten')
+  ok('Einstellungen: Abschnitt „Sicherheit“ mit Automatisch sperren (Sofort / 1 Min. / 5 Min. / 15 Min.), Face ID, Passwort ändern, Schlüssel erzeugen, Jetzt sperren; weder „App-Sperre ausschalten“ noch „App-Sperre einrichten“')
 
   // Jetzt sperren
   await row(A, 'Jetzt sperren').click()
@@ -2802,40 +2896,6 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await bal(A), '875,55 €', 'Kontostand nach Import und Sperren')
   ok('Backups bei aktiver Sperre: verschlüsselter Export aus dem Speicher, Import ersetzt die Daten (875,55 €) und landet verschlüsselt im Tresor, nach Sperren/Entsperren noch da')
 
-  // Ausschalten
-  await nav(A, 'Einstellungen').click()
-  const [plainDl] = await Promise.all([A.waitForEvent('download'), (async () => {
-    await A.getByRole('button', { name: 'Exportieren', exact: true }).click()
-    await A.getByRole('dialog', { name: 'Backup exportieren' }).getByRole('button', { name: 'Ohne Passwort exportieren' }).click()
-    await A.getByRole('alertdialog').getByRole('button', { name: 'Unverschlüsselt exportieren' }).click()
-  })()])
-  const plainFile = `${SHOTS}/../backup-sperre-klar.json`
-  await plainDl.saveAs(plainFile)
-  const memoryData = JSON.parse(fs.readFileSync(plainFile, 'utf8'))
-  await row(A, 'App-Sperre ausschalten').click()
-  const offConfirm = A.getByRole('alertdialog', { name: 'App-Sperre ausschalten?' })
-  await offConfirm.waitFor()
-  await expectTextOn(A, 'unverschlüsselt auf diesem Gerät gespeichert')
-  await offConfirm.getByRole('button', { name: 'Weiter' }).click()
-  const offSheet = A.getByRole('dialog', { name: 'App-Sperre ausschalten' })
-  await offSheet.waitFor(); await sleep(500)
-  await A.fill('#dis-pw', 'falsch falsch falsch')
-  await offSheet.getByRole('button', { name: 'App-Sperre ausschalten' }).click()
-  await A.getByRole('alert').filter({ hasText: 'Passwort falsch.' }).waitFor({ timeout: 10000 })
-  must(await ls(A, KEY_PLAIN), null, 'falsches Passwort: weiter kein Klartext')
-  await A.fill('#dis-pw', PW3)
-  await offSheet.getByRole('button', { name: 'App-Sperre ausschalten' }).click()
-  await offSheet.waitFor({ state: 'detached', timeout: 20000 })
-  await sleep(300)
-  must(await ls(A, KEY_VAULT), null, 'Tresor entfernt')
-  assert.deepEqual(JSON.parse(await ls(A, KEY_PLAIN)), memoryData)
-  await hide(A, true)
-  must(await A.evaluate(() => getComputedStyle(document.querySelector('#privacy-cover')).display), 'none', 'ohne Sperre kein Sichtschutz')
-  await hide(A, false)
-  must(await bal(A), '875,55 €', 'Kontostand nach dem Ausschalten')
-  await A.reload(); await waitOpen(A)
-  must(await bal(A), '875,55 €', 'nach Neuladen ohne Sperre direkt offen')
-  ok('App-Sperre ausschalten: Passwort nötig (falsches abgelehnt), „finanz-app:v1“ ist zurück und stimmt mit den Daten im Speicher überein, Tresor weg, kein Sichtschutz mehr, Neuladen öffnet direkt')
   await cA.close()
 
   // ===== B) Face ID (virtueller Authenticator mit PRF) =====
@@ -2846,21 +2906,21 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     options: { protocol: 'ctap2', ctap2Version: 'ctap2_1', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, hasPrf: true, automaticPresenceSimulation: true },
   })
   await B.goto(URL)
-  await B.getByTestId('balance').waitFor()
+  await setupLock(B, PW1)
+  await finishKeyStep(B)
+  await B.getByRole('heading', { name: 'Face ID hinzufügen?' }).waitFor({ timeout: 30000 })
+  await B.screenshot({ path: `${SHOTS}/46c-einrichtung-face-id.png` })
+  await B.getByRole('button', { name: 'Face ID hinzufügen' }).click()
+  await doneStep(B, 15000)
+  await B.getByRole('button', { name: 'Fertig' }).click()
+  await B.locator(APPNAV).waitFor()
   await nav(B, 'Einstellungen').click()
   await B.fill('#start-balance', '2000'); await B.getByRole('button', { name: 'Speichern' }).click()
   await B.fill('#display-name', 'Felix'); await B.press('#display-name', 'Enter')
   await nav(B, 'Start').click()
   await addTxP(B, { amount: '10', category: 'Sonstiges', note: 'Face ID Test' })
   must(await bal(B), '1.990,00 €', 'B: Kontostand vor der Sperre')
-  await setupLock(B, PW1)
-  await finishKeyStep(B)
-  const dlgB = setupDlg(B)
-  await dlgB.getByText('Face ID hinzufügen?').waitFor({ timeout: 30000 })
-  await dlgB.getByRole('button', { name: 'Face ID hinzufügen' }).click()
-  await dlgB.getByText('App-Sperre ist aktiv').waitFor({ timeout: 15000 })
-  await dlgB.getByRole('button', { name: 'Fertig' }).click()
-  await dlgB.waitFor({ state: 'detached' })
+  await storedWhen(B, (d) => d.settings.displayName === 'Felix' && d.transactions.length === 1, PW1)
   const vb = JSON.parse(await ls(B, KEY_VAULT))
   if (!vb.unlock.passkey || vb.unlock.passkey.hkdfInfo !== 'finanzklar-vault-v1' || Buffer.from(vb.unlock.passkey.prfSalt, 'base64').length !== 32 || !vb.unlock.passkey.credentialId) throw new Error('Passkey-Eintrag: ' + JSON.stringify(vb.unlock.passkey))
   const { credentials } = await cdpB.send('WebAuthn.getCredentials', { authenticatorId })
@@ -3015,27 +3075,25 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     options: { protocol: 'ctap2', ctap2Version: 'ctap2_1', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, hasPrf: false, automaticPresenceSimulation: true },
   })
   await C.goto(URL)
-  await C.getByTestId('balance').waitFor()
   await setupLock(C, PW1)
   await finishKeyStep(C)
-  const dlgC = setupDlg(C)
-  await dlgC.getByText('Face ID hinzufügen?').waitFor({ timeout: 30000 })
-  await dlgC.getByRole('button', { name: 'Face ID hinzufügen' }).click()
+  await C.getByRole('heading', { name: 'Face ID hinzufügen?' }).waitFor({ timeout: 30000 })
+  await C.getByRole('button', { name: 'Face ID hinzufügen' }).click()
   await C.getByRole('alert').filter({ hasText: 'Face ID wird auf diesem Gerät nicht unterstützt (benötigt iOS 18 oder neuer).' }).waitFor({ timeout: 15000 })
   if (JSON.parse(await ls(C, KEY_VAULT)).unlock.passkey) throw new Error('Passkey trotz fehlendem PRF eingetragen')
-  await dlgC.getByRole('button', { name: 'Überspringen' }).click()
-  await dlgC.getByText('App-Sperre ist aktiv').waitFor()
-  await dlgC.getByRole('button', { name: 'Fertig' }).click()
+  await C.getByRole('button', { name: 'Überspringen' }).click()
+  await doneStep(C, 5000)
+  await C.getByRole('button', { name: 'Fertig' }).click()
+  await C.locator(APPNAV).waitFor()
   ok('Ohne PRF: „Face ID wird auf diesem Gerät nicht unterstützt (benötigt iOS 18 oder neuer).“, es wird nichts eingetragen, Überspringen führt weiter')
   await cC.close()
 
   // ===== D) beschädigter Tresor: kein Rückfall auf Standarddaten, Tresor bleibt unberührt =====
   const { c: cD, p: D } = await mkCtx()
   await D.goto(URL)
-  await D.getByTestId('balance').waitFor()
   await setupLock(D, PW1)
   await finishKeyStep(D)
-  await setupDlg(D).getByText('App-Sperre ist aktiv').waitFor({ timeout: 30000 })
+  await doneStep(D)
   const goodVault = await ls(D, KEY_VAULT)
   const hurt = JSON.stringify({ ...JSON.parse(goodVault), data: { ...JSON.parse(goodVault).data, ciphertext: 'AAAA' + JSON.parse(goodVault).data.ciphertext.slice(4) } })
   await D.evaluate((x) => localStorage.setItem('finanz-app:vault', x), hurt)
@@ -3054,6 +3112,74 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await ls(D, KEY_PLAIN), null, 'kein Klartext nach unlesbarem Tresor')
   ok('Beschädigter Tresor: Fehlermeldung statt Standarddaten, Tresor bleibt byte-genau erhalten, kein Klartext-Fallback; unlesbarer Tresor zeigt „Wiederherstellungsschlüssel verwenden“')
   await cD.close()
+
+  // ===== E) Neuladen mitten in der Einrichtung (Face-ID-Schritt): Tresor existiert schon → Sperrbildschirm, kein zweites Einrichten =====
+  const { c: cE, p: E } = await mkCtx()
+  const cdpE = await cE.newCDPSession(E)
+  await cdpE.send('WebAuthn.enable')
+  await cdpE.send('WebAuthn.addVirtualAuthenticator', {
+    options: { protocol: 'ctap2', ctap2Version: 'ctap2_1', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, hasPrf: true, automaticPresenceSimulation: true },
+  })
+  await E.goto(URL)
+  await setupLock(E, PW1)
+  await finishKeyStep(E)
+  await E.getByRole('heading', { name: 'Face ID hinzufügen?' }).waitFor({ timeout: 30000 })
+  must(await E.locator(APPNAV).count(), 0, 'E: im Face-ID-Schritt noch keine App')
+  await E.reload()
+  await waitLocked(E)
+  must(await E.locator(SETUP).count(), 0, 'E: nach dem Neuladen keine Einrichtung mehr')
+  must(await E.locator(APPNAV).count(), 0, 'E: gesperrt, keine App')
+  must(await E.getByRole('button', { name: 'Mit Face ID entsperren' }).count(), 0, 'E: ohne Passkey kein Face-ID-Knopf')
+  await unlockPw(E, PW1)
+  await E.locator(APPNAV).waitFor({ timeout: 20000 })
+  must(await E.locator(SETUP).count(), 0, 'E: App öffnet direkt, ohne erneutes Einrichten')
+  must(await E.locator('.greeting').count(), 0, 'E: keine Begrüßung bei Passwort')
+  await waitOpen(E)
+  must(await ls(E, KEY_PLAIN), null, 'E: kein Klartext')
+  must(!!(await ls(E, KEY_VAULT)), true, 'E: Tresor vorhanden')
+  must(!!JSON.parse(await ls(E, KEY_VAULT)).unlock.passkey, false, 'E: Face ID wurde nicht eingetragen')
+  ok('Neuladen im Face-ID-Schritt der Einrichtung: der Tresor existiert schon → Sperrbildschirm statt erneuter Einrichtung, Passwort öffnet die App direkt (ohne Face ID, ohne Begrüßung)')
+  await cE.close()
+
+  // ===== F) Frischer Start MIT vorhandenen Klartext-Daten: Einrichtung zeigt den Backup-Tipp und übernimmt die Daten =====
+  const { c: cF, p: F } = await mkCtx()
+  await F.addInitScript(([k, vk]) => {
+    if (localStorage.getItem(k) || localStorage.getItem(vk)) return
+    const cats = ['lebensmittel', 'fixkosten', 'mobilität', 'freizeit'].map((n) => ({ id: `expense-${n}`, name: n[0].toUpperCase() + n.slice(1), kind: 'expense', builtIn: false }))
+    cats.push({ id: 'expense-sonstiges', name: 'Sonstiges', kind: 'expense', builtIn: true }, { id: 'income-gehalt', name: 'Gehalt', kind: 'income', builtIn: false }, { id: 'income-sonstiges', name: 'Sonstiges', kind: 'income', builtIn: true })
+    const transactions = [
+      { id: 'f1', kind: 'income', amountCents: 250000, date: '2026-10-05', categoryId: 'income-gehalt', note: 'Gehalt Altbestand', account: 'konto', createdAt: 1700000000001 },
+      { id: 'f2', kind: 'expense', amountCents: 4599, date: '2026-10-12', categoryId: 'expense-lebensmittel', note: 'Wocheneinkauf Altbestand', account: 'konto', createdAt: 1700000000002 },
+    ]
+    localStorage.setItem(k, JSON.stringify({ version: 6, settings: { startBalanceCents: 0, startCashCents: 0 }, categories: cats, transactions, recurring: [], transfers: [] }))
+  }, [KEY_PLAIN, KEY_VAULT])
+  await F.goto(URL)
+  await F.locator(SETUP).waitFor()
+  must(await F.locator(APPNAV).count(), 0, 'F: Einrichtung vor der App')
+  await expectTextOn(F, 'Tipp: Exportiere vorher ein verschlüsseltes Backup.')
+  await F.screenshot({ path: `${SHOTS}/46d-einrichtung-backup-tipp.png` })
+  await F.getByRole('button', { name: 'Backup exportieren', exact: true }).click()
+  const bkF = F.getByRole('dialog', { name: 'Backup exportieren' })
+  await bkF.waitFor()
+  await bkF.getByRole('button', { name: 'Abbrechen' }).click()
+  await bkF.waitFor({ state: 'detached' })
+  must(await ls(F, KEY_VAULT), null, 'F: Backup-Tipp legt keinen Tresor an')
+  must(!!(await ls(F, KEY_PLAIN)), true, 'F: Klartext bis zum Ende der Einrichtung unangetastet')
+  await runSetup(F, { password: PW1 })
+  await F.locator(APPNAV).waitFor()
+  must(await bal(F), '2.454,01 €', 'F: Daten nach der Einrichtung')
+  await F.getByRole('button', { name: /^Alle Buchungen/ }).click()
+  await expectTextOn(F, 'Wocheneinkauf Altbestand'); await expectTextOn(F, 'Gehalt Altbestand')
+  must(await ls(F, KEY_PLAIN), null, 'F: Klartext nach der Einrichtung weg')
+  must(await ls(F, KEY_PLAIN + ':corrupt'), null, 'F: kein corrupt-Key')
+  const vF = await ls(F, KEY_VAULT)
+  must(!!vF, true, 'F: Tresor vorhanden')
+  for (const needle of ['Altbestand', 'Wocheneinkauf', 'amountCents']) if (vF.includes(needle)) throw new Error('F: Klartext im Tresor: ' + needle)
+  await F.reload()
+  await unlockPw(F, PW1); await waitOpen(F)
+  must(await bal(F), '2.454,01 €', 'F: Daten nach Neuladen und Entsperren')
+  ok('Frischer Start mit Klartext-Daten: Einrichtung zeigt „Tipp: Exportiere vorher ein verschlüsseltes Backup“ (Export-Sheet öffnet/schließt, nichts wird dabei angelegt); danach sind dieselben Buchungen da (2.454,01 €), „finanz-app:v1“ ist weg, „finanz-app:vault“ existiert ohne Klartext, nach Neuladen und Entsperren unverändert')
+  await cF.close()
 }
 
 await browser.close()
