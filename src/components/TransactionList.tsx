@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import type { Category, Transaction } from '../domain/types'
 import { formatShortDay } from '../domain/dates'
 import { formatSigned } from '../domain/money'
@@ -5,21 +6,26 @@ import { useFinance } from '../state/FinanceContext'
 import { RepeatIcon } from './Icons'
 import { SwipeRow } from './SwipeRow'
 
-/** One booking row (swipe left to delete, with undo); cash bookings get a small "Bar" badge unless `hideBadge` (cash page). */
-export function TransactionRow({
+/**
+ * One booking row (swipe left to delete, with undo); cash bookings get a small "Bar" badge unless `hideBadge` (cash page).
+ * Memoized: with a stable `transaction` object and stable handlers a list of hundreds of rows is not re-rendered
+ * when a sheet opens or one booking changes.
+ */
+export const TransactionRow = memo(function TransactionRow({
   transaction: t,
   categoryName,
   hideBadge,
   onSelect,
+  onDelete,
 }: {
   transaction: Transaction
   categoryName: string
   hideBadge?: boolean
   onSelect: (t: Transaction) => void
+  onDelete: (id: string) => void
 }) {
-  const { deleteTransaction } = useFinance()
   return (
-    <SwipeRow label={categoryName} onDelete={() => deleteTransaction(t.id)}>
+    <SwipeRow label={categoryName} onDelete={() => onDelete(t.id)}>
       <button className="row" onClick={() => onSelect(t)}>
         <span
           className="dot"
@@ -47,9 +53,9 @@ export function TransactionRow({
       </button>
     </SwipeRow>
   )
-}
+})
 
-export function TransactionList({
+export const TransactionList = memo(function TransactionList({
   transactions,
   categories,
   onSelect,
@@ -58,12 +64,19 @@ export function TransactionList({
   categories: Category[]
   onSelect: (t: Transaction) => void
 }) {
-  const names = new Map(categories.map((c) => [c.id, c.name]))
+  const { deleteTransaction } = useFinance() // stable: the actions do not change with the data
+  const names = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
   return (
     <ul className="list card">
       {transactions.map((t) => (
-        <TransactionRow key={t.id} transaction={t} categoryName={names.get(t.categoryId) ?? 'Unbekannt'} onSelect={onSelect} />
+        <TransactionRow
+          key={t.id}
+          transaction={t}
+          categoryName={names.get(t.categoryId) ?? 'Unbekannt'}
+          onSelect={onSelect}
+          onDelete={deleteTransaction}
+        />
       ))}
     </ul>
   )
-}
+})

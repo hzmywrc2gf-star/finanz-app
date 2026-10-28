@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { todayISO } from '../domain/dates'
 import { downloadTextFile } from '../lib/download'
@@ -23,7 +23,7 @@ const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
   { value: 'dark', label: 'Dunkel' },
 ]
 
-export function SettingsPage() {
+export const SettingsPage = memo(function SettingsPage() {
   const { data, setStartBalance, setStartCash, setDisplayName, replaceAll, saveError } = useFinance()
   const [balance, setBalance] = useState(centsToInputString(data.settings.startBalanceCents))
   const [cash, setCash] = useState(centsToInputString(data.settings.startCashCents))
@@ -261,4 +261,4 @@ export function SettingsPage() {
       )}
     </>
   )
-}
+})

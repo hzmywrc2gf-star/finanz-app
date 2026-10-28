@@ -29,6 +29,15 @@ export const ROW_ACTION_PX = 80
 export const ROW_OPEN_FRACTION = 0.5
 /** Dragged beyond this share of the row width, releasing deletes the row immediately. */
 export const ROW_DELETE_FRACTION = 0.6
+/** Over this travel after the direction is clear, the 8 px dead zone is absorbed (no jump when the content starts to follow). */
+export const FOLLOW_RAMP_PX = 24
+/** Release animations last between these bounds, depending on the finger speed. */
+export const RELEASE_MIN_MS = 150
+export const RELEASE_MAX_MS = 350
+/** Initial speed of EASE_IOS relative to distance/duration (cubic-bezier y1 / x1 = 0.8 / 0.2). */
+const EASE_START_SLOPE = 4
+/** Below this finger speed (px/ms) a release counts as "resting": the duration then only depends on the distance. */
+const REST_VELOCITY = 0.3
 /** Velocity is measured over the last 100 ms before release. */
 const VELOCITY_WINDOW_MS = 100
 /** With "reduce motion" nothing slides; changes become a quick fade of at most this long. */
@@ -47,6 +56,9 @@ export function gestureIntent(main: number, cross: number): Intent {
   if (Math.abs(cross) > Math.abs(main) * INTENT_RATIO) return 'reject'
   return 'pending'
 }
+
+/** Has the finger moved far enough that a press turned into a scroll or drag (the pressed highlight goes away)? */
+export const pressCancelled = (dx: number, dy: number): boolean => Math.hypot(dx, dy) >= INTENT_PX
 
 /** Does a pointer-down at `x` (relative to the left edge of the page) start an edge swipe? */
 export const isEdgeStart = (x: number): boolean => x >= 0 && x <= EDGE_PX
@@ -106,3 +118,38 @@ export const monthStep = (dx: number): 1 | -1 => (dx < 0 ? 1 : -1)
 
 /** Duration of a transition; reduced motion shortens it to a quick fade. */
 export const animationMs = (ms: number, reduced: boolean): number => (reduced ? Math.min(ms, REDUCED_MAX_MS) : ms)
+
+/**
+ * Where the content is painted while dragging. The first `startDelta` px (the dead zone before the direction was clear)
+ * are absorbed over the next FOLLOW_RAMP_PX, so the content starts at its resting place instead of jumping and then
+ * follows the finger exactly. Decisions on release keep using the raw delta.
+ */
+export function followOffset(delta: number, startDelta: number): number {
+  const progress = Math.min(1, Math.abs(delta - startDelta) / FOLLOW_RAMP_PX)
+  return delta - startDelta * (1 - progress)
+}
+
+/**
+ * Duration of the animation after a release. `distance` is what is left to travel (px), `velocity` the finger speed
+ * towards the target (px/ms, <= 0 = resting or moving away). With the iOS curve the motion starts at distance/duration
+ * times its initial slope, so a fast finger gets a short animation that continues at its speed; a resting finger gets
+ * a duration that grows a little with the distance. Reduced motion: a quick fade.
+ */
+export function releaseDuration(distance: number, velocity: number, reduced: boolean): number {
+  if (reduced) return REDUCED_MAX_MS
+  const d = Math.max(0, distance)
+  if (velocity < REST_VELOCITY) return Math.round(Math.min(RELEASE_MAX_MS, Math.max(RELEASE_MIN_MS, 150 + d / 4)))
+  return Math.round(Math.min(RELEASE_MAX_MS, Math.max(RELEASE_MIN_MS, (EASE_START_SLOPE * d) / velocity)))
+}
+
+/**
+ * Timing function for a release: EASE_IOS (initial slope 4) when the duration matches the finger speed; when the duration
+ * had to be clamped (a slow finger on a long way) the start slope is lowered/raised, within limits, so the motion still
+ * begins at the finger speed.
+ */
+export function releaseCurve(distance: number, velocity: number, ms: number): string {
+  if (velocity < REST_VELOCITY || distance <= 0 || ms <= 0) return 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+  const slope = (velocity * ms) / distance
+  const y1 = Math.min(1, Math.max(0.2, 0.2 * slope))
+  return `cubic-bezier(0.2, ${Number(y1.toFixed(2))}, 0.2, 1)`
+}

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { SHEET_FRACTION, SHEET_PULL_UP_PX, animationMs, rubberBand, swipeDecision } from '../domain/gesture'
+import { SHEET_FRACTION, SHEET_PULL_UP_PX, rubberBand, swipeDecision } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
-import { EASE_IOS, afterTransition, isInteractive, reducedMotion } from '../lib/motion'
-
-const SETTLE_MS = 250
+import { afterTransition, isInteractive, reducedMotion, releaseMotion } from '../lib/motion'
 
 /**
  * Bottom sheet. Closing always animates out (Abbrechen, Escape, backdrop, swipe down) and then calls `onClose`.
@@ -28,6 +26,8 @@ export function Sheet({
   const closing = useRef(false)
   const mounted = useRef(true)
   const height = useRef(1)
+  /** Where the sheet is painted (px below its resting place), the start of the animation after a release. */
+  const offset = useRef(0)
   const fromHeader = useRef(false)
 
   useEffect(() => {
@@ -40,23 +40,27 @@ export function Sheet({
     }
   }, [])
 
-  const settle = useCallback(async (to: 'open' | 'closed') => {
+  /** Animates to the resting place or off screen; `velocity` is the finger speed (px/ms) towards it, 0 = from rest. */
+  const settle = useCallback(async (to: 'open' | 'closed', velocity = 0) => {
     const sheet = sheetRef.current
     const dim = dimRef.current
     if (!sheet || !dim) return
     const reduced = reducedMotion()
-    const ms = animationMs(SETTLE_MS, reduced)
+    height.current = sheet.offsetHeight || height.current
+    const { ms, curve } = releaseMotion(to === 'open' ? Math.abs(offset.current) : Math.max(0, height.current - offset.current), velocity)
     sheet.style.willChange = 'transform'
     void sheet.offsetHeight
-    sheet.style.transition = `transform ${ms}ms ${EASE_IOS}, opacity ${ms}ms ease`
+    sheet.style.transition = `transform ${ms}ms ${curve}, opacity ${ms}ms ease`
     dim.style.transition = `opacity ${ms}ms ease`
     dim.style.opacity = to === 'open' ? '1' : '0'
     if (to === 'open') {
       sheet.style.transform = ''
+      offset.current = 0
     } else if (reduced) {
       sheet.style.opacity = '0' // no slide, just a quick fade
     } else {
       sheet.style.transform = 'translate3d(0, 100%, 0)'
+      offset.current = height.current
     }
     await afterTransition(sheet, ms)
     if (to === 'open' && sheet.isConnected) {
@@ -67,10 +71,10 @@ export function Sheet({
     }
   }, [])
 
-  const dismiss = useCallback(() => {
+  const closeWith = useCallback((velocity: number) => {
     if (closing.current || !latest.current.dismissible) return
     closing.current = true
-    void settle('closed').then(() => {
+    void settle('closed', velocity).then(() => {
       if (!mounted.current) return
       latest.current.onClose()
       // a parent that keeps the sheet mounted must not be left with an invisible one
@@ -81,6 +85,7 @@ export function Sheet({
       })
     })
   }, [settle])
+  const dismiss = useCallback(() => closeWith(0), [closeWith])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && dismiss()
@@ -127,13 +132,14 @@ export function Sheet({
     },
     onMove: (dy) => {
       const y = dy >= 0 ? dy : -rubberBand(-dy, SHEET_PULL_UP_PX)
+      offset.current = y
       if (sheetRef.current) sheetRef.current.style.transform = `translate3d(0, ${y}px, 0)`
       if (dimRef.current) dimRef.current.style.opacity = String(Math.max(0, 1 - Math.max(y, 0) / height.current))
     },
     onEnd: ({ delta, velocity, cancelled }) => {
       const commit = !cancelled && swipeDecision({ distance: delta, velocity, size: height.current, fraction: SHEET_FRACTION })
-      if (commit) dismiss()
-      else void settle('open')
+      if (commit) closeWith(velocity)
+      else void settle('open', -velocity)
     },
   })
 

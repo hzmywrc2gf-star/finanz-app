@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { Transaction, Transfer } from '../domain/types'
 import { ledgerEntries } from '../domain/ledger'
 import { useFinance } from '../state/FinanceContext'
@@ -9,7 +9,7 @@ import { SubPageHeader } from '../components/SubPageHeader'
 import { TransferForm } from '../components/TransferForm'
 
 /** All bookings and transfers, newest first, grouped by month, with search. */
-export function BookingsPage({
+export const BookingsPage = memo(function BookingsPage({
   onBack,
   onAdd,
   onEdit,
@@ -68,4 +68,4 @@ export function BookingsPage({
       {transfer && <TransferForm key={transfer.id} transfer={transfer} onClose={() => setTransfer(null)} />}
     </>
   )
-}
+})

@@ -2038,6 +2038,31 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await p.locator('.swipe-li:not([data-swipe="closed"])').count(), 0, 'Senkrechtes Ziehen öffnet keine Zeile')
   ok('Senkrechtes Ziehen auf einer Zeile scrollt die Liste und öffnet keine Zeile')
 
+  // 4b) Tipp-Rückmeldung: data-pressed liegt sofort ab pointerdown auf der Zeile; Scrollen, Loslassen und Wischen räumen es weg
+  await row(p, 'Miete').evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await sleep(200)
+  const pb = await row(p, 'Miete').boundingBox()
+  const pcdp = await cdpOf(p)
+  const pressedCount = () => p.locator('[data-pressed]').count()
+  await pcdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pb.x + 40, y: pb.y + pb.height / 2 }] })
+  await sleep(30)
+  must(await pressedCount(), 1, 'Zeile ist sofort „pressed“')
+  must(await p.locator('button.row[data-pressed]').count(), 1, 'der Zeilenknopf trägt data-pressed')
+  for (let i = 1; i <= 6; i++) { await pcdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: pb.x + 40, y: pb.y + pb.height / 2 - i * 8 }] }); await sleep(30) }
+  must(await pressedCount(), 0, 'Scrollbeginn entfernt „pressed“')
+  await pcdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await sleep(300)
+  const pb2 = await row(p, 'Miete').boundingBox()
+  await pcdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pb2.x + 40, y: pb2.y + pb2.height / 2 }] })
+  await sleep(30)
+  must(await pressedCount(), 1, 'zweiter Tipp: sofort „pressed“')
+  await pcdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await p.getByRole('dialog').waitFor()
+  await sleep(250)
+  must(await pressedCount(), 0, 'nach dem Loslassen weg')
+  await p.keyboard.press('Escape'); await p.getByRole('dialog').waitFor({ state: 'detached' })
+  ok('Tipp-Rückmeldung: data-pressed ab pointerdown (vor dem Loslassen), weg beim Scrollbeginn und nach dem Antippen')
+
   // 5) Antippen einer offenen Zeile schließt sie, öffnet nicht das Sheet; immer nur eine offen
   await p.evaluate(() => window.scrollTo(0, 0))
   await swipeRow(p, 'Miete', 60)
@@ -2235,6 +2260,59 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     ok('Bewegung reduzieren: Zeile öffnet ohne Slide-Animation, Löschen per Knopf und per langem Wischen funktioniert (Überblendung)')
     await cr.close()
   }
+}
+
+// ---------- Lange Liste: Monate außerhalb des Bildschirms werden nicht gerendert (content-visibility), alles bleibt bedienbar ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
+  const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+  const p = await c.newPage()
+  p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  p.on('pageerror', (e) => errors.push(e.message))
+  await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+  await p.addInitScript(() => {
+    if (localStorage.getItem('finanz-app:v1')) return
+    const cats = ['lebensmittel', 'fixkosten', 'mobilität', 'freizeit'].map((n) => ({ id: `expense-${n}`, name: n[0].toUpperCase() + n.slice(1), kind: 'expense', builtIn: false }))
+    cats.push({ id: 'expense-sonstiges', name: 'Sonstiges', kind: 'expense', builtIn: true }, { id: 'income-gehalt', name: 'Gehalt', kind: 'income', builtIn: false }, { id: 'income-sonstiges', name: 'Sonstiges', kind: 'income', builtIn: true })
+    const transactions = Array.from({ length: 96 }, (_, i) => {
+      const d = new Date(2026, 9, 27 - i * 2)
+      return { id: `l${i}`, kind: 'expense', amountCents: 1000 + i * 37, date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, categoryId: cats[i % 4].id, note: `Eintrag ${i}`, account: 'konto', createdAt: 1700000000000 + i }
+    })
+    localStorage.setItem('finanz-app:v1', JSON.stringify({ version: 6, settings: { startBalanceCents: 0, startCashCents: 0 }, categories: cats, transactions, recurring: [], transfers: [] }))
+  })
+  await p.goto(URL)
+  await p.getByRole('button', { name: /^Alle Buchungen/ }).click()
+  await p.locator('.swipe-li').first().waitFor()
+  await p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
+  must(await p.locator('.swipe-li').count(), 96, 'alle 96 Zeilen im DOM')
+  const months = await p.locator('section.ledger-skip').count()
+  if (months < 5) throw new Error('Monatsgruppen der langen Liste fehlen: ' + months)
+  must(await p.locator('section.ledger-skip').first().evaluate((el) => getComputedStyle(el).contentVisibility), 'auto', 'content-visibility der Monatsgruppe')
+  const head0 = await p.locator('.month-head').first().evaluate((el) => Math.round(el.getBoundingClientRect().top + scrollY))
+  // ganz nach unten: die letzte Zeile ist tippbar und öffnet ihr Sheet
+  await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await sleep(300)
+  await p.locator('.swipe-li').last().getByRole('button').first().click()
+  await p.getByRole('dialog').waitFor()
+  must(await p.inputValue('#tx-note'), 'Eintrag 95', 'letzte Zeile öffnet ihr Sheet')
+  await p.keyboard.press('Escape'); await p.getByRole('dialog').waitFor({ state: 'detached' })
+  // eine Zeile mitten in der Liste lässt sich wischen
+  const mid = p.locator('.swipe-li').nth(48)
+  await mid.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await sleep(300)
+  const b = await mid.boundingBox()
+  const cdp = await c.newCDPSession(p)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + 300, y: b.y + b.height / 2 }] })
+  for (let i = 1; i <= 10; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: b.x + 300 - i * 6, y: b.y + b.height / 2 }] }); await sleep(20) }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await p.waitForFunction((el) => el.getAttribute('data-swipe') === 'open', await mid.elementHandle())
+  // zurück ganz nach oben: die Überschrift steht wieder exakt an ihrem Platz
+  await p.evaluate(() => window.scrollTo(0, 0))
+  await sleep(300)
+  must(await p.locator('.month-head').first().evaluate((el) => Math.round(el.getBoundingClientRect().top + scrollY)), head0, 'Überschrift nach dem Durchscrollen an gleicher Stelle')
+  await c.close()
+  ok(`Lange Liste (96 Zeilen, ${months} Monatsgruppen mit content-visibility): alles im DOM, letzte Zeile tippbar, Zeile in der Mitte wischbar, Layout nach dem Durchscrollen unverändert`)
 }
 
 // ---------- App-Sperre: Tresor (AES-GCM, Datenschlüssel), Passwort, Wiederherstellungsschlüssel, Auto-Sperre, Face ID ----------
@@ -2691,17 +2769,22 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await B.evaluate(() => { window.__greetTexts = []; new MutationObserver(() => { const g = document.querySelector('.greeting h1'); if (g && !window.__greetTexts.includes(g.textContent)) window.__greetTexts.push(g.textContent) }).observe(document.body, { childList: true, subtree: true, characterData: true }) })
   await faceBtn.click()
   await B.locator('.greeting').waitFor({ timeout: 15000 })
-  must(await B.locator('.greeting').evaluate((el) => getComputedStyle(el).animationDuration), '1.1s', 'Begrüßung dauert 1,1 s')
+  must(await B.locator('.greeting').evaluate((el) => getComputedStyle(el).animationDuration), '2.5s', 'Begrüßung dauert 2,5 s')
   const tIn = Date.now()
   await sleep(300)
   await B.screenshot({ path: `${SHOTS}/48-moin-felix.png` })
   must((await B.locator('.greeting h1').innerText()).trim(), 'Moin, Felix', 'Begrüßung mit Namen')
+  // Haltephase (0,35 s – 2,05 s): der Titel steht voll sichtbar, die Begrüßung fängt Tippen ab
+  await sleep(900)
+  must(await B.locator('.greeting').evaluate((el) => getComputedStyle(el).opacity), '1', 'Begrüßung steht in der Haltephase voll da')
+  must(await B.locator('.greeting').evaluate((el) => getComputedStyle(el).pointerEvents), 'auto', 'Begrüßung fängt Tippen nur solange sie sichtbar ist')
+  await B.screenshot({ path: `${SHOTS}/51-moin-felix-halten.png` })
   await B.locator('.greeting').waitFor({ state: 'detached', timeout: 5000 })
   const greetMs = Date.now() - tIn + 300
-  if (greetMs < 700 || greetMs > 2500) throw new Error('Begrüßung dauert ' + greetMs + ' ms')
+  if (greetMs < 1800 || greetMs > 3800) throw new Error('Begrüßung dauert ' + greetMs + ' ms')
   await waitOpen(B)
   must(await bal(B), '1.990,00 €', 'B: Daten nach Face ID')
-  ok(`Face ID entsperren: Begrüßung „Moin, Felix“ blendet ein und nach 1,1 s (gemessen ${(greetMs / 1000).toFixed(1)} s) wieder aus, danach Startseite mit 1.990,00 €`)
+  ok(`Face ID entsperren: Begrüßung „Moin, Felix“ blendet 0,35 s ein, hält 1,7 s und blendet nach insgesamt 2,5 s (gemessen ${(greetMs / 1000).toFixed(1)} s) wieder aus, danach Startseite mit 1.990,00 €`)
   // keine Begrüßung bei Tabwechsel
   await nav(B, 'Monat').click(); await nav(B, 'Start').click()
   must(await B.locator('.greeting').count(), 0, 'keine Begrüßung beim Tabwechsel')
@@ -2717,16 +2800,32 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await B.locator('.greeting').waitFor({ state: 'detached', timeout: 5000 })
   ok('Ohne Namen lautet die Begrüßung nur „Moin“')
 
+  // Antippen beendet die Begrüßung früh (kurzes Ausblenden), danach ist die App sofort bedienbar
+  await waitOpen(B)
+  await nav(B, 'Einstellungen').click()
+  await row(B, 'Jetzt sperren').click(); await waitLocked(B)
+  await B.getByRole('button', { name: 'Mit Face ID entsperren' }).click()
+  await B.locator('.greeting').waitFor({ timeout: 15000 })
+  await sleep(500)
+  const tTap = Date.now()
+  await B.locator('.greeting').click()
+  await B.locator('.greeting').waitFor({ state: 'detached', timeout: 2000 })
+  const tapMs = Date.now() - tTap
+  if (tapMs > 1200) throw new Error('Begrüßung reagiert zu spät aufs Antippen: ' + tapMs + ' ms')
+  await waitOpen(B)
+  must(await B.locator('.greeting').count(), 0, 'Begrüßung nach dem Antippen weg')
+  ok(`Antippen beendet die Begrüßung vorzeitig (nach ${tapMs} ms statt 2,5 s), die App ist danach bedienbar`)
+
   // Bewegung reduzieren: kurze Überblendung
   await B.emulateMedia({ reducedMotion: 'reduce' })
   await nav(B, 'Einstellungen').click()
   await row(B, 'Jetzt sperren').click(); await waitLocked(B)
   await B.getByRole('button', { name: 'Mit Face ID entsperren' }).click()
   await B.locator('.greeting').waitFor({ timeout: 15000 })
-  must(await B.locator('.greeting').evaluate((el) => getComputedStyle(el).animationDuration), '0.5s', 'Begrüßung bei reduzierter Bewegung')
+  must(await B.locator('.greeting').evaluate((el) => getComputedStyle(el).animationDuration), '1.5s', 'Begrüßung bei reduzierter Bewegung')
   await B.locator('.greeting').waitFor({ state: 'detached', timeout: 5000 })
   await B.emulateMedia({ reducedMotion: 'no-preference' })
-  ok('Bewegung reduzieren: Begrüßung nur als kurze Überblendung (0,5 s)')
+  ok('Bewegung reduzieren: Begrüßung nur als Überblendung (1,5 s insgesamt)')
 
   // Auto-Sperre im Hintergrund → Face ID startet beim Zurückkehren von selbst
   await waitOpen(B)

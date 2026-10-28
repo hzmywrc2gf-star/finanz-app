@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { accountBalance, totalBalance } from '../domain/calc'
 import { todayISO, formatDayMonth, formatShortDay } from '../domain/dates'
@@ -47,7 +47,7 @@ function MenuRow({
   )
 }
 
-export function StartPage({
+export const StartPage = memo(function StartPage({
   onAdd,
   onOpenBudgets,
   onNavigate,
@@ -237,4 +237,4 @@ export function StartPage({
       )}
     </>
   )
-}
+})
