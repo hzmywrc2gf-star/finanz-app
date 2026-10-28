@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultData } from '../domain/defaults'
 import { addRecurring, addTransaction, addTransfer, setCategoryBudget, setStartCash } from '../state/actions'
 import { exportJSON, parseBackup } from './backup'
+import { decodeBackupFile, exportEncrypted, isEncryptedBackup } from './backupCrypto'
 
 const sample = () =>
   addRecurring(
@@ -167,5 +168,28 @@ describe('backup', () => {
       mutate((d) => (d.categories.find((c: any) => c.id === id).monthlyBudgetCents = value))
     for (const v of [0, -5, 12.5, '400', null]) expect(() => parseBackup(bad(v))).toThrow(/Budget/)
     expect(() => parseBackup(bad(1000, 'income-gehalt'))).toThrow(/nur für Ausgaben/)
+  })
+})
+
+describe('verschlüsselte Backups', () => {
+  it('Roundtrip: exportEncrypted -> decodeBackupFile -> parseBackup liefert dieselben Daten', async () => {
+    const data = sample()
+    const file = await exportEncrypted(data, 'ein langes Passwort')
+    expect(isEncryptedBackup(file)).toBe(true)
+    expect(file).not.toContain('Miete')
+    expect(parseBackup(await decodeBackupFile(file, 'ein langes Passwort'))).toEqual(data)
+  }, 30_000)
+
+  it('falsches Passwort und fehlendes Passwort geben deutsche Fehler', async () => {
+    const file = await exportEncrypted(sample(), 'ein langes Passwort')
+    await expect(decodeBackupFile(file, 'falsch')).rejects.toThrow('Passwort falsch oder Datei beschädigt.')
+    await expect(decodeBackupFile(file)).rejects.toThrow('Passwort nötig')
+  }, 30_000)
+
+  it('unverschlüsselte Dateien laufen unverändert durch', async () => {
+    const plain = exportJSON(sample())
+    expect(isEncryptedBackup(plain)).toBe(false)
+    expect(await decodeBackupFile(plain)).toBe(plain)
+    expect(await decodeBackupFile(plain, 'egal')).toBe(plain)
   })
 })
