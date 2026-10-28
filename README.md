@@ -58,4 +58,4 @@ React + Vite + TypeScript, `vite-plugin-pwa` (Manifest, Service Worker). Beträg
 2. **Investitionen – Sparpläne**: als Vertrag, der monatlich vom Konto ins Depot geht und – wie eine Bargeld-Abhebung – nicht als Ausgabe zählt.
 3. **Sparziele** mit Zielbetrag und Datum.
 4. **Sync zwischen Handy und PC** – neues Repository-Backend (z. B. Supabase oder PocketBase), Login optional.
-5. Kleinere Ideen: CSV-Export, Haptik/Swipe-to-delete.
+5. Kleinere Ideen: CSV-Export, Haptik/Swipe-to-delete, Suchleiste in den Einstellungen (sobald es deutlich mehr Einstellungen gibt).

@@ -51,4 +51,5 @@ E2E-Hinweis: Push/Pop und Sheet-Schließen laufen animiert; vor Folgeprüfungen 
 - Investitionen, Depot-Übersicht: Positionen manuell (Name/ISIN, Stückzahl, Kaufkurs), Kurs manuell nachtragen, Wert + Gewinn/Verlust; offline, keine Kurs-APIs (CORS, inoffizielle Quellen).
 - Investitionen, Sparpläne: Vertrag Konto → Depot, zählt wie eine Umbuchung nicht als Ausgabe.
 - Sparziele, Sync Handy/PC.
+- Einstellungen: Suchleiste erst, wenn deutlich mehr Einstellungen dazukommen (Nutzerwunsch: vorerst abwarten).
 - Bewusst nicht: das Day-Trader-Skill-Paket (github.com/Jakeschincariol/day-trader-skill) – US-Day-Trading, Python/Chat-basiert, passt nicht in die Offline-PWA.
