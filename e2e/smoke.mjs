@@ -40,10 +40,12 @@ async function addTx({ kind = 'Ausgabe', amount, category, date, note, account }
   await page.getByRole('button', { name: 'Sichern' }).click()
 }
 // Zeilen der Start-Übersicht und die Unterseiten dahinter (Start → Alle Buchungen / Bargeld / Verträge)
+// Push/Pop dauern ~300 ms; währenddessen liegen Übersicht und Unterseite gleichzeitig im DOM
+const settled = (p = page) => p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
 const hubRow = (name) => page.getByRole('button', { name: new RegExp(`^${name}`) })
 async function openStartPage(name) {
   await tab('Start').click()
-  await hubRow(name).click()
+  await hubRow(name).click(); await settled()
   await page.getByRole('button', { name: 'Zurück', exact: true }).waitFor()
 }
 const openBookings = () => openStartPage('Alle Buchungen')
@@ -93,8 +95,7 @@ const alert = await page.getByRole('alert').count()
 if (!alert) throw new Error('Keine Fehlermeldung bei Betrag 0')
 await page.screenshot({ path: `${SHOTS}/3-formular-fehler.png` })
 await page.keyboard.press('Escape')
-await page.getByRole('button', { name: 'Abbrechen' }).count().then(async (n) => { if (n) await page.getByRole('button', { name: 'Abbrechen' }).first().click() })
-await page.waitForTimeout(300)
+await page.getByRole('dialog').waitFor({ state: 'detached' }) // Sheets animieren beim Schließen aus
 if ((await balance()) !== '2.642,00 €') throw new Error('Ungültige Buchung wurde gespeichert')
 ok('Betrag 0 wird mit Fehlermeldung abgelehnt')
 
@@ -638,7 +639,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await top.locator('.row').first().click()
   await page.getByRole('dialog').waitFor()
   must(await page.inputValue('#tx-amount'), '800,00', 'Bearbeiten-Sheet öffnet')
-  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({ state: 'detached' })
   if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: 'Abbrechen' }).first().click()
   ok('Größte Ausgaben: 800,00 (27.10.) vor 800,00 (01.10. ↻), 270,00, 103,10, 50,00; Kino fehlt; Tippen öffnet das Bearbeiten-Sheet')
 
@@ -662,7 +663,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await all.locator('.row', { hasText: 'Kino' }).click()
   await page.getByRole('dialog').waitFor()
   must(await page.inputValue('#tx-amount'), '20,00', 'Kino: Betrag im Sheet'); must(await page.inputValue('#tx-date'), '2026-10-20', 'Kino: Datum im Sheet'); must(await page.inputValue('#tx-note'), 'Kino', 'Kino: Notiz im Sheet')
-  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({ state: 'detached' })
   if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: 'Abbrechen' }).first().click()
   ok('Alle Buchungen (unter „Größte Ausgaben“): 8 Einträge neueste zuerst −103,10 / −270,00 / −30,00 / −800,00 / −50,00 / +2.500,00 (27.10.), −20,00 (20.10.), −800,00 ↻ (01.10.); Tippen auf Kino öffnet das Bearbeiten-Sheet (20,00, 2026-10-20)')
 
@@ -670,8 +671,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const fab = page.getByRole('button', { name: 'Buchung hinzufügen', exact: true })
   const openFab = async () => { await fab.click(); await page.getByRole('dialog').waitFor() }
   const closeSheet = async () => {
-    await page.keyboard.press('Escape'); await page.waitForTimeout(300)
-    if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: 'Abbrechen' }).first().click()
+    await page.keyboard.press('Escape')
     await page.getByRole('dialog').waitFor({ state: 'detached' })
   }
   await openFab(); must(await page.inputValue('#tx-date'), '2026-10-27', 'Plus im aktuellen Monat: heute'); await closeSheet()
@@ -783,7 +783,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const search_ = (q) => page.getByRole('searchbox', { name: 'Suchen' }).fill(q)
   const pressed = async (name) => (await dlg().getByRole('button', { name, exact: true }).getAttribute('aria-pressed')) === 'true'
   const closeSheet = async () => {
-    await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+    await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({ state: 'detached' })
     if (await dlg().count()) await page.getByRole('button', { name: 'Abbrechen' }).first().click()
     await dlg().waitFor({ state: 'detached' })
   }
@@ -800,7 +800,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Start-Übersicht: Kontostand −223,10 €, „Bargeld 0,00 € · Gesamt −223,10 €“, Zeilen „Alle Buchungen 11“, „Bargeld 0,00 €“, „Verträge Keine“ (je ≥ 44 px), keine „Letzte Buchungen“')
 
   // --- Alle Buchungen ---
-  await hubRow('Alle Buchungen').click()
+  await hubRow('Alle Buchungen').click(); await settled()
   must(await page.locator('h1').innerText(), 'Alle Buchungen', 'Titel Unterseite')
   must(await page.getByRole('button', { name: 'Zurück', exact: true }).innerText(), 'Start', 'Zurück-Knopf zeigt „Start“')
   if ((await page.getByRole('button', { name: 'Zurück', exact: true }).boundingBox()).height < 44) throw new Error('Zurück-Knopf < 44 px')
@@ -847,16 +847,16 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   // --- Zurück-Knopf, Tab-Wechsel, Scroll nach oben ---
   await page.evaluate(() => window.scrollTo(0, 500))
   if ((await page.evaluate(() => window.scrollY)) < 100) throw new Error('Alle Buchungen ist nicht scrollbar')
-  await page.getByRole('button', { name: 'Zurück', exact: true }).click()
+  await page.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled()
   must(await page.locator('h1').innerText(), 'Finanzklar', 'Zurück → Start-Übersicht')
   must(await page.evaluate(() => window.scrollY), 0, 'Nach Navigation ganz oben')
   must(await tab('Start').getAttribute('aria-current'), 'page', 'Tab Start bleibt aktiv')
-  await hubRow('Alle Buchungen').click()
+  await hubRow('Alle Buchungen').click(); await settled()
   await tab('Monat').click()
   must(await page.locator('h1').innerText(), 'Monat', 'Tab Monat')
   await tab('Start').click()
   must(await page.locator('h1').innerText(), 'Finanzklar', 'Tab-Wechsel setzt Start auf die Übersicht zurück')
-  await hubRow('Alle Buchungen').click()
+  await hubRow('Alle Buchungen').click(); await settled()
   await tab('Start').click()
   must(await page.locator('h1').innerText(), 'Finanzklar', 'Start-Tab auf einer Unterseite → Übersicht')
   ok('Zurück („‹ Start“, aria-label „Zurück“) führt zur Übersicht und scrollt nach oben; Tab-Wechsel (Monat → Start) und Tippen auf „Start“ setzen die Unterseite zurück')
@@ -869,7 +869,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await page.inputValue('#start-balance'), '1000,00', 'Startguthaben Konto unverändert')
   await mustHub('−223,10 €', '20,00 €', '−203,10 €', 'Startbestand Bargeld 20,00')
   must(flat(await hubRow('Bargeld').innerText()), 'Bargeld | 20,00 €', 'Zeile Bargeld mit Startbestand')
-  await hubRow('Bargeld').click()
+  await hubRow('Bargeld').click(); await settled()
   must(await page.locator('h1').innerText(), 'Bargeld', 'Titel Bargeld')
   await expectText('Bargeld-Bestand')
   must(await cashBal(), '20,00 €', 'Bargeld-Bestand')
@@ -1068,7 +1068,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await tab('Start').click()
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.screenshot({ path: `${SHOTS}/28-start-dark.png`, fullPage: true })
-  await hubRow('Alle Buchungen').click()
+  await hubRow('Alle Buchungen').click(); await settled()
   await page.screenshot({ path: `${SHOTS}/28b-alle-buchungen-dark.png` })
   await page.emulateMedia({ colorScheme: 'light' })
   await tab('Start').click()
@@ -1091,7 +1091,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const mustBal5 = async (expected, what) => { const b = await bal5(); if (b !== expected) throw new Error(`${what}: erwartet ${expected}, war ${b}`) }
   const stored5 = () => p5.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
   const rec5 = () => p5.locator('[aria-label="wiederkehrend"]').count()
-  const open5 = async () => { await nav5('Start').click(); await p5.getByRole('button', { name: /^Verträge/ }).click(); await p5.getByRole('button', { name: 'Zurück', exact: true }).waitFor() }
+  const open5 = async () => { await nav5('Start').click(); await p5.getByRole('button', { name: /^Verträge/ }).click(); await p5.getByRole('button', { name: 'Zurück', exact: true }).waitFor(); await settled(p5) }
   async function rule5({ kind = 'Ausgabe', amount, category, note, day, start, manual = true }) {
     await open5()
     await p5.getByRole('button', { name: 'Vertrag hinzufügen' }).click()
@@ -1408,6 +1408,248 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if (st.transactions.length !== 2) throw new Error('Rollover: Neuladen hat doppelt gebucht')
   ok('Neuladen nach dem Datumswechsel bucht nichts doppelt (2 Buchungen, −20,00 €)')
   await ctx2.close()
+}
+
+// ---------- Gesten: Kanten-Wischen zurück, Sheet nach unten wischen, Monat wischen (echte Touch-Events per CDP) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const sessions = new WeakMap()
+  const cdpOf = async (p) => {
+    if (!sessions.has(p)) sessions.set(p, await p.context().newCDPSession(p))
+    return sessions.get(p)
+  }
+  // Wischen mit echten Touch-Events; release:false hält den Finger unten (für Zwischenstand-Screenshots)
+  async function swipe(p, { x0, y0, x1, y1, steps = 10, durationMs = 300, release = true }) {
+    const cdp = await cdpOf(p)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] })
+    for (let i = 1; i <= steps; i++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + ((x1 - x0) * i) / steps, y: y0 + ((y1 - y0) * i) / steps }] })
+      await sleep(durationMs / steps)
+    }
+    if (release) await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+  const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
+  const moveTo = async (p, x, y) => (await cdpOf(p)).send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] })
+  const lift = async (p) => (await cdpOf(p)).send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  const tapAt = async (p, x, y) => {
+    const cdp = await cdpOf(p)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+    await sleep(40)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+  const h1 = async (p = page) => (await p.locator('h1').first().innerText()).trim()
+  const waitH1 = async (p, text) => {
+    for (let i = 0; i < 30; i++) { if ((await h1(p)) === text) return; await sleep(100) }
+    throw new Error(`Überschrift erwartet "${text}", war "${await h1(p)}"`)
+  }
+  const stayH1 = async (p, text, what) => { await settled(p); await sleep(150); await settled(p); must(await h1(p), text, what) }
+  const paneIdle = (p) => p.waitForFunction(() => { const el = document.querySelector('.swipe-pane'); return el && el.style.transform === '' && !el.hasAttribute('data-dragging') && el.style.opacity === '' })
+  const stack = (p) => p.evaluate(() => { const s = document.querySelector('.stack-sub'); const h = document.querySelector('.stack-hub'); return { sub: s?.style.transform ?? null, hub: h?.style.transform ?? null, dim: document.querySelector('.stack-dim')?.style.opacity ?? null } })
+  const historyState = (p) => p.evaluate(() => history.state?.sub ?? null)
+  const sheetIdle = (p) => p.waitForFunction(() => { const s = document.querySelector('.sheet'); return s && s.getAnimations().length === 0 && s.style.transform === '' })
+
+  await tab('Start').click()
+  await settled()
+  await page.getByRole('button', { name: 'Zurück', exact: true }).count().then(async (n) => { if (n) await tab('Start').click() })
+  const startBalance = await balance()
+
+  // 1) Kanten-Wischen zurück
+  await openBookings()
+  must(await historyState(page), 'bookings', 'Unterseite ist ein History-Eintrag')
+  await swipe(page, { x0: 6, y0: 300, x1: 260, y1: 305 })
+  await waitH1(page, 'Finanzklar'); await settled()
+  if (await page.locator('.stack-sub').count()) throw new Error('Unterseite nach dem Wischen noch im DOM')
+  must(await historyState(page), null, 'History nach Wischen zurück')
+  ok('Kanten-Wischen (6 → 260 px, > 35 % der Breite) auf „Alle Buchungen“: zurück auf der Übersicht, History-Eintrag entfernt')
+
+  await openBookings()
+  await swipe(page, { x0: 6, y0: 300, x1: 45, y1: 300, durationMs: 900 })
+  await stayH1(page, 'Alle Buchungen', 'Kurzes langsames Wischen (10 %)')
+  must((await stack(page)).sub, '', 'Unterseite wieder in Ruhelage')
+  ok('Kurzes, langsames Wischen (10 % der Breite) federt zurück: bleibt auf „Alle Buchungen“')
+
+  await swipe(page, { x0: 100, y0: 300, x1: 330, y1: 300 })
+  await stayH1(page, 'Alle Buchungen', 'Wischen abseits der Kante')
+  await swipe(page, { x0: 30, y0: 300, x1: 330, y1: 300 })
+  await stayH1(page, 'Alle Buchungen', 'Wischen ab 30 px')
+  ok('Wischen ab x = 100 (und 30) px, also nicht am Rand, navigiert nicht')
+
+  await swipe(page, { x0: 150, y0: 650, x1: 150, y1: 150, steps: 12, durationMs: 350 })
+  await stayH1(page, 'Alle Buchungen', 'Vertikales Ziehen')
+  if ((await page.evaluate(() => window.scrollY)) < 100) throw new Error('Vertikales Ziehen hat nicht gescrollt')
+  await swipe(page, { x0: 10, y0: 650, x1: 12, y1: 300, steps: 8, durationMs: 250 })
+  await stayH1(page, 'Alle Buchungen', 'Vertikales Ziehen am Rand')
+  ok('Vertikales Ziehen (auch am linken Rand) scrollt die Liste und navigiert nicht')
+
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await swipe(page, { x0: 6, y0: 300, x1: 56, y1: 300, steps: 5, durationMs: 40 })
+  await waitH1(page, 'Finanzklar'); await settled()
+  ok('Schneller Wisch (50 px = 13 % der Breite, > 0,5 px/ms) geht zurück')
+
+  // Zwischenstand: Unterseite halb verschoben, Übersicht (Parallaxe + Abdunkeln) darunter sichtbar
+  await openBookings()
+  await swipe(page, { x0: 6, y0: 300, x1: 200, y1: 300, durationMs: 400, release: false })
+  await sleep(100)
+  const mid = await stack(page)
+  const subX = parseFloat(mid.sub.match(/translate3d\(([-\d.]+)%/)[1])
+  const hubX = parseFloat(mid.hub.match(/translate3d\(([-\d.]+)%/)[1])
+  if (!(subX > 40 && subX < 60) || !(hubX < -10 && hubX > -20)) throw new Error('Zwischenstand: Unterseite ' + subX + ' %, Übersicht ' + hubX + ' %')
+  if (!(parseFloat(mid.dim) > 0.4 && parseFloat(mid.dim) < 0.6)) throw new Error('Abdunkeln ' + mid.dim)
+  must(await page.locator('.stack-hub h1').innerText(), 'Finanzklar', 'Übersicht liegt unter der Unterseite')
+  await page.screenshot({ path: `${SHOTS}/33-swipe-back-mitte.png` })
+  await moveTo(page, 6, 300) // Finger zurück an den Rand und loslassen: bleibt auf der Unterseite
+  await sleep(100)
+  await lift(page)
+  await stayH1(page, 'Alle Buchungen', 'Zurückgezogen und losgelassen')
+  ok(`Mitten im Wischen: Unterseite ${subX.toFixed(0)} % verschoben, Übersicht bei ${hubX.toFixed(0)} % (Parallaxe), Abdunkeln ${Number(mid.dim).toFixed(2)}; Finger zurück zum Rand → bleibt auf der Unterseite`)
+
+  // Zurück-Knopf spielt die Pop-Animation, Browser-Zurück geht ohne Animation zur Übersicht
+  await page.getByRole('button', { name: 'Zurück', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.stack')?.dataset.phase === 'pop')
+  await waitH1(page, 'Finanzklar'); await settled()
+  must(await historyState(page), null, 'History nach Zurück-Knopf')
+  await openBookings()
+  await page.goBack()
+  await waitH1(page, 'Finanzklar'); await settled()
+  await page.goForward()
+  await waitH1(page, 'Alle Buchungen'); await settled()
+  await tab('Monat').click()
+  await waitH1(page, 'Monat')
+  for (let i = 0; i < 20 && (await historyState(page)) !== null; i++) await sleep(50)
+  must(await historyState(page), null, 'Tab-Wechsel entfernt den History-Eintrag')
+  await tab('Start').click(); await hubRow('Bargeld').click(); await settled()
+  await page.goBack()
+  await waitH1(page, 'Finanzklar'); await settled()
+  must(await historyState(page), null, 'History nach Öffnen und System-Zurück')
+  ok('Zurück-Knopf animiert (Phase „pop“); Browser-Zurück (page.goBack) und Vor führen zwischen Übersicht und Unterseite; ein Tab-Wechsel räumt den History-Eintrag weg, kein doppeltes Zurück')
+
+  // 2) Sheet nach unten wischen
+  await page.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+  await page.getByRole('dialog').waitFor(); await sheetIdle(page)
+  await page.fill('#tx-amount', '99,99')
+  const grab = await page.locator('.grabber').boundingBox()
+  const sheetBox = await page.locator('.sheet').boundingBox()
+  const gx = grab.x + grab.width / 2, gy = grab.y + grab.height / 2
+  await swipe(page, { x0: gx, y0: gy, x1: gx, y1: gy + 40, steps: 6, durationMs: 700 })
+  await sheetIdle(page)
+  if (!(await page.getByRole('dialog').count())) throw new Error('Kurzes Ziehen hat das Sheet geschlossen')
+  const amountBox = await page.locator('#tx-amount').boundingBox()
+  await swipe(page, { x0: amountBox.x + 40, y0: amountBox.y + amountBox.height / 2, x1: amountBox.x + 40, y1: amountBox.y + 420, durationMs: 300 })
+  await sleep(300)
+  if (!(await page.getByRole('dialog').count())) throw new Error('Ziehen ab einem Eingabefeld hat das Sheet geschlossen')
+  ok('Sheet: kurzes langsames Ziehen am Griff (40 px) und Ziehen ab einem Eingabefeld lassen es offen')
+  await swipe(page, { x0: gx, y0: gy, x1: gx, y1: gy + sheetBox.height * 0.5, durationMs: 400, release: false })
+  await sleep(120)
+  await page.screenshot({ path: `${SHOTS}/34-sheet-swipe-mitte.png` })
+  const dimMid = await page.evaluate(() => ({ y: new DOMMatrix(getComputedStyle(document.querySelector('.sheet')).transform).m42, dim: Number(document.querySelector('.backdrop-dim').style.opacity) }))
+  if (!(dimMid.y > sheetBox.height * 0.4 && dimMid.dim > 0.3 && dimMid.dim < 0.7)) throw new Error('Sheet-Zwischenstand: ' + JSON.stringify(dimMid))
+  await lift(page)
+  await page.getByRole('dialog').waitFor({ state: 'detached' })
+  must(await balance(), startBalance, 'Kontostand nach Sheet-Wischen')
+  ok(`Sheet am Griff halb (${Math.round(dimMid.y)} px) nach unten gezogen und losgelassen: schließt, verwirft die Eingabe (Kontostand unverändert ${startBalance}); Abdunkeln folgte (${dimMid.dim.toFixed(2)})`)
+
+  await page.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+  await page.getByRole('dialog').waitFor(); await sheetIdle(page)
+  const g2 = await page.locator('.grabber').boundingBox()
+  await swipe(page, { x0: g2.x + g2.width / 2, y0: g2.y + 2, x1: g2.x + g2.width / 2, y1: g2.y + 70, steps: 4, durationMs: 60 })
+  await page.getByRole('dialog').waitFor({ state: 'detached' })
+  ok('Sheet: schneller Wisch nach unten (70 px, > 0,5 px/ms) schließt ebenfalls')
+
+  // Sheet auf einer Unterseite (Bargeld → Abhebung) – Griff funktioniert auch dort
+  await hubRow('Bargeld').click(); await settled()
+  await page.getByRole('button', { name: 'Abhebung', exact: true }).click()
+  await page.getByRole('dialog').waitFor(); await sheetIdle(page)
+  const g3 = await page.locator('.grabber').boundingBox()
+  await swipe(page, { x0: g3.x + g3.width / 2, y0: g3.y + 2, x1: g3.x + g3.width / 2, y1: g3.y + 330, durationMs: 300 })
+  await page.getByRole('dialog').waitFor({ state: 'detached' })
+  await tab('Start').click()
+
+  // 3) Monat wischen
+  const monthLabelText = async () => (await page.locator('.week-nav .label').innerText()).trim()
+  const waitMonth = async (text) => { for (let i = 0; i < 30; i++) { if ((await monthLabelText()) === text) return; await sleep(100) } throw new Error(`Monat erwartet ${text}, war ${await monthLabelText()}`) }
+  await tab('Monat').click()
+  await waitMonth('Oktober 2026'); await paneIdle(page)
+  await swipe(page, { x0: 320, y0: 420, x1: 70, y1: 425 })
+  await waitMonth('November 2026'); await paneIdle(page)
+  await swipe(page, { x0: 70, y0: 420, x1: 330, y1: 420 })
+  await waitMonth('Oktober 2026'); await paneIdle(page)
+  await swipe(page, { x0: 70, y0: 420, x1: 330, y1: 420 })
+  await waitMonth('September 2026'); await paneIdle(page)
+  ok('Monat: Wischen nach links → November 2026 (Oktober → November), zweimal nach rechts → September 2026')
+
+  await swipe(page, { x0: 200, y0: 420, x1: 120, y1: 420, durationMs: 800 })
+  await paneIdle(page); must(await monthLabelText(), 'September 2026', 'Kurzes langsames Wischen')
+  await swipe(page, { x0: 4, y0: 420, x1: 300, y1: 420 })
+  await sleep(300); await paneIdle(page); must(await monthLabelText(), 'September 2026', 'Wischen vom Rand')
+  await swipe(page, { x0: 200, y0: 700, x1: 200, y1: 300, steps: 10, durationMs: 300 })
+  await sleep(200); must(await monthLabelText(), 'September 2026', 'Vertikales Ziehen')
+  await page.getByRole('button', { name: 'Aktueller Monat' }).click()
+  await waitMonth('Oktober 2026')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await swipe(page, { x0: 300, y0: 420, x1: 130, y1: 420, durationMs: 400, release: false })
+  await sleep(100)
+  const paneX = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('.swipe-pane')).transform).m41)
+  if (!(paneX < -20 && paneX > -156)) throw new Error('Monat-Zwischenstand: ' + paneX)
+  await page.screenshot({ path: `${SHOTS}/35-monat-swipe-mitte.png` })
+  await moveTo(page, 300, 420)
+  await sleep(100)
+  await lift(page); await paneIdle(page)
+  await sleep(150); must(await monthLabelText(), 'Oktober 2026', 'Zurückgezogen und losgelassen')
+  ok(`Monat: kurzes langsames Wischen, Wischen vom linken Rand und vertikales Ziehen ändern den Monat nicht; mitten im Wischen folgt der Inhalt mit Widerstand (${Math.round(paneX)} px bei 170 px Fingerweg), zurückgezogen bleibt Oktober`)
+
+  await page.locator('.trend-col').nth(3).scrollIntoViewIfNeeded()
+  const colBox = await page.locator('.trend-col').nth(3).boundingBox()
+  await tapAt(page, colBox.x + colBox.width / 2, colBox.y + colBox.height / 2)
+  await sleep(200)
+  must(await monthLabelText(), 'Oktober 2026', 'Tippen aufs Diagramm')
+  if (!(await page.locator('.callout').innerText()).includes('Einnahmen')) throw new Error('Tippen aufs Diagramm zeigt keine Details')
+  ok('Monat: Tippen auf eine Diagrammspalte ist kein Wischen (Details erscheinen, Monat bleibt)')
+
+  // 4) Budgets wischen
+  await tab('Budgets').click()
+  await waitMonth('Oktober 2026'); await paneIdle(page)
+  await swipe(page, { x0: 320, y0: 420, x1: 70, y1: 425 })
+  await waitMonth('November 2026'); await paneIdle(page)
+  await swipe(page, { x0: 70, y0: 420, x1: 330, y1: 420 })
+  await waitMonth('Oktober 2026'); await paneIdle(page)
+  await swipe(page, { x0: 70, y0: 420, x1: 330, y1: 420 })
+  await waitMonth('September 2026'); await paneIdle(page)
+  await page.getByRole('button', { name: 'Nächster Monat' }).click()
+  await waitMonth('Oktober 2026')
+  ok('Budgets: Wischen links → November 2026, zweimal rechts → September 2026; Pfeil-Knopf funktioniert weiter')
+  await tab('Start').click()
+
+  // 5) „Bewegung reduzieren“: Navigation und Gesten funktionieren, nur kurze Überblendungen
+  {
+    const ctxR = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', reducedMotion: 'reduce', serviceWorkers: 'block' })
+    const pr = await ctxR.newPage()
+    pr.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    pr.on('pageerror', (e) => errors.push(e.message))
+    await pr.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+    await pr.goto(URL)
+    await pr.getByRole('button', { name: /^Verträge/ }).click()
+    await pr.getByRole('button', { name: 'Zurück', exact: true }).waitFor()
+    const t0 = Date.now(); await settled(pr); const pushMs = Date.now() - t0
+    await pr.getByRole('button', { name: 'Zurück', exact: true }).click()
+    await waitH1(pr, 'Finanzklar'); await settled(pr)
+    await pr.getByRole('button', { name: /^Alle Buchungen/ }).click(); await settled(pr)
+    await swipe(pr, { x0: 6, y0: 300, x1: 260, y1: 300 })
+    await waitH1(pr, 'Finanzklar'); await settled(pr)
+    await pr.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await pr.getByRole('dialog').waitFor()
+    const anim = await pr.evaluate(() => getComputedStyle(document.querySelector('.sheet')).animationName)
+    if (anim !== 'fade') throw new Error('Reduzierte Bewegung: Sheet nutzt Animation ' + anim)
+    const g = await pr.locator('.grabber').boundingBox()
+    await sleep(200)
+    await swipe(pr, { x0: g.x + g.width / 2, y0: g.y + 2, x1: g.x + g.width / 2, y1: g.y + 300, durationMs: 250 })
+    await pr.getByRole('dialog').waitFor({ state: 'detached' })
+    await pr.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Monat', exact: true }).click()
+    await swipe(pr, { x0: 320, y0: 420, x1: 70, y1: 420 })
+    for (let i = 0; i < 30 && (await pr.locator('.week-nav .label').innerText()).trim() !== 'November 2026'; i++) await sleep(100)
+    must((await pr.locator('.week-nav .label').innerText()).trim(), 'November 2026', 'Reduzierte Bewegung: Monat wischen')
+    await ctxR.close()
+    ok(`Bewegung reduzieren: Push/Pop, Kanten-Wischen, Sheet-Wischen (Überblendung statt Slide) und Monat-Wischen funktionieren (Push ${pushMs} ms)`)
+  }
 }
 
 await browser.close()

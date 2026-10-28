@@ -11,9 +11,6 @@ import { SegmentedControl } from './SegmentedControl'
 import { ConfirmDialog } from './ConfirmDialog'
 import { TransactionForm } from './TransactionForm'
 
-/** While the nested "Jetzt buchen" sheet is open, Escape/backdrop must only close that one. */
-const ignoreClose = () => {}
-
 export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose: () => void }) {
   const { data, addRecurring, updateRecurring, deleteRecurring, bookNextNow } = useFinance()
   const [kind, setKind] = useState<Kind>(rule?.kind ?? 'expense')
@@ -108,7 +105,7 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
   }
 
   return (
-    <Sheet title={rule ? 'Vertrag' : 'Neuer Vertrag'} onClose={bookNow ? ignoreClose : onClose}>
+    <Sheet title={rule ? 'Vertrag' : 'Neuer Vertrag'} onClose={onClose} dismissible={!bookNow}>
       <form onSubmit={submit} noValidate>
         <SegmentedControl<Kind>
           label="Art der Buchung"

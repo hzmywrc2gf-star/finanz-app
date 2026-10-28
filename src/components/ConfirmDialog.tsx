@@ -1,4 +1,7 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+/** Length of the scale-out when a dialog is dismissed (matches `.dialog.closing` in index.css). */
+const EXIT_MS = 150
 
 export function ConfirmDialog({
   title,
@@ -20,23 +23,38 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const [closing, setClosing] = useState(false)
+  const latest = useRef(onCancel)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCancel()
+    latest.current = onCancel
+  })
+  // Abbrechen, Escape and a tap outside play the exit animation first, then call onCancel
+  const closingNow = useRef(false)
+  const cancel = useCallback(() => {
+    if (closingNow.current) return
+    closingNow.current = true
+    setClosing(true)
+    window.setTimeout(() => latest.current(), EXIT_MS)
+  }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && cancel()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  }, [cancel])
 
   return (
-    <div className="backdrop center" style={{ zIndex: 60 }} onClick={onCancel}>
+    <div className={closing ? 'backdrop center closing' : 'backdrop center'} style={{ zIndex: 60 }} onClick={cancel}>
+      <div className="backdrop-dim" />
       <div className="dialog" role="alertdialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="body">
           <h3>{title}</h3>
           {message && <p>{message}</p>}
         </div>
         <div className={secondaryLabel ? 'actions stacked' : 'actions'}>
-          <button onClick={onCancel}>Abbrechen</button>
-          {secondaryLabel && <button onClick={onSecondary}>{secondaryLabel}</button>}
-          <button className={danger ? 'danger' : undefined} onClick={onConfirm} autoFocus>
+          <button onClick={cancel}>Abbrechen</button>
+          {secondaryLabel && <button onClick={() => !closingNow.current && onSecondary?.()}>{secondaryLabel}</button>}
+          <button className={danger ? 'danger' : undefined} onClick={() => !closingNow.current && onConfirm()} autoFocus>
             {confirmLabel}
           </button>
         </div>
