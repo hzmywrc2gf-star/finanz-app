@@ -1,7 +1,6 @@
 import { memo, useState } from 'react'
-import type { ReactNode } from 'react'
 import { accountBalance, totalBalance } from '../domain/calc'
-import { todayISO, formatDayMonth, formatShortDay } from '../domain/dates'
+import { todayISO, formatDayMonth, formatShortDay, monthLabel } from '../domain/dates'
 import { formatCents, formatPercent, formatSigned } from '../domain/money'
 import { budgetAlerts } from '../domain/budget'
 import { builtInId } from '../domain/defaults'
@@ -9,43 +8,17 @@ import type { PendingConfirmation } from '../domain/recurring'
 import { monthlyEquivalent, pendingConfirmations, recurringTitle, upcoming } from '../domain/recurring'
 import { haptic } from '../lib/haptics'
 import { useFinance } from '../state/FinanceContext'
+import { useLock } from '../state/LockContext'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { TransactionForm } from '../components/TransactionForm'
-import { CashIcon, ChevronRight, ContractIcon, ListIcon, PlusIcon } from '../components/Icons'
+import { BalanceChart } from '../components/BalanceChart'
+import { BudgetBar } from '../components/BudgetBar'
+import { CashIcon, ChevronRight, ContractIcon, ListIcon, LockIcon, PlusIcon, RefreshIcon } from '../components/Icons'
 
 export type StartView = 'hub' | 'bookings' | 'cash' | 'contracts'
 
 /** Salary is expected anyway, so it stays out of "Demnächst fällig". */
 const HIDDEN_FROM_UPCOMING = [builtInId('income', 'Gehalt')]
-
-function MenuRow({
-  icon,
-  tone,
-  title,
-  value,
-  onClick,
-}: {
-  icon: ReactNode
-  tone: 'blue' | 'green' | 'orange'
-  title: string
-  value: string
-  onClick: () => void
-}) {
-  return (
-    <li>
-      <button className="row menu-row" onClick={onClick}>
-        <span className={`menu-icon ${tone}`}>{icon}</span>
-        <span className="row-main">
-          <div className="row-title">{title}</div>
-        </span>
-        <span className="row-value num">{value}</span>
-        <span className="chev">
-          <ChevronRight />
-        </span>
-      </button>
-    </li>
-  )
-}
 
 export const StartPage = memo(function StartPage({
   onAdd,
@@ -57,6 +30,7 @@ export const StartPage = memo(function StartPage({
   onNavigate: (view: StartView) => void
 }) {
   const { data, confirmOccurrence, skipOccurrence } = useFinance()
+  const { lockNow } = useLock()
   const [booking, setBooking] = useState<PendingConfirmation | null>(null)
   const [skipping, setSkipping] = useState<PendingConfirmation | null>(null)
   const today = todayISO()
@@ -73,8 +47,13 @@ export const StartPage = memo(function StartPage({
 
   return (
     <>
-      <h1 className="page-title">Finanzklar</h1>
-      <div className="card card-pad">
+      <div className="titlebar">
+        <h1 className="page-title">Finanzklar</h1>
+        <button className="round-btn" aria-label="Jetzt sperren" onClick={lockNow}>
+          <LockIcon />
+        </button>
+      </div>
+      <section className="hero tint-sky" aria-label="Kontostand">
         <div className="balance-label">Kontostand</div>
         <div
           className={`balance-value num ${balance < 0 ? 'expense-text' : ''}`}
@@ -82,128 +61,142 @@ export const StartPage = memo(function StartPage({
         >
           {formatCents(balance)}
         </div>
-        <div className="balance-sub num" data-testid="balance-sub">
-          Bargeld {formatCents(cash)} · Gesamt {formatCents(totalBalance(data))}
+        <div className="chip-row" data-testid="balance-sub">
+          <span className="chip num">
+            Bargeld <b>{formatCents(cash)}</b>
+          </span>
+          <span className="chip num">
+            Gesamt <b>{formatCents(totalBalance(data))}</b>
+          </span>
         </div>
-      </div>
+        <BalanceChart data={data} today={today} />
+      </section>
       {/* Inline instead of the floating Fab: the start page is short, a Fab would cover the last row. */}
       <button className="btn add-btn" onClick={onAdd} aria-label="Buchung hinzufügen">
         <PlusIcon /> Buchung hinzufügen
       </button>
 
       {toConfirm.length > 0 && (
-        <>
-          <div className="section-title">Zu bestätigen</div>
-          <ul className="list card">
-            {toConfirm.map(({ rule, date, more }) => {
-              const title = recurringTitle(rule, data.categories)
-              return (
-                <li key={rule.id}>
-                  <div className="row-static confirm-row">
-                    <div className="confirm-info">
-                      <span className="dot" style={{ background: rule.kind === 'income' ? 'var(--income)' : 'var(--expense)' }} />
-                      <span className="row-main">
-                        <div className="row-title">{title}</div>
-                        <div className="row-sub">fällig {formatDayMonth(date)}</div>
-                        {more > 0 && (
-                          <div className="row-sub">+{more} {more === 1 ? 'weiterer offener Termin' : 'weitere offene Termine'}</div>
-                        )}
-                      </span>
-                      <span className={`row-amount num ${rule.kind === 'income' ? 'income-text' : 'expense-text'}`}>
-                        {formatSigned(rule.amountCents, rule.kind)}
-                      </span>
-                    </div>
-                    <div className="confirm-actions">
-                      <button className="primary" aria-label={`Buchen: ${title}`} onClick={() => setBooking({ rule, date })}>
-                        Buchen
-                      </button>
-                      <button aria-label={`Überspringen: ${title}`} onClick={() => setSkipping({ rule, date })}>
-                        Überspringen
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-
-      {alerts.length > 0 && (
-        <>
-          <div className="section-title">Budgets</div>
-          <button className="list card budget-alert" onClick={onOpenBudgets}>
-            {alerts.map((a) => (
-              <span key={a.categoryId} className="row-static budget-alert-row">
-                <span className="dot" style={{ background: `var(--${a.status})` }} />
-                <span className="row-main">
-                  <span className="row-title">{a.name}</span>
-                  <span className="row-sub" style={{ color: `var(--${a.status}-text)` }}>
-                    {a.status === 'over'
-                      ? `${formatPercent(a.percent)} · ${formatCents(-a.remainingCents)} drüber`
-                      : `${formatPercent(a.percent)} verbraucht · noch ${formatCents(a.remainingCents)}`}
+        <section className="pcard tint-lav" aria-label="Zu bestätigen">
+          <div className="pcard-head">
+            <h2>Zu bestätigen</h2>
+          </div>
+          {toConfirm.map(({ rule, date, more }) => {
+            const title = recurringTitle(rule, data.categories)
+            return (
+              <div key={rule.id} className="confirm-item">
+                <div className="prow">
+                  <span className="pico">
+                    <RefreshIcon />
                   </span>
-                </span>
-              </span>
-            ))}
-          </button>
-        </>
-      )}
-
-      {due.length > 0 && (
-        <>
-          <div className="section-title">Demnächst fällig</div>
-          <ul className="list card">
-            {due.map(({ rule, date }) => (
-              <li key={`${rule.id}:${date}`}>
-                <div className="row-static">
-                  <span
-                    className="dot"
-                    style={{ background: rule.kind === 'income' ? 'var(--income)' : 'var(--expense)' }}
-                  />
-                  <span className="row-main">
-                    <div className="row-title">{recurringTitle(rule, data.categories)}</div>
-                    <div className="row-sub">{formatShortDay(date)}</div>
+                  <span className="pmain">
+                    <div className="t">{title}</div>
+                    <div className="s">fällig {formatDayMonth(date)}</div>
+                    {more > 0 && (
+                      <div className="s">+{more} {more === 1 ? 'weiterer offener Termin' : 'weitere offene Termine'}</div>
+                    )}
                   </span>
-                  <span className={`row-amount num ${rule.kind === 'income' ? 'income-text' : 'expense-text'}`}>
+                  <span className={`pamt num ${rule.kind === 'income' ? 'income-text' : 'expense-text'}`}>
                     {formatSigned(rule.amountCents, rule.kind)}
                   </span>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </>
+                <div className="pactions">
+                  <button className="pbtn" aria-label={`Buchen: ${title}`} onClick={() => setBooking({ rule, date })}>
+                    Buchen
+                  </button>
+                  <button className="pbtn soft" aria-label={`Überspringen: ${title}`} onClick={() => setSkipping({ rule, date })}>
+                    Überspringen
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </section>
       )}
 
-      <ul className="list card menu-list">
-        <MenuRow
-          icon={<ListIcon />}
-          tone="blue"
-          title="Alle Buchungen"
-          value={String(data.transactions.length)}
-          onClick={() => onNavigate('bookings')}
-        />
-        <MenuRow
-          icon={<CashIcon />}
-          tone="green"
-          title="Bargeld"
-          value={formatCents(cash)}
-          onClick={() => onNavigate('cash')}
-        />
-        <MenuRow
-          icon={<ContractIcon />}
-          tone="orange"
-          title="Verträge"
-          value={
-            contracts.activeCount === 0
-              ? 'Keine'
-              : contracts.monthlyCents === 0
-                ? `${contracts.activeCount} ${contracts.activeCount === 1 ? 'Vertrag' : 'Verträge'}`
-                : `${contracts.activeCount} · ${formatCents(contracts.monthlyCents)}/Monat`
-          }
-          onClick={() => onNavigate('contracts')}
-        />
-      </ul>
+      {alerts.length > 0 && (
+        <button className="card pcard budgets budget-alert" onClick={onOpenBudgets}>
+          <span className="pcard-head">
+            <h2>Budgets</h2>
+            <span className="muted" style={{ fontSize: 13 }}>{monthLabel(today).split(' ')[0]}</span>
+          </span>
+          {alerts.map((a) => (
+            <span key={a.categoryId} className="budget-mini" data-status={a.status}>
+              <span className="budget-top">
+                <span>
+                  <span className="t" style={{ display: 'block', fontSize: 17, fontWeight: 500 }}>{a.name}</span>
+                  <span className={`s c-${a.status}`} style={{ display: 'block', fontSize: 13, lineHeight: '18px' }}>
+                    {a.status === 'over' ? `${formatCents(-a.remainingCents)} drüber` : `noch ${formatCents(a.remainingCents)}`}
+                  </span>
+                </span>
+                <span className={`pct num c-${a.status}`} style={{ fontSize: 22, fontWeight: 700 }}>{formatPercent(a.percent)}</span>
+              </span>
+              <BudgetBar percent={a.percent} status={a.status} />
+            </span>
+          ))}
+        </button>
+      )}
+
+      {due.length > 0 && (
+        <section className="card pcard plain" aria-label="Demnächst fällig">
+          <div className="pcard-head">
+            <h2>Demnächst fällig</h2>
+          </div>
+          {due.map(({ rule, date }) => (
+            <div key={`${rule.id}:${date}`} className="prow">
+              <span className="pico">
+                <RefreshIcon />
+              </span>
+              <span className="pmain">
+                <div className="t">{recurringTitle(rule, data.categories)}</div>
+                <div className="s">{formatShortDay(date)}</div>
+              </span>
+              <span className={`pamt num ${rule.kind === 'income' ? 'income-text' : 'expense-text'}`}>
+                {formatSigned(rule.amountCents, rule.kind)}
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <div className="tiles">
+        <button className="tile tint-lav" onClick={() => onNavigate('bookings')}>
+          <span className="pico">
+            <ListIcon />
+          </span>
+          <span>
+            <div className="l">Alle Buchungen</div>
+            <div className="v num">{data.transactions.length}</div>
+          </span>
+        </button>
+        <button className="tile tint-sand" onClick={() => onNavigate('cash')}>
+          <span className="pico">
+            <CashIcon />
+          </span>
+          <span>
+            <div className="l">Bargeld</div>
+            <div className="v num">{formatCents(cash)}</div>
+          </span>
+        </button>
+        <button className="tile wide tint-sky" onClick={() => onNavigate('contracts')}>
+          <span className="pico">
+            <ContractIcon />
+          </span>
+          <span className="pmain">
+            <div className="l">Verträge</div>
+            <div className="v num">
+              {contracts.activeCount === 0
+                ? 'Keine'
+                : contracts.monthlyCents === 0
+                  ? `${contracts.activeCount} ${contracts.activeCount === 1 ? 'Vertrag' : 'Verträge'}`
+                  : `${contracts.activeCount} · ${formatCents(contracts.monthlyCents)}/Monat`}
+            </div>
+          </span>
+          <span className="chev">
+            <ChevronRight />
+          </span>
+        </button>
+      </div>
       {booking && (
         <TransactionForm
           key={`${booking.rule.id}:${booking.date}`}

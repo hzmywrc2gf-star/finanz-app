@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { PasswordFields } from './PasswordFields'
 import { validateNewPassword } from '../lib/password'
+import { LockIcon } from './Icons'
 
 export interface LockControls {
   hasPasskey: boolean
@@ -18,12 +19,15 @@ export interface LockControls {
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : 'Entsperren fehlgeschlagen.')
 
-function AppHeader({ subtitle }: { subtitle: string }) {
+function AppHeader({ subtitle, locked }: { subtitle: string; locked?: boolean }) {
   return (
-    <div className="lock-head">
+    <div className="lock-top">
       <img className="lock-icon" src="./icon-192.png" alt="" width={88} height={88} />
       <h1>Finanzklar</h1>
-      <p className="muted">{subtitle}</p>
+      <p className="muted">
+        {locked && <LockIcon size={18} />}
+        {subtitle}
+      </p>
     </div>
   )
 }
@@ -42,6 +46,7 @@ export function LockScreen({ hasPasskey, unreadable, autoPasskey, onPassword, on
   const [busy, setBusy] = useState<'secret' | 'face' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
+  const [usePassword, setUsePassword] = useState(false)
   const [wait, setWait] = useState(() => waitMs())
   const triedAuto = useRef(false)
 
@@ -103,71 +108,91 @@ export function LockScreen({ hasPasskey, unreadable, autoPasskey, onPassword, on
 
   const locked = wait > 0
   const recovery = mode === 'recovery'
+  // with Face ID the card first offers only the primary button; the password field appears after "Passwort verwenden"
+  const showForm = !hasPasskey || recovery || usePassword
   return (
     <main className="lock-screen">
-      <AppHeader subtitle={recovery ? 'Mit Wiederherstellungsschlüssel entsperren' : 'Gesperrt'} />
-      {unreadable && (
-        <div className="error" role="alert">
-          Der Tresor konnte nicht gelesen werden. Deine Daten wurden nicht verändert. Versuche es mit dem Wiederherstellungsschlüssel
-          oder spiele ein Backup ein.
-        </div>
-      )}
-      {hasPasskey && !recovery && (
-        <button className="btn lock-face" type="button" disabled={busy !== null} aria-busy={busy === 'face'} onClick={() => faceId(false)}>
-          <FaceIdGlyph /> {busy === 'face' ? 'Face ID …' : 'Mit Face ID entsperren'}
-        </button>
-      )}
-      <form onSubmit={submit} noValidate>
-        <div className="card wide-labels">
-          <div className="field">
-            <label htmlFor="lock-secret">{recovery ? 'Schlüssel' : 'Passwort'}</label>
-            <input
-              id="lock-secret"
-              className={recovery ? 'mono' : undefined}
-              type={recovery ? 'text' : 'password'}
-              autoComplete={recovery ? 'off' : 'current-password'}
-              autoCapitalize={recovery ? 'characters' : 'off'}
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder={recovery ? 'XXXX-XXXX-XXXX-…' : undefined}
-              value={secret}
-              disabled={busy !== null || locked}
-              onChange={(e) => {
-                setSecret(e.target.value)
-                setError(null)
-              }}
-              autoFocus={!hasPasskey || recovery}
-            />
+      <AppHeader subtitle={recovery ? 'Mit Wiederherstellungsschlüssel entsperren' : 'Gesperrt'} locked />
+      <div className="lock-panel">
+        <p className="lock-note">Deine Daten sind auf diesem Gerät verschlüsselt.</p>
+        {unreadable && (
+          <div className="error" role="alert">
+            Der Tresor konnte nicht gelesen werden. Deine Daten wurden nicht verändert. Versuche es mit dem Wiederherstellungsschlüssel
+            oder spiele ein Backup ein.
           </div>
-        </div>
-        {error && (
+        )}
+        {hasPasskey && !recovery && (
+          <button className="btn lock-face" type="button" disabled={busy !== null} aria-busy={busy === 'face'} onClick={() => faceId(false)}>
+            <FaceIdGlyph /> {busy === 'face' ? 'Face ID …' : 'Mit Face ID entsperren'}
+          </button>
+        )}
+        {hint && <div className="footnote lock-hint">{hint}</div>}
+        {hasPasskey && !showForm && (
+          <button type="button" className="link-btn lock-link" disabled={busy !== null} onClick={() => setUsePassword(true)}>
+            Passwort verwenden
+          </button>
+        )}
+        {showForm && (
+          <form onSubmit={submit} noValidate>
+            <div className="card wide-labels">
+              <div className="field">
+                <label htmlFor="lock-secret">{recovery ? 'Schlüssel' : 'Passwort'}</label>
+                <input
+                  id="lock-secret"
+                  className={recovery ? 'mono' : undefined}
+                  type={recovery ? 'text' : 'password'}
+                  autoComplete={recovery ? 'off' : 'current-password'}
+                  autoCapitalize={recovery ? 'characters' : 'off'}
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={recovery ? 'XXXX-XXXX-XXXX-…' : undefined}
+                  value={secret}
+                  disabled={busy !== null || locked}
+                  onChange={(e) => {
+                    setSecret(e.target.value)
+                    setError(null)
+                  }}
+                  autoFocus={!hasPasskey || recovery || usePassword}
+                />
+              </div>
+            </div>
+            {error && (
+              <div className="error" role="alert">
+                {error}
+              </div>
+            )}
+            {locked && (
+              <div className="error" aria-live="off">
+                Zu viele Fehlversuche. Bitte warte noch {Math.ceil(wait / 1000)} Sekunden.
+              </div>
+            )}
+            <button className={hasPasskey && !recovery ? 'btn secondary lock-alt' : 'btn'} type="submit" disabled={busy !== null || locked} aria-busy={busy === 'secret'}>
+              {busy === 'secret' ? 'Wird entsperrt …' : recovery ? 'Mit Schlüssel entsperren' : 'Mit Passwort entsperren'}
+            </button>
+          </form>
+        )}
+        {/* errors of Face ID attempts while only its button is shown */}
+        {!showForm && error && (
           <div className="error" role="alert">
             {error}
           </div>
         )}
-        {locked && (
-          <div className="error" aria-live="off">
-            Zu viele Fehlversuche. Bitte warte noch {Math.ceil(wait / 1000)} Sekunden.
-          </div>
+        {showForm && (
+          <button
+            type="button"
+            className="link-btn lock-link"
+            disabled={busy !== null}
+            onClick={() => {
+              setMode(recovery ? 'password' : 'recovery')
+              setSecret('')
+              setError(null)
+              setHint(null)
+            }}
+          >
+            {recovery ? 'Zurück zum Passwort' : 'Wiederherstellungsschlüssel verwenden'}
+          </button>
         )}
-        {hint && <div className="footnote lock-hint">{hint}</div>}
-        <button className={hasPasskey && !recovery ? 'btn secondary lock-alt' : 'btn'} type="submit" disabled={busy !== null || locked} aria-busy={busy === 'secret'}>
-          {busy === 'secret' ? 'Wird entsperrt …' : recovery ? 'Mit Schlüssel entsperren' : 'Mit Passwort entsperren'}
-        </button>
-      </form>
-      <button
-        type="button"
-        className="link-btn lock-link"
-        disabled={busy !== null}
-        onClick={() => {
-          setMode(recovery ? 'password' : 'recovery')
-          setSecret('')
-          setError(null)
-          setHint(null)
-        }}
-      >
-        {recovery ? 'Zurück zum Passwort' : 'Wiederherstellungsschlüssel verwenden'}
-      </button>
+      </div>
     </main>
   )
 }
@@ -200,7 +225,7 @@ export function NewPasswordScreen({ onSubmit }: { onSubmit: (password: string) =
   return (
     <main className="lock-screen">
       <AppHeader subtitle="Neues Passwort festlegen" />
-      <form onSubmit={submit} noValidate>
+      <form onSubmit={submit} noValidate className="lock-form">
         <PasswordFields
           idPrefix="reset"
           password={password}

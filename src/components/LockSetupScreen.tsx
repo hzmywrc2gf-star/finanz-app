@@ -95,7 +95,7 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <main className="lock-screen setup-screen" aria-label="App-Sperre einrichten">
-      <div className="lock-head">
+      <div className="lock-top">
         <img className="lock-icon" src="./icon-192.png" alt="" width={72} height={72} />
         <h1>Finanzklar</h1>
         <p className="muted">{SUBTITLE[step]}</p>
