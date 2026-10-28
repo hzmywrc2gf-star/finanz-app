@@ -82,6 +82,7 @@ Performance: `node e2e/perf.mjs` (nicht Teil von `npm run e2e`; braucht `npm run
 E2E-Hinweis: Push/Pop und Sheet-Schließen laufen animiert; vor Folgeprüfungen `settled()` (Stack `data-phase` = idle) bzw. `waitFor({ state: 'detached' })` abwarten statt fester Pausen (Übersicht und Unterseite liegen sonst kurz gleichzeitig im DOM).
 
 ## Backlog (nicht in v1)
+- Design-Ziel „Erlebnis beim Scrollen“ (Nutzerwunsch): haptisches Feedback konsequent (Basis: `haptic()`), flüssige Feder-Animationen mit echter Spring-Physik (Masse/Steifigkeit/Dämpfung statt fester Kurven, inkl. Nachschwingen beim Loslassen; Basis: `releaseDuration`/`releaseMotion`) und schöne Farbverläufe, die beim Durchscrollen wirken (z. B. Kontostand-Karte, Kopfbereiche, Budget-Balken). Vorher Plan mit Beispielen/Screenshots zeigen; Lesbarkeit, Kontraste (Hell/Dunkel), „Bewegung reduzieren“ und Performance (`e2e/perf.mjs`) dürfen nicht leiden.
 - Excel-Listen importieren (Nutzerwunsch): `.xlsx` und `.csv` (eigene Tabellen und/oder Bank-CSV), Vorschau mit anpassbarer Spaltenzuordnung (Datum, Betrag, Kategorie, Notiz), Zuordnung merken; Quelle (eigene Tabelle vs. Bank) und Dateiart beim Nutzer klären, bevor geplant wird.
 - Investitionen, Depot-Übersicht: Positionen manuell (Name/ISIN, Stückzahl, Kaufkurs), Kurs manuell nachtragen, Wert + Gewinn/Verlust; offline, keine Kurs-APIs (CORS, inoffizielle Quellen).
 - Investitionen, Sparpläne: Vertrag Konto → Depot, zählt wie eine Umbuchung nicht als Ausgabe.
