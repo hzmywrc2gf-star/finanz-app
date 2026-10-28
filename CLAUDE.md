@@ -26,6 +26,11 @@ React 19 + Vite + TypeScript, vite-plugin-pwa (autoUpdate, precache), Vitest. Ke
 
 - Monatsauswertung (`MonthPage`): nur gebuchte Buchungen des Kalendermonats, Vergleich zum Vormonat (mehr Einnahmen/Saldo = gut, mehr Ausgaben = schlecht), Verlaufsdiagramm in CSS (Einnahmen links, Ausgaben rechts, gemeinsame Achse ab 0) mit Tabelle als Nicht-Farb-Fallback. Ganz unten „Alle Buchungen“ des Monats (neueste zuerst, `monthSummary.transactions`, Tippen öffnet das Bearbeiten-Sheet) und „+“ (Fab; Datum = heute im aktuellen Monat, sonst der 1. des angezeigten Monats). Es gibt keine Wochenansicht mehr. Kein Datenmodell-Update nötig.
 
+## Projektgraph (Graphify)
+- `graphify-out/GRAPH_REPORT.md` (Überblick: Kern-Abstraktionen, Module, Zusammenhänge) und `graphify-out/graph.json` (vollständiger Code-Graph) liegen im Repo. Neue Chats: zuerst den Report lesen statt alle Dateien zu öffnen; gezielt abfragen mit `graphify query "<Frage>"`, `graphify explain "<Symbol>"`, `graphify path "A" "B"`.
+- Installation (falls nicht vorhanden): `uv tool install graphifyy` oder `pip install graphifyy` (Quelle: github.com/Graphify-Labs/graphify).
+- Nach Code-Änderungen vor dem Commit aktualisieren – offline, ohne KI-Dienst: `GRAPHIFY_BACKEND=none graphify update .`
+
 ## Prüfen
 `npm test` · `npm run build` · `npm run preview` + `npm run e2e` (Playwright, 71 Durchklick-Prüfungen inkl. Offline, Verträge, Budgets, Monatsauswertung, Start-Übersicht, Alle Buchungen mit Suche, Bargeld/Umbuchungen, manuelle Verträge (Bestätigen/Überspringen/Jetzt buchen), Migration v3→v4 und v4→v5 und Datumswechsel per `page.clock`).
 

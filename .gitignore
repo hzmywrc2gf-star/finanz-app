@@ -26,3 +26,8 @@ dist-ssr
 # E2E-Ausgaben
 e2e/screenshots/
 e2e/*.json
+
+# Graphify: nur Bericht und Graph versionieren, Cache/Ansicht lokal
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md
+!graphify-out/graph.json
