@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Kind, Transaction } from '../domain/types'
+import type { Account, Kind, Transaction } from '../domain/types'
 import { todayISO } from '../domain/dates'
 import { centsToInputString, parseEuroInput } from '../domain/money'
 import { useFinance } from '../state/FinanceContext'
@@ -8,17 +8,30 @@ import { Sheet } from './Sheet'
 import { SegmentedControl } from './SegmentedControl'
 import { ConfirmDialog } from './ConfirmDialog'
 
+/** Starting values for a new booking, chosen by the page that opens the form. */
+export interface AddPreset {
+  defaultDate?: string
+  defaultKind?: Kind
+  defaultAccount?: Account
+}
+
 export function TransactionForm({
   transaction,
   defaultDate,
+  defaultKind,
+  defaultAccount,
   onClose,
 }: {
   transaction?: Transaction
   defaultDate?: string
+  defaultKind?: Kind
+  /** For new bookings: where the opener lives (cash page → 'bargeld'). Editing keeps the booking's account. */
+  defaultAccount?: Account
   onClose: () => void
 }) {
   const { data, addTransaction, updateTransaction, deleteTransaction } = useFinance()
-  const [kind, setKind] = useState<Kind>(transaction?.kind ?? 'expense')
+  const [kind, setKind] = useState<Kind>(transaction?.kind ?? defaultKind ?? 'expense')
+  const [account, setAccount] = useState<Account>(transaction?.account ?? defaultAccount ?? 'konto')
   const [amount, setAmount] = useState(transaction ? centsToInputString(transaction.amountCents) : '')
   const [date, setDate] = useState(transaction?.date ?? defaultDate ?? todayISO())
   const [categoryId, setCategoryId] = useState(transaction?.categoryId ?? '')
@@ -50,7 +63,7 @@ export function TransactionForm({
       setError('Bitte eine Kategorie wählen.')
       return
     }
-    const input = { kind, amountCents: cents, date, categoryId: effectiveCategory, note }
+    const input = { kind, amountCents: cents, date, categoryId: effectiveCategory, account, note }
     try {
       if (transaction) updateTransaction(transaction.id, input)
       else addTransaction(input)
@@ -72,6 +85,17 @@ export function TransactionForm({
             { value: 'income', label: 'Einnahme' },
           ]}
         />
+        <div style={{ marginTop: 12 }}>
+          <SegmentedControl<Account>
+            label="Konto oder Bargeld"
+            value={account}
+            onChange={setAccount}
+            options={[
+              { value: 'konto', label: 'Konto' },
+              { value: 'bargeld', label: 'Bargeld' },
+            ]}
+          />
+        </div>
         <div className="card" style={{ marginTop: 16 }}>
           <div className="field">
             <label htmlFor="tx-amount">Betrag</label>

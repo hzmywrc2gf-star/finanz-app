@@ -7,6 +7,7 @@ let n = 0
 const tx = (p: Partial<Transaction> & Pick<Transaction, 'kind' | 'amountCents' | 'date'>): Transaction => ({
   id: `t${n++}`,
   categoryId: p.kind === 'income' ? 'income-gehalt' : 'expense-lebensmittel',
+  account: 'konto',
   createdAt: n,
   ...p,
 })
@@ -133,5 +134,31 @@ describe('niceAxisMax', () => {
     expect(niceAxisMax(80001)).toBe(100000)
     expect(niceAxisMax(1)).toBe(1)
     expect(niceAxisMax(7)).toBe(8)
+  })
+})
+
+describe('cash bookings and transfers in the month report', () => {
+  const data: AppData = {
+    ...withTx([
+      tx({ kind: 'income', amountCents: 250000, date: '2026-10-01' }),
+      tx({ kind: 'expense', amountCents: 4550, date: '2026-10-06', account: 'bargeld' }),
+      tx({ kind: 'income', amountCents: 1000, date: '2026-10-07', account: 'bargeld', categoryId: 'income-nebeneinkünfte' }),
+    ]),
+    transfers: [
+      { id: 'w', direction: 'withdrawal', amountCents: 20000, date: '2026-10-05', createdAt: 1 },
+      { id: 'd', direction: 'deposit', amountCents: 5000, date: '2026-10-08', createdAt: 2 },
+    ],
+  }
+  it('counts cash income and expenses like any other booking and ignores transfers', () => {
+    const s = monthSummary(data, '2026-10-01')
+    expect(s.incomeCents).toBe(251000)
+    expect(s.expenseCents).toBe(4550)
+    expect(s.transactionCount).toBe(3)
+    expect(s.expenseByCategory).toEqual([expect.objectContaining({ categoryId: 'expense-lebensmittel', cents: 4550 })])
+    expect(monthTrend(data, '2026-10-01', 1)[0]).toMatchObject({ incomeCents: 251000, expenseCents: 4550 })
+  })
+  it('a month with transfers only is empty', () => {
+    const only: AppData = { ...createDefaultData(), transfers: data.transfers }
+    expect(monthSummary(only, '2026-10-01')).toMatchObject({ incomeCents: 0, expenseCents: 0, transactionCount: 0 })
   })
 })

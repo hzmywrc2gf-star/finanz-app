@@ -110,7 +110,7 @@ function CategorySection({ kind, title }: { kind: Kind; title: string }) {
             deleteCount + ruleCount > 0
               ? `${[
                   deleteCount > 0 && `${deleteCount} ${deleteCount === 1 ? 'Buchung' : 'Buchungen'}`,
-                  ruleCount > 0 && `${ruleCount} wiederkehrende ${ruleCount === 1 ? 'Buchung' : 'Buchungen'}`,
+                  ruleCount > 0 && `${ruleCount} ${ruleCount === 1 ? 'Vertrag' : 'Verträge'}`,
                 ]
                   .filter(Boolean)
                   .join(' und ')} ${deleteCount + ruleCount === 1 ? 'wird' : 'werden'} der Kategorie „Sonstiges“ zugeordnet.`

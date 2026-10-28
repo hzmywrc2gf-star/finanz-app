@@ -81,6 +81,7 @@ export function bookDue(data: AppData, today: string, now: number = Date.now()):
         amountCents: rule.amountCents,
         date,
         categoryId: rule.categoryId,
+        account: 'konto',
         createdAt: now,
         recurringId: rule.id,
       }
@@ -98,10 +99,21 @@ export interface UpcomingItem {
   date: string
 }
 
+export interface UpcomingOptions {
+  /** Rules with one of these categories are left out (the start page hides Gehalt). */
+  excludeCategoryIds?: string[]
+}
+
 /** Occurrences in (today, today + days], sorted by date. */
-export function upcoming(data: AppData, today: string, days = 7): UpcomingItem[] {
+export function upcoming(
+  data: AppData,
+  today: string,
+  days = 7,
+  { excludeCategoryIds = [] }: UpcomingOptions = {},
+): UpcomingItem[] {
   const until = addDays(today, days)
   return data.recurring
+    .filter((rule) => !excludeCategoryIds.includes(rule.categoryId))
     .flatMap((rule) => occurrencesBetween(rule, today, until).map((date) => ({ rule, date })))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 }
@@ -120,3 +132,24 @@ export function recurringTitle(rule: RecurringRule, categories: Category[]): str
 
 /** Day of month of an ISO date (default for the rule's day). */
 export const dayOfMonthOf = (iso: string) => Number(iso.slice(8, 10))
+
+export interface ContractsSummary {
+  /** Rules without end date or ending today or later (income rules included). */
+  activeCount: number
+  /** Expense rules per month in cents; every rule is rounded to whole cents first. */
+  monthlyCents: number
+}
+
+/** Monthly share of one rule: monthly ×1, quarterly ÷3, yearly ÷12, rounded to whole cents. */
+export function monthlyEquivalentOf(rule: Pick<RecurringRule, 'amountCents' | 'interval'>): number {
+  return Math.round(rule.amountCents / STEP_MONTHS[rule.interval])
+}
+
+/** Active rules and the monthly equivalent of their expenses. */
+export function monthlyEquivalent(rules: RecurringRule[], today: string): ContractsSummary {
+  const active = rules.filter((r) => !r.endDate || r.endDate >= today)
+  return {
+    activeCount: active.length,
+    monthlyCents: active.filter((r) => r.kind === 'expense').reduce((sum, r) => sum + monthlyEquivalentOf(r), 0),
+  }
+}

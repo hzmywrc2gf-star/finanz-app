@@ -887,3 +887,176 @@ button.row:active {
 .trend-table tr[data-selected='true'] > * {
   font-weight: 700;
 }
+
+/* Start: Kontostand-Zusatz, Menüliste, Unterseiten */
+.balance-sub {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--text-2);
+}
+.menu-list {
+  margin-top: 24px;
+}
+.card-pad + .list {
+  margin-top: 16px;
+}
+.menu-row {
+  min-height: 52px;
+}
+.menu-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+.menu-icon.blue {
+  background: var(--accent);
+}
+.menu-icon.green {
+  background: var(--income);
+}
+.menu-icon.orange {
+  background: var(--warn);
+}
+.row-value {
+  flex: none;
+  max-width: 62%;
+  font-size: 17px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chev {
+  flex: none;
+  display: grid;
+  margin-right: -6px;
+  color: var(--text-2);
+  opacity: 0.6;
+}
+.chev svg {
+  width: 18px;
+  height: 18px;
+}
+
+.subnav {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 -8px;
+}
+.back-btn {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px 0 0;
+  color: var(--accent);
+  font-size: 17px;
+}
+.sub-title {
+  margin-top: 0;
+}
+
+/* Alle Buchungen / Bargeld */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  background: var(--seg-bg);
+  color: var(--text-2);
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 17px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.search input::-webkit-search-cancel-button {
+  display: none;
+}
+.search input::placeholder {
+  color: var(--text-2);
+}
+.search-clear {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 44px;
+  margin-right: -8px;
+  color: var(--text-2);
+}
+.month-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 22px 16px 6px;
+}
+.month-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+.month-head span {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--seg-bg);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 2px;
+}
+.transfer-icon {
+  flex: none;
+  width: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  overflow: visible;
+}
+.transfer-icon svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0 -5px;
+}
+.action-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.action-row button {
+  min-height: 48px;
+  padding: 0 4px;
+  border-radius: 13px;
+  background: var(--card);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+}
+.action-row button:active {
+  background: var(--card-2);
+}
+.action-row + .today-row {
+  margin: 4px 0 0;
+}

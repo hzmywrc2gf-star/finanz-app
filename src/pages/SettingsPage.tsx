@@ -5,13 +5,13 @@ import { centsToInputString, parseEuroInput } from '../domain/money'
 import { exportJSON, parseBackup } from '../data/backup'
 import type { AppData } from '../domain/types'
 import { useFinance } from '../state/FinanceContext'
-import { RecurringManager } from '../components/RecurringManager'
 import { CategoryManager } from '../components/CategoryManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 
 export function SettingsPage() {
-  const { data, setStartBalance, replaceAll, saveError } = useFinance()
+  const { data, setStartBalance, setStartCash, replaceAll, saveError } = useFinance()
   const [balance, setBalance] = useState(centsToInputString(data.settings.startBalanceCents))
+  const [cash, setCash] = useState(centsToInputString(data.settings.startCashCents))
   const [balanceMsg, setBalanceMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [pending, setPending] = useState<AppData | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -20,12 +20,15 @@ export function SettingsPage() {
   function saveBalance(e: FormEvent) {
     e.preventDefault()
     const cents = parseEuroInput(balance, { allowNegative: true })
-    if (cents === null) {
+    const cashCents = parseEuroInput(cash, { allowNegative: true })
+    if (cents === null || cashCents === null) {
       setBalanceMsg({ ok: false, text: 'Bitte einen gültigen Betrag eingeben, z. B. 1.000,00.' })
       return
     }
     setStartBalance(cents)
+    setStartCash(cashCents)
     setBalance(centsToInputString(cents))
+    setCash(centsToInputString(cashCents))
     setBalanceMsg({ ok: true, text: 'Startguthaben gespeichert.' })
   }
 
@@ -60,6 +63,7 @@ export function SettingsPage() {
     try {
       replaceAll(pending)
       setBalance(centsToInputString(pending.settings.startBalanceCents))
+      setCash(centsToInputString(pending.settings.startCashCents))
       setBackupMsg({
         ok: true,
         text: `Import erfolgreich: ${pending.transactions.length} Buchungen, ${pending.categories.length} Kategorien.`,
@@ -82,7 +86,7 @@ export function SettingsPage() {
       <div className="section-title">Startguthaben</div>
       <form className="card" onSubmit={saveBalance} noValidate>
         <div className="field">
-          <label htmlFor="start-balance">Betrag</label>
+          <label htmlFor="start-balance">Konto</label>
           <input
             id="start-balance"
             className="num"
@@ -91,6 +95,21 @@ export function SettingsPage() {
             value={balance}
             onChange={(e) => {
               setBalance(e.target.value)
+              setBalanceMsg(null)
+            }}
+          />
+          <span className="muted">€</span>
+        </div>
+        <div className="field">
+          <label htmlFor="start-cash">Bargeld</label>
+          <input
+            id="start-cash"
+            className="num"
+            inputMode="decimal"
+            autoComplete="off"
+            value={cash}
+            onChange={(e) => {
+              setCash(e.target.value)
               setBalanceMsg(null)
             }}
           />
@@ -107,9 +126,10 @@ export function SettingsPage() {
           {balanceMsg.text}
         </div>
       )}
-      <div className="footnote">Der Kontostand ergibt sich aus Startguthaben plus Einnahmen minus Ausgaben.</div>
-
-      <RecurringManager />
+      <div className="footnote">
+        Der Kontostand ergibt sich aus dem Startguthaben plus Einnahmen minus Ausgaben, Abhebungen und plus Einzahlungen. Beim
+        Bargeld gilt der Startbestand Bargeld, Abhebungen kommen dazu.
+      </div>
 
       <CategoryManager />
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultData } from './defaults'
 import type { AppData, RecurringRule } from './types'
 import {
-  bookDue, nextOccurrence, occurrencesBetween, recurrenceLabel, recurringTitle, upcoming,
+  bookDue, monthlyEquivalent, nextOccurrence, occurrencesBetween, recurrenceLabel, recurringTitle, upcoming,
 } from './recurring'
 
 const rule = (over: Partial<RecurringRule> = {}): RecurringRule => ({
@@ -73,7 +73,7 @@ describe('bookDue', () => {
     const out = bookDue(d, '2026-10-27', 100)
     expect(out.transactions.map((t) => t.date)).toEqual(['2026-09-01', '2026-10-01'])
     expect(out.transactions[0]).toMatchObject({
-      kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', recurringId: 'r1', createdAt: 100,
+      kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', account: 'konto', recurringId: 'r1', createdAt: 100,
     })
     expect(new Set(out.transactions.map((t) => t.id)).size).toBe(2)
     expect(out.recurring[0].bookedThrough).toBe('2026-10-27')
@@ -125,6 +125,41 @@ describe('upcoming', () => {
     const out = upcoming(withRules(a, b, c), '2026-10-27')
     expect(out.map((u) => [u.rule.id, u.date])).toEqual([['b', '2026-10-28'], ['a', '2026-11-02']])
     expect(upcoming(withRules(a, b), '2026-10-27', 1).map((u) => u.date)).toEqual(['2026-10-28'])
+  })
+  it('can leave out rules by category (Gehalt) while other income stays', () => {
+    const salary = rule({ id: 's', kind: 'income', categoryId: 'income-gehalt', dayOfMonth: 30, startDate: '2026-01-01', bookedThrough: '2026-10-27' })
+    const side = rule({ id: 'n', kind: 'income', categoryId: 'income-nebeneinkünfte', dayOfMonth: 29, startDate: '2026-01-01', bookedThrough: '2026-10-27' })
+    const rent = rule({ id: 'm', dayOfMonth: 1, startDate: '2026-01-01', bookedThrough: '2026-10-27' })
+    const data = withRules(salary, side, rent)
+    expect(upcoming(data, '2026-10-27').map((u) => u.rule.id)).toEqual(['n', 's', 'm'])
+    const hidden = upcoming(data, '2026-10-27', 7, { excludeCategoryIds: ['income-gehalt'] })
+    expect(hidden.map((u) => u.rule.id)).toEqual(['n', 'm'])
+    expect(upcoming(data, '2026-10-27', 7, { excludeCategoryIds: [] })).toHaveLength(3)
+  })
+})
+
+describe('monthlyEquivalent', () => {
+  const today = '2026-10-27'
+  it('converts quarterly and yearly rules to a month and rounds each to whole cents', () => {
+    const q = rule({ interval: 'quarterly', amountCents: 10000 })
+    const y = rule({ interval: 'yearly', amountCents: 11988 })
+    expect(monthlyEquivalent([q], today)).toEqual({ activeCount: 1, monthlyCents: 3333 }) // 33,33 €
+    expect(monthlyEquivalent([y], today)).toEqual({ activeCount: 1, monthlyCents: 999 }) // 9,99 €
+    expect(monthlyEquivalent([rule({ interval: 'quarterly', amountCents: 20000 })], today).monthlyCents).toBe(6667) // 66,666… rounds up
+    expect(monthlyEquivalent([rule({ interval: 'yearly', amountCents: 1000 })], today).monthlyCents).toBe(83) // 83,33… rounds down
+  })
+  it('sums expense rules only, counts all active rules, skips ended ones', () => {
+    const rules = [
+      rule({ id: 'a', amountCents: 80000 }),
+      rule({ id: 'b', interval: 'quarterly', amountCents: 10000 }),
+      rule({ id: 'c', kind: 'income', categoryId: 'income-gehalt', amountCents: 200000 }),
+      rule({ id: 'd', amountCents: 5000, endDate: '2026-10-26' }), // ended yesterday
+      rule({ id: 'e', amountCents: 999, endDate: '2026-10-27' }), // ends today: still active
+    ]
+    expect(monthlyEquivalent(rules, today)).toEqual({ activeCount: 4, monthlyCents: 80000 + 3333 + 999 })
+  })
+  it('is empty without rules', () => {
+    expect(monthlyEquivalent([], today)).toEqual({ activeCount: 0, monthlyCents: 0 })
   })
 })
 

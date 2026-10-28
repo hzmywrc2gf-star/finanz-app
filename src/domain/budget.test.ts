@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultData } from './defaults'
 import { budgetAlerts, budgetStatus, monthBudgets } from './budget'
-import { addCategory, addTransaction, setCategoryBudget } from '../state/actions'
+import { addCategory, addTransaction, addTransfer, setCategoryBudget } from '../state/actions'
 import type { TransactionInput } from '../state/actions'
 import type { AppData } from './types'
 
 let n = 0
-const tx = (d: AppData, date: string, amountCents: number, categoryId = 'expense-lebensmittel', kind: 'expense' | 'income' = 'expense') =>
-  addTransaction(d, { kind, amountCents, date, categoryId } as TransactionInput, { id: `t${++n}`, createdAt: n })
+const tx = (d: AppData, date: string, amountCents: number, categoryId = 'expense-lebensmittel', kind: 'expense' | 'income' = 'expense', account: 'konto' | 'bargeld' = 'konto') =>
+  addTransaction(d, { kind, amountCents, date, categoryId, account } as TransactionInput, { id: `t${++n}`, createdAt: n })
 
 const withBudget = (cents = 40000, id = 'expense-lebensmittel') => setCategoryBudget(createDefaultData(), id, cents)
 const item = (d: AppData, month = '2026-10-01', id = 'expense-lebensmittel') =>
@@ -40,7 +40,7 @@ describe('monthBudgets: spent', () => {
   })
   it('counts recurring-generated bookings but not planned future occurrences', () => {
     let d = withBudget()
-    d = { ...d, transactions: [{ id: 'r', kind: 'expense', amountCents: 700, date: '2026-10-01', categoryId: 'expense-lebensmittel', createdAt: 1, recurringId: 'rule' }] }
+    d = { ...d, transactions: [{ id: 'r', kind: 'expense', amountCents: 700, date: '2026-10-01', categoryId: 'expense-lebensmittel', account: 'konto', createdAt: 1, recurringId: 'rule' }] }
     d = {
       ...d,
       recurring: [{ id: 'rule', kind: 'expense', amountCents: 700, categoryId: 'expense-lebensmittel', interval: 'monthly', dayOfMonth: 30, startDate: '2026-10-01', bookedThrough: '2026-10-01' }],
@@ -118,5 +118,18 @@ describe('budgetAlerts', () => {
       ['Lebensmittel', 'warn', 92],
     ])
     expect(budgetAlerts(d, '2026-11-02')).toEqual([])
+  })
+})
+
+describe('cash bookings and transfers in budgets', () => {
+  it('counts cash expenses against the category budget, transfers never', () => {
+    let d = tx(tx(withBudget(), '2026-10-05', 5000), '2026-10-06', 4550, 'expense-lebensmittel', 'expense', 'bargeld')
+    d = addTransfer(d, { direction: 'withdrawal', amountCents: 20000, date: '2026-10-06' }, { id: 'w', createdAt: 1 })
+    d = addTransfer(d, { direction: 'deposit', amountCents: 5000, date: '2026-10-07' }, { id: 'd', createdAt: 2 })
+    const i = item(d)
+    expect(i.spentCents).toBe(9550)
+    expect(i.remainingCents).toBe(30450)
+    expect(monthBudgets(d, '2026-10-01').total.spentCents).toBe(9550)
+    expect(monthBudgets(d, '2026-10-01').unbudgeted).toEqual([])
   })
 })

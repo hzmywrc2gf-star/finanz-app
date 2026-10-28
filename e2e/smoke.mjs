@@ -29,16 +29,29 @@ async function expectText(t) {
 async function expectNoText(t) {
   if ((await bodyText()).includes(t)) throw new Error(`Text sollte fehlen: "${t}"`)
 }
-async function addTx({ kind = 'Ausgabe', amount, category, date, note }) {
+async function addTx({ kind = 'Ausgabe', amount, category, date, note, account }) {
   await page.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
   await page.getByRole('button', { name: kind, exact: true }).click()
+  if (account) await page.getByRole('dialog').getByRole('button', { name: account, exact: true }).click()
   await page.fill('#tx-amount', amount)
   if (date) await page.fill('#tx-date', date)
   await page.selectOption('#tx-cat', { label: category })
   if (note) await page.fill('#tx-note', note)
   await page.getByRole('button', { name: 'Sichern' }).click()
 }
+// Zeilen der Start-Übersicht und die Unterseiten dahinter (Start → Alle Buchungen / Bargeld / Verträge)
+const hubRow = (name) => page.getByRole('button', { name: new RegExp(`^${name}`) })
+async function openStartPage(name) {
+  await tab('Start').click()
+  await hubRow(name).click()
+  await page.getByRole('button', { name: 'Zurück', exact: true }).waitFor()
+}
+const openBookings = () => openStartPage('Alle Buchungen')
+const openCash = () => openStartPage('Bargeld')
+const openContracts = () => openStartPage('Verträge')
+// Kontostand steht auf der Start-Übersicht – der Aufruf wechselt dorthin zurück
 async function balance() {
+  await tab('Start').click()
   const t = await bodyText()
   return t.match(/Kontostand\s*\n?\s*([-−]?[\d.]+,\d\d €)/)?.[1]
 }
@@ -86,6 +99,7 @@ if ((await balance()) !== '2.642,00 €') throw new Error('Ungültige Buchung wu
 ok('Betrag 0 wird mit Fehlermeldung abgelehnt')
 
 // Bearbeiten
+await openBookings()
 await page.getByRole('button', { name: /Wocheneinkauf/ }).click()
 await page.fill('#tx-amount', '50,00')
 await page.getByRole('button', { name: 'Sichern' }).click()
@@ -93,6 +107,7 @@ if ((await balance()) !== '2.637,99 €') throw new Error('Nach Bearbeiten falsc
 ok('Bearbeiten 45,99 → 50,00, Kontostand 2.637,99 €')
 
 // Löschen
+await openBookings()
 await page.getByRole('button', { name: /Mobilität/ }).first().click()
 await page.getByRole('button', { name: 'Buchung löschen' }).click()
 await page.getByRole('alertdialog').getByRole('button', { name: /Löschen/ }).click()
@@ -167,7 +182,9 @@ await dl.saveAs(file)
 const json = JSON.parse(fs.readFileSync(file, 'utf8'))
 if (dl.suggestedFilename() !== 'finanz-backup-2026-10-27.json' || json.transactions.length !== 5 || json.settings.startBalanceCents !== 100000)
   throw new Error('Export unvollständig ' + dl.suggestedFilename())
-ok(`Export ${dl.suggestedFilename()}: 5 Buchungen, Startguthaben 100000 Cent`)
+if (json.version !== 4 || json.settings.startCashCents !== 0 || json.transfers.length !== 0 || json.transactions.some((t) => t.account !== 'konto'))
+  throw new Error('Export: Version 4 / Bargeld-Felder fehlen')
+ok(`Export ${dl.suggestedFilename()}: Version 4, 5 Buchungen (alle auf dem Konto), Startguthaben 100000 Cent, Startbestand Bargeld 0, keine Umbuchungen`)
 // Daten ändern, dann Backup wieder einspielen
 await tab('Start').click()
 await addTx({ amount: '999', category: 'Sonstiges' })
@@ -204,10 +221,11 @@ await page.screenshot({ path: `${SHOTS}/7-neue-buchung.png` })
 
 await page.keyboard.press('Escape')
 
-// ---------- Wiederkehrende Buchungen (Datum der Umgebung: 2026-10-27, Stand vorher 2.600,00 €) ----------
+// ---------- Verträge = wiederkehrende Buchungen (Datum der Umgebung: 2026-10-27, Stand vorher 2.600,00 €) ----------
+// Erreichbar über Start → Verträge. Gebuchte Einträge sieht man unter Start → Alle Buchungen.
 const txCount = () => page.locator('[aria-label="wiederkehrend"]').count()
 async function addRule({ kind = 'Ausgabe', amount, category, note, interval, day, start, end }) {
-  await page.getByRole('button', { name: 'Wiederkehrende Buchung hinzufügen' }).click()
+  await page.getByRole('button', { name: 'Vertrag hinzufügen' }).click()
   await page.getByRole('button', { name: kind, exact: true }).click()
   await page.fill('#rc-amount', amount)
   await page.selectOption('#rc-cat', { label: category })
@@ -222,53 +240,86 @@ const mustBalance = async (expected, what) => {
   const b = await balance()
   if (b !== expected) throw new Error(`${what}: erwartet ${expected}, war ${b}`)
 }
+const flatText = (s) => nbsp(s).trim().replace(/\s*\n\s*/g, ' | ')
+const fixedCosts = async () => nbsp(await page.getByTestId('fixed-costs').innerText())
+const mustFixed = async (expected, count, what) => {
+  const f = await fixedCosts()
+  if (f !== expected) throw new Error(`${what}: Fixkosten pro Monat erwartet ${expected}, war ${f}`)
+  await expectText(count)
+}
 
-await tab('Einstellungen').click()
-await expectText('WIEDERKEHRENDE BUCHUNGEN'); await expectText('Noch keine wiederkehrenden Buchungen.')
+await openContracts()
+await expectText('Fixkosten pro Monat'); await expectText('Keine aktiven Verträge'); await expectText('Noch keine Verträge.')
+await mustFixed('0,00 €', 'Keine aktiven Verträge', 'Ohne Verträge')
 await addRule({ amount: '800', category: 'Fixkosten', note: 'Miete', start: '2026-08-01' })
 await page.getByRole('alertdialog').waitFor()
 await expectText('Vergangene Termine nachbuchen?'); await expectText('3 Termine seit 01.08.2026 liegen in der Vergangenheit.')
 await page.getByRole('alertdialog').getByRole('button', { name: 'Nachbuchen' }).click()
 await expectText('monatlich am 1.'); await expectText('nächste: 01.11.')
-await tab('Start').click()
+await mustFixed('800,00 €', '1 aktiver Vertrag', 'Miete')
 await mustBalance('200,00 €', 'Nach Nachbuchen (2.600 − 3 × 800)')
+await openBookings()
 for (const d of ['Sa, 01.08.', 'Di, 01.09.', 'Do, 01.10.']) await expectText(d)
 if ((await txCount()) !== 3) throw new Error('Erwartet 3 Buchungen mit ↻, gefunden: ' + (await txCount()))
-ok('Regel „Miete“ 800,00 € ab 01.08.: Dialog „3 Termine“, Nachbuchen → Kontostand genau −2.400,00 € (200,00 €), 3 Buchungen mit ↻')
+ok('Vertrag „Miete“ 800,00 € ab 01.08. (Start → Verträge, „Fixkosten pro Monat“ 800,00 €): Dialog „3 Termine“, Nachbuchen → Kontostand genau −2.400,00 € (200,00 €), 3 Buchungen mit ↻ unter Alle Buchungen')
 
 // Miete ist am 01.11. fällig (innerhalb von 7 Tagen) → „Demnächst fällig“
+await tab('Start').click()
 await expectText('DEMNÄCHST FÄLLIG'); await expectText('So, 01.11.')
+if (flatText(await hubRow('Verträge').innerText()) !== 'Verträge | 1 · 800,00 €/Monat') throw new Error('Hub Verträge: ' + flatText(await hubRow('Verträge').innerText()))
 
-// Gehalt am 30., Start heute: kein Dialog, nichts gebucht, aber „Demnächst fällig“ (vor der Miete)
-await tab('Einstellungen').click()
+// Gehalt am 30., Start heute: kein Dialog, nichts gebucht – und Gehalt steht NICHT in „Demnächst fällig“
+await openContracts()
 await addRule({ kind: 'Einnahme', amount: '2.000,00', category: 'Gehalt', note: 'Gehalt', day: '30', start: '2026-10-27' })
 await page.getByRole('alertdialog').waitFor({ timeout: 500 }).then(() => { throw new Error('Dialog trotz keiner vergangenen Termine') }, () => {})
 await expectText('Gehalt'); await expectText('nächste: 30.10.')
-await tab('Start').click()
+await mustFixed('800,00 €', '2 aktive Verträge', 'Gehalt zählt nicht zu den Fixkosten')
 await mustBalance('200,00 €', 'Nach Gehalt-Regel (noch nichts fällig)')
-await expectText('Fr, 30.10.'); await expectText('+2.000,00 €')
+await expectNoText('Fr, 30.10.'); await expectNoText('+2.000,00 €')
+// Nebeneinkünfte am 29. (Einnahme, aber nicht Gehalt) erscheint dagegen
+await openContracts()
+await addRule({ kind: 'Einnahme', amount: '150,00', category: 'Nebeneinkünfte', note: 'Nachhilfe', day: '29', start: '2026-10-27' })
+await page.getByRole('alertdialog').waitFor({ timeout: 500 }).then(() => { throw new Error('Dialog trotz keiner vergangenen Termine') }, () => {})
+await mustBalance('200,00 €', 'Nach Nebeneinkünfte-Regel')
+await expectText('Do, 29.10.'); await expectText('+150,00 €')
+await expectNoText('Fr, 30.10.'); await expectNoText('+2.000,00 €')
 const startText = await bodyText()
-if (startText.indexOf('Fr, 30.10.') > startText.indexOf('So, 01.11.')) throw new Error('„Demnächst fällig“ nicht nach Datum sortiert')
-if (startText.indexOf('DEMNÄCHST FÄLLIG') < startText.indexOf('Kontostand') || startText.indexOf('DEMNÄCHST FÄLLIG') > startText.indexOf('LETZTE BUCHUNGEN'))
+if (startText.indexOf('Do, 29.10.') > startText.indexOf('So, 01.11.')) throw new Error('„Demnächst fällig“ nicht nach Datum sortiert')
+if (startText.indexOf('DEMNÄCHST FÄLLIG') < startText.indexOf('Kontostand') || startText.indexOf('DEMNÄCHST FÄLLIG') > startText.indexOf('Alle Buchungen'))
   throw new Error('„Demnächst fällig“ steht an der falschen Stelle')
+if (startText.includes('LETZTE BUCHUNGEN')) throw new Error('„Letzte Buchungen“ gehört nicht mehr auf den Start')
 await page.screenshot({ path: `${SHOTS}/11-start-demnaechst.png`, fullPage: true })
-ok('Gehalt-Regel (Tag 30, Start heute): kein Dialog, Kontostand unverändert; „Demnächst fällig“: Fr, 30.10. +2.000,00 € vor So, 01.11. Miete −800,00 €')
+ok('Gehalt-Vertrag (Tag 30, Start heute): kein Dialog, Kontostand unverändert, NICHT in „Demnächst fällig“ und nicht in den Fixkosten; Nebeneinkünfte-Vertrag (Tag 29) steht dort: Do, 29.10. +150,00 € vor So, 01.11. Miete −800,00 €')
 
 // „Nur künftige“: 15. monatlich ab 15.09. → 2 vergangene Termine werden übersprungen
-await tab('Einstellungen').click()
+await openContracts()
 await addRule({ amount: '9,99', category: 'Freizeit', note: 'Streaming', day: '15', start: '2026-09-15' })
 await expectText('2 Termine seit 15.09.2026 liegen in der Vergangenheit.')
 await page.getByRole('alertdialog').getByRole('button', { name: 'Nur künftige' }).click()
 await expectText('Streaming'); await expectText('nächste: 15.11.')
-await tab('Start').click()
 await mustBalance('200,00 €', 'Nach „Nur künftige“')
+await openBookings()
 if ((await txCount()) !== 3) throw new Error('„Nur künftige“ hat gebucht')
 ok('„Nur künftige“: 2 vergangene Termine übersprungen, Kontostand unverändert, nächste: 15.11.')
 
-// Screenshots Einstellungen + Formular
-await tab('Einstellungen').click()
+// Vierteljährlicher Vertrag: 100,00 € pro Quartal = 33,33 € pro Monat (gerundet)
+await openContracts()
+await addRule({ amount: '100,00', category: 'Fixkosten', note: 'Versicherung', interval: 'Vierteljährlich', day: '15', start: '2026-11-15' })
+await expectText('vierteljährlich am 15.'); await expectText('nächste: 15.11.')
+// 800,00 + 9,99 + 33,33 = 843,32 (Gehalt und Nachhilfe sind Einnahmen und zählen nicht)
+await mustFixed('843,32 €', '5 aktive Verträge', 'Fixkosten mit vierteljährlichem Vertrag')
 await page.waitForTimeout(300)
-await page.screenshot({ path: `${SHOTS}/9-einstellungen-wiederkehrend.png`, fullPage: true })
+await page.screenshot({ path: `${SHOTS}/27-vertraege.png`, fullPage: true })
+await page.setViewportSize({ width: 375, height: 667 })
+await page.screenshot({ path: `${SHOTS}/27b-vertraege-se.png`, fullPage: true })
+if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Verträge: horizontaler Überlauf bei 375 px')
+await page.setViewportSize({ width: 390, height: 664 })
+await tab('Start').click()
+if (flatText(await hubRow('Verträge').innerText()) !== 'Verträge | 5 · 843,32 €/Monat') throw new Error('Hub Verträge: ' + flatText(await hubRow('Verträge').innerText()))
+ok('Verträge-Übersicht: „Fixkosten pro Monat“ 843,32 € = 800,00 + 9,99 + 33,33 (Quartal 100,00 € ÷ 3 gerundet), 5 aktive Verträge; Start-Zeile „5 · 843,32 €/Monat“')
+
+// Formular-Screenshot
+await openContracts()
 await page.getByRole('button', { name: /Miete.*monatlich am 1\./ }).click()
 await page.waitForTimeout(500) // Sheet-Animation abwarten
 await page.screenshot({ path: `${SHOTS}/10-formular-wiederkehrend.png` })
@@ -277,28 +328,32 @@ await page.screenshot({ path: `${SHOTS}/10-formular-wiederkehrend.png` })
 await page.fill('#rc-amount', '850,00')
 await page.getByRole('button', { name: 'Sichern' }).click()
 await expectText('−850,00 €')
-await tab('Start').click()
+await mustFixed('893,32 €', '5 aktive Verträge', 'Fixkosten nach Bearbeiten') // 850,00 + 9,99 + 33,33
 await mustBalance('200,00 €', 'Nach Bearbeiten der Regel')
-const body850 = await bodyText()
-const count = (needle) => body850.split(needle).length - 1
-if (count('−800,00 €') !== 4 || count('−850,00 €') !== 1) throw new Error('Erwartet 4 × −800,00 € (3 gebucht + manuelle Miete) und 1 × −850,00 € (fällig), war ' + count('−800,00 €') + ' / ' + count('−850,00 €'))
+const countIn = async (needle) => (await bodyText()).split(needle).length - 1
+if ((await countIn('−850,00 €')) !== 1) throw new Error('Erwartet 1 × −850,00 € (fällig am 01.11.) in „Demnächst fällig“')
+await openBookings()
+if ((await countIn('−800,00 €')) !== 4 || (await countIn('−850,00 €')) !== 0) throw new Error('Erwartet 4 × −800,00 € (3 gebucht + manuelle Miete) und keine −850,00 € bei den Buchungen, war ' + (await countIn('−800,00 €')) + ' / ' + (await countIn('−850,00 €')))
 if ((await txCount()) !== 3) throw new Error('Bearbeiten hat Buchungen verändert')
-ok('Regel Miete auf 850,00 € geändert: 3 gebuchte Einträge bleiben bei 800,00 €, nur der nächste Termin (01.11.) zeigt 850,00 €')
+ok('Vertrag Miete auf 850,00 € geändert (Fixkosten 893,32 €): 3 gebuchte Einträge bleiben bei 800,00 €, nur der nächste Termin (01.11.) zeigt 850,00 €')
 
 // Löschen: Buchungen bleiben
-await tab('Einstellungen').click()
-for (const name of [/Streaming/, /Miete.*monatlich/, /Gehalt.*monatlich/]) {
+await openContracts()
+for (const name of [/Streaming/, /Miete.*monatlich/, /Gehalt.*monatlich/, /Nachhilfe/, /Versicherung/]) {
   await page.getByRole('button', { name }).click()
   await page.getByRole('button', { name: 'Löschen', exact: true }).click()
   await expectText('Bereits gebuchte Einträge bleiben erhalten.')
   await page.getByRole('alertdialog').getByRole('button', { name: 'Löschen' }).click()
 }
-await expectText('Noch keine wiederkehrenden Buchungen.')
+await expectText('Noch keine Verträge.')
+await mustFixed('0,00 €', 'Keine aktiven Verträge', 'Nach Löschen')
 await tab('Start').click()
 await expectNoText('DEMNÄCHST FÄLLIG')
+if (flatText(await hubRow('Verträge').innerText()) !== 'Verträge | Keine') throw new Error('Hub Verträge ohne Verträge: ' + flatText(await hubRow('Verträge').innerText()))
 await mustBalance('200,00 €', 'Nach Löschen der Regeln')
+await openBookings()
 if ((await txCount()) !== 3) throw new Error('Gebuchte Einträge sind nach Löschen der Regel weg')
-ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleiben, „Demnächst fällig“ verschwindet')
+ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleiben, „Demnächst fällig“ verschwindet, Start-Zeile „Keine“')
 
 // ---------- Budgets (Stand: Oktober 2026, Daten aus den Schritten oben) ----------
 // Lebensmittel im Oktober: nur „Wocheneinkauf“ (45,99 → auf 50,00 bearbeitet) = 5.000 Cent.
@@ -374,11 +429,11 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
   const alertCard = page.getByRole('button', { name: /80,0 % verbraucht/ })
   if ((await css(alertCard.getByText('80,0 % verbraucht · noch 80,00 €'), 'color')) !== 'rgb(201, 52, 0)') throw new Error('Start-Hinweis: Warnfarbe falsch')
   const startTxt = await bodyText()
-  if (startTxt.indexOf('BUDGETS') < startTxt.indexOf('Kontostand') || startTxt.indexOf('BUDGETS') > startTxt.indexOf('LETZTE BUCHUNGEN')) throw new Error('Budget-Karte steht an der falschen Stelle')
+  if (startTxt.indexOf('BUDGETS') < startTxt.indexOf('Kontostand') || startTxt.indexOf('BUDGETS') > startTxt.indexOf('Alle Buchungen')) throw new Error('Budget-Karte steht an der falschen Stelle')
   await alertCard.click()
   await expectText('Oktober 2026')
   if ((await tab('Budgets').getAttribute('aria-current')) !== 'page') throw new Error('Tippen auf den Hinweis wechselt nicht zu Budgets')
-  ok('Start-Hinweis „Lebensmittel · 80,0 % verbraucht · noch 80,00 €“ (orange) zwischen Kontostand und Buchungen; Tippen öffnet den Budgets-Tab')
+  ok('Start-Hinweis „Lebensmittel · 80,0 % verbraucht · noch 80,00 €“ (orange) zwischen Kontostand und der Übersichtsliste; Tippen öffnet den Budgets-Tab')
 
   // warn → over: +103,10 = 423,10 (105,8 %, 23,10 € drüber)
   await tab('Start').click()
@@ -442,9 +497,9 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
   await tab('Budgets').click()
   await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 23,10 € drüber | 105,8 %', 'Nach Reload')
   const st = await stored()
-  if (st.version !== 3 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
+  if (st.version !== 4 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
     throw new Error('Gespeicherte Daten: Version/Budget falsch')
-  ok('Budget bleibt nach Neuladen erhalten (gespeichert als Version 3, monthlyBudgetCents 40000)')
+  ok('Budget bleibt nach Neuladen erhalten (gespeichert als Version 4, monthlyBudgetCents 40000)')
 
   // Entfernen
   for (const name of ['Fixkosten', 'Freizeit', 'Lebensmittel']) {
@@ -700,6 +755,362 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
   ok('Monat nach Neuladen unverändert (Oktober 2026, 426,90 € Saldo)')
 }
 
+// ---------- Start-Übersicht, Alle Buchungen, Bargeld (Stand: 11 Buchungen, Konto −223,10 €) ----------
+// Oktober 8 Buchungen, September 2 (Konzert, Miete ↻), August 1 (Miete ↻). Konto: 1.000 + 2.500 − 3 × 800 − 800 − 20 − 30 − 50 − 270 − 103,10 − 50 = −223,10.
+{
+  const flat = (s) => nbsp(s).trim().replace(/\s*\n\s*/g, ' | ')
+  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const css = (loc, prop) => loc.evaluate((el, p) => getComputedStyle(el)[p], prop)
+  const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet "${expected}", war "${actual}"`) }
+  const RED = 'rgb(215, 0, 21)', INK = 'rgb(0, 0, 0)'
+  const noOverflow = async (what) => {
+    if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error(`${what}: horizontaler Überlauf`)
+  }
+  const sub = async () => nbsp(await page.getByTestId('balance-sub').innerText())
+  const mustHub = async (konto, cash, total, what) => {
+    must(await balance(), konto, `${what}: Kontostand`)
+    must(await sub(), `Bargeld ${cash} · Gesamt ${total}`, `${what}: Bargeld/Gesamt`)
+  }
+  const cashBal = async () => nbsp(await page.getByTestId('cash-balance').innerText())
+  const monthSum = async () => {
+    await tab('Monat').click()
+    await expectText('Oktober 2026')
+    return flat(await page.locator('.summary').innerText())
+  }
+  const heads = async () => (await page.locator('.month-head').allInnerTexts()).map(flat).join(' // ')
+  const rowCount = () => page.locator('main .list .row').count()
+  const dlg = () => page.getByRole('dialog')
+  const search_ = (q) => page.getByRole('searchbox', { name: 'Suchen' }).fill(q)
+  const pressed = async (name) => (await dlg().getByRole('button', { name, exact: true }).getAttribute('aria-pressed')) === 'true'
+  const closeSheet = async () => {
+    await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+    if (await dlg().count()) await page.getByRole('button', { name: 'Abbrechen' }).first().click()
+    await dlg().waitFor({ state: 'detached' })
+  }
+
+  // --- Start-Übersicht ---
+  await tab('Start').click()
+  must(await page.locator('h1').innerText(), 'Finanzklar', 'Titel')
+  await mustHub('−223,10 €', '0,00 €', '−223,10 €', 'Start-Übersicht')
+  must(flat(await hubRow('Alle Buchungen').innerText()), 'Alle Buchungen | 11', 'Zeile Alle Buchungen')
+  must(flat(await hubRow('Bargeld').innerText()), 'Bargeld | 0,00 €', 'Zeile Bargeld')
+  must(flat(await hubRow('Verträge').innerText()), 'Verträge | Keine', 'Zeile Verträge')
+  for (const n of ['Alle Buchungen', 'Bargeld', 'Verträge']) if ((await hubRow(n).boundingBox()).height < 44) throw new Error(`Zeile ${n} < 44 px hoch`)
+  await expectNoText('Letzte Buchungen'); await expectNoText('LETZTE BUCHUNGEN')
+  ok('Start-Übersicht: Kontostand −223,10 €, „Bargeld 0,00 € · Gesamt −223,10 €“, Zeilen „Alle Buchungen 11“, „Bargeld 0,00 €“, „Verträge Keine“ (je ≥ 44 px), keine „Letzte Buchungen“')
+
+  // --- Alle Buchungen ---
+  await hubRow('Alle Buchungen').click()
+  must(await page.locator('h1').innerText(), 'Alle Buchungen', 'Titel Unterseite')
+  must(await page.getByRole('button', { name: 'Zurück', exact: true }).innerText(), 'Start', 'Zurück-Knopf zeigt „Start“')
+  if ((await page.getByRole('button', { name: 'Zurück', exact: true }).boundingBox()).height < 44) throw new Error('Zurück-Knopf < 44 px')
+  must(await heads(), 'Oktober 2026 | 8 Einträge // September 2026 | 2 Einträge // August 2026 | 1 Eintrag', 'Monatsköpfe')
+  must(await rowCount(), 11, 'Anzahl Zeilen')
+  const ams = (await page.locator('main .row-amount').allInnerTexts()).map(nbsp).join(' ')
+  must(ams, '−103,10 € −270,00 € −30,00 € −800,00 € −50,00 € +2.500,00 € −20,00 € −800,00 € −50,00 € −800,00 € −800,00 €', 'Reihenfolge neueste zuerst über alle Monate')
+  const search = page.getByRole('searchbox', { name: 'Suchen' })
+  must(await search.getAttribute('placeholder'), 'Suchen', 'Platzhalter')
+
+  await search.fill('Kino')
+  must(await rowCount(), 1, 'Suche „Kino“'); must(await heads(), 'Oktober 2026 | 1 Eintrag', 'Kopf bei „Kino“')
+  await search.fill('kINO')
+  must(await rowCount(), 1, 'Suche Groß/Klein')
+  await search.fill('800')
+  must(await rowCount(), 4, 'Suche „800“ (Mieten)')
+  must((await page.locator('main .row-amount').allInnerTexts()).map(nbsp).join(' '), '−800,00 € −800,00 € −800,00 € −800,00 €', 'Beträge bei „800“')
+  must((await page.locator('main .row-sub').allInnerTexts()).map(nbsp).join(' // '), 'Di, 27.10. · Miete // Do, 01.10. · Miete // Di, 01.09. · Miete // Sa, 01.08. · Miete', 'Zeilen bei „800“')
+  must(await heads(), 'Oktober 2026 | 2 Einträge // September 2026 | 1 Eintrag // August 2026 | 1 Eintrag', 'Köpfe bei „800“')
+  await search.fill('lebensmittel')
+  must((await page.locator('main .row-amount').allInnerTexts()).map(nbsp).join(' '), '−103,10 € −270,00 € −50,00 €', 'Suche Kategorie')
+  await search.fill('103,1')
+  must(await rowCount(), 1, 'Suche Betrag „103,1“')
+  await search.fill('Wocheneinkauf')
+  must(await rowCount(), 1, 'Suche Notiz')
+  await search.fill('xyzzy')
+  must(await rowCount(), 0, 'Suche ohne Treffer'); await expectText('Keine Treffer')
+  if (await page.locator('.month-head').count()) throw new Error('Monatsköpfe trotz „Keine Treffer“')
+  await search.fill('800')
+  await page.screenshot({ path: `${SHOTS}/25-alle-buchungen.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Suche löschen' }).click()
+  must(await search.inputValue(), '', 'Suchfeld geleert'); must(await rowCount(), 11, 'Alle Zeilen nach Löschen')
+  await page.getByRole('button', { name: /Kino/ }).click()
+  await dlg().waitFor()
+  must(await page.inputValue('#tx-amount'), '20,00', 'Kino: Betrag im Sheet'); must(await page.inputValue('#tx-date'), '2026-10-20', 'Kino: Datum')
+  must(await pressed('Konto'), true, 'Konto-Buchung: „Konto“ gewählt')
+  await closeSheet()
+  must(await page.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).count(), 1, 'Plus-Knopf auf Alle Buchungen')
+  await page.setViewportSize({ width: 375, height: 667 })
+  await noOverflow('Alle Buchungen 375 px')
+  await page.setViewportSize({ width: 390, height: 664 })
+  ok('Alle Buchungen: Monatsgruppen „Oktober 2026 · 8 Einträge“, „September 2026 · 2“, „August 2026 · 1“, 11 Zeilen neueste zuerst; Suche „Kino“ → 1, „800“ → 4 Mieten (2/1/1 je Monat), „lebensmittel“ (Groß/Klein egal) → 3, „103,1“ → 1, „xyzzy“ → „Keine Treffer“; Löschen-Knopf; Tippen öffnet Bearbeiten-Sheet')
+
+  // --- Zurück-Knopf, Tab-Wechsel, Scroll nach oben ---
+  await page.evaluate(() => window.scrollTo(0, 500))
+  if ((await page.evaluate(() => window.scrollY)) < 100) throw new Error('Alle Buchungen ist nicht scrollbar')
+  await page.getByRole('button', { name: 'Zurück', exact: true }).click()
+  must(await page.locator('h1').innerText(), 'Finanzklar', 'Zurück → Start-Übersicht')
+  must(await page.evaluate(() => window.scrollY), 0, 'Nach Navigation ganz oben')
+  must(await tab('Start').getAttribute('aria-current'), 'page', 'Tab Start bleibt aktiv')
+  await hubRow('Alle Buchungen').click()
+  await tab('Monat').click()
+  must(await page.locator('h1').innerText(), 'Monat', 'Tab Monat')
+  await tab('Start').click()
+  must(await page.locator('h1').innerText(), 'Finanzklar', 'Tab-Wechsel setzt Start auf die Übersicht zurück')
+  await hubRow('Alle Buchungen').click()
+  await tab('Start').click()
+  must(await page.locator('h1').innerText(), 'Finanzklar', 'Start-Tab auf einer Unterseite → Übersicht')
+  ok('Zurück („‹ Start“, aria-label „Zurück“) führt zur Übersicht und scrollt nach oben; Tab-Wechsel (Monat → Start) und Tippen auf „Start“ setzen die Unterseite zurück')
+
+  // --- Bargeld: Startbestand 20,00 € ---
+  await tab('Einstellungen').click()
+  await page.fill('#start-cash', '20,00')
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expectText('Startguthaben gespeichert.')
+  must(await page.inputValue('#start-balance'), '1000,00', 'Startguthaben Konto unverändert')
+  await mustHub('−223,10 €', '20,00 €', '−203,10 €', 'Startbestand Bargeld 20,00')
+  must(flat(await hubRow('Bargeld').innerText()), 'Bargeld | 20,00 €', 'Zeile Bargeld mit Startbestand')
+  await hubRow('Bargeld').click()
+  must(await page.locator('h1').innerText(), 'Bargeld', 'Titel Bargeld')
+  await expectText('Bargeld-Bestand')
+  must(await cashBal(), '20,00 €', 'Bargeld-Bestand')
+  must(await css(page.getByTestId('cash-balance'), 'color'), INK, 'Positiver Bestand nicht rot')
+  await expectText('Abhebungen buchen vom Konto ins Bargeld und zählen nicht als Ausgabe.'); await expectText('Noch keine Bargeld-Buchungen.')
+  for (const n of ['Bar bezahlt', 'Bar erhalten', 'Abhebung', 'Einzahlung aufs Konto']) {
+    const b = page.getByRole('button', { name: n, exact: true })
+    if ((await b.count()) !== 1 || (await b.boundingBox()).height < 44) throw new Error(`Knopf „${n}“ fehlt oder < 44 px`)
+  }
+  ok('Bargeld: Startbestand 20,00 € (Einstellungen), Start „Bargeld 20,00 € · Gesamt −203,10 €“, Seite mit „Bargeld-Bestand 20,00 €“, Knöpfe Bar bezahlt / Bar erhalten / Abhebung / Einzahlung aufs Konto, Fußnote')
+
+  // 1) Abhebung 200,00 €: Konto −200, Bargeld +200, Monat Ausgaben unverändert
+  const before = await monthSum()
+  must(before, 'Einnahmen | 2.500,00 € | Ausgaben | 2.073,10 € | Saldo | 426,90 €', 'Monat vor der Abhebung')
+  await openCash()
+  await page.getByRole('button', { name: 'Abhebung', exact: true }).click()
+  await dlg().waitFor()
+  must(await pressed('Abhebung'), true, 'Abhebung vorgewählt'); must(await pressed('Einzahlung'), false, 'Einzahlung nicht gewählt')
+  must(await page.inputValue('#tr-date'), '2026-10-27', 'Datum heute')
+  await page.fill('#tr-amount', '0')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await expectText('Der Betrag muss größer als 0 sein.')
+  await page.fill('#tr-amount', '200')
+  await page.fill('#tr-note', 'Geldautomat')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(await cashBal(), '220,00 €', 'Bargeld nach Abhebung')
+  const wRow = page.locator('main .list .row', { hasText: 'Konto → Bargeld' })
+  must(flat(await wRow.innerText()), 'Abhebung | Di, 27.10. · Konto → Bargeld · Geldautomat | 200,00 €', 'Abhebung-Zeile (ohne Vorzeichen)')
+  must(await css(wRow.locator('.row-amount'), 'color'), INK, 'Abhebung in normaler Schriftfarbe')
+  must(await heads(), 'Oktober 2026 | 1 Eintrag', 'Kopf Bargeld-Liste')
+  await mustHub('−423,10 €', '220,00 €', '−203,10 €', 'Nach Abhebung')
+  must(await monthSum(), before, 'Monat Ausgaben nach der Abhebung unverändert')
+  must(await page.locator('main .section-title', { hasText: 'Alle Buchungen' }).locator('xpath=following-sibling::*[1]').locator('.row').count(), 8, 'Monat: Abhebung ist keine Buchung')
+  ok('Abhebung 200,00 €: Konto −423,10 € (−200), Bargeld 220,00 € (+200), Gesamt −203,10 € unverändert; Zeile „Abhebung · Konto → Bargeld“ ohne Vorzeichen/Farbe; Monat Ausgaben 2.073,10 € unverändert; Betrag 0 abgelehnt')
+
+  // 2) „Bar bezahlt“ 45,50 € Lebensmittel: Bargeld −45,50, Monat Ausgaben +45,50, Lebensmittel inkl. Barausgabe
+  await openCash()
+  await page.getByRole('button', { name: 'Bar bezahlt', exact: true }).click()
+  await dlg().waitFor()
+  must(await pressed('Ausgabe'), true, 'Bar bezahlt: Ausgabe'); must(await pressed('Bargeld'), true, 'Bar bezahlt: Bargeld'); must(await pressed('Konto'), false, 'Bar bezahlt: nicht Konto')
+  await page.fill('#tx-amount', '45,50')
+  await page.selectOption('#tx-cat', { label: 'Lebensmittel' })
+  await page.fill('#tx-note', 'Bäcker')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(await cashBal(), '174,50 €', 'Bargeld nach Bar bezahlt')
+  const cRow = page.locator('main .list .row', { hasText: 'Bäcker' })
+  must(flat(await cRow.innerText()), 'Lebensmittel | Di, 27.10. · Bäcker | −45,50 €', 'Barzeile auf der Bargeld-Seite (ohne Badge)')
+  must(await heads(), 'Oktober 2026 | 2 Einträge', 'Kopf nach Bar bezahlt')
+  await mustHub('−423,10 €', '174,50 €', '−248,60 €', 'Nach Bar bezahlt')
+  must(await monthSum(), 'Einnahmen | 2.500,00 € | Ausgaben | 2.118,60 € | Saldo | 381,40 €', 'Monat nach Bar bezahlt')
+  const lm = (await page.locator('main .section-title', { hasText: 'Ausgaben nach Kategorie' }).locator('xpath=following-sibling::*[1]').locator('li').allInnerTexts()).map(flat).find((t) => t.startsWith('Lebensmittel'))
+  must(lm, 'Lebensmittel ▲ 468,60 € | 468,60 €22,1 %', 'Monat: Lebensmittel inkl. 45,50 € bar') // 423,10 + 45,50
+  const mrow = page.locator('main .section-title', { hasText: 'Alle Buchungen' }).locator('xpath=following-sibling::*[1]').locator('.row', { hasText: 'Bäcker' })
+  must(flat(await mrow.innerText()), 'Lebensmittel Bar | Di, 27.10. · Bäcker | −45,50 €', 'Monat: „Bar“-Badge')
+  // Budget Lebensmittel 500,00 €: 468,60 € verbraucht (inkl. Barausgabe)
+  await tab('Budgets').click()
+  await page.getByRole('button', { name: /^Lebensmittel/ }).click()
+  await page.fill('#budget-amount', '500,00')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(flat(await page.getByRole('button', { name: /^Lebensmittel/ }).innerText()), 'Lebensmittel | 468,60 € von 500,00 € | noch 31,40 € | 93,7 %', 'Budget inkl. Barausgabe')
+  ok('Bar bezahlt 45,50 € Lebensmittel (Bargeld vorgewählt): Bargeld 174,50 €, Konto unverändert −423,10 €; Monat Ausgaben 2.118,60 € / Saldo 381,40 €, Lebensmittel 468,60 € (22,1 %), „Bar“-Badge in Monat; Budget Lebensmittel 468,60 € von 500,00 € (93,7 %)')
+
+  // Start-Screenshots (Budget-Hinweis + Bargeld in der Kontokarte)
+  await tab('Start').click()
+  await expectText('93,7 % verbraucht · noch 31,40 €')
+  await page.screenshot({ path: `${SHOTS}/24-start-neu.png`, fullPage: true })
+  await page.setViewportSize({ width: 375, height: 667 })
+  await page.screenshot({ path: `${SHOTS}/24b-start-neu-se.png`, fullPage: true })
+  await noOverflow('Start 375 px')
+  await page.setViewportSize({ width: 390, height: 664 })
+  await tab('Budgets').click()
+  await page.getByRole('button', { name: /^Lebensmittel/ }).click()
+  await page.getByRole('button', { name: 'Budget entfernen' }).click()
+  await dlg().waitFor({ state: 'detached' })
+
+  // 3) Einzahlung 50,00 €
+  await openCash()
+  await page.getByRole('button', { name: 'Einzahlung aufs Konto', exact: true }).click()
+  await dlg().waitFor()
+  must(await pressed('Einzahlung'), true, 'Einzahlung vorgewählt')
+  await page.fill('#tr-amount', '50,00')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(await cashBal(), '124,50 €', 'Bargeld nach Einzahlung')
+  must(await heads(), 'Oktober 2026 | 3 Einträge', 'Kopf nach Einzahlung')
+  await page.screenshot({ path: `${SHOTS}/26-bargeld.png`, fullPage: true })
+  await page.setViewportSize({ width: 375, height: 667 })
+  await page.screenshot({ path: `${SHOTS}/26b-bargeld-se.png`, fullPage: true })
+  await noOverflow('Bargeld 375 px')
+  await page.setViewportSize({ width: 390, height: 664 })
+  await mustHub('−373,10 €', '124,50 €', '−248,60 €', 'Nach Einzahlung')
+  ok('Einzahlung 50,00 €: Konto −373,10 € (+50), Bargeld 124,50 € (−50), Gesamt −248,60 € unverändert')
+
+  // Alle Buchungen zeigt Abhebung, Einzahlung und die Barbuchung mit „Bar“-Badge
+  await openBookings()
+  must(await rowCount(), 14, 'Alle Buchungen mit Umbuchungen')
+  must(await heads(), 'Oktober 2026 | 11 Einträge // September 2026 | 2 Einträge // August 2026 | 1 Eintrag', 'Köpfe mit Umbuchungen')
+  must(flat(await page.locator('main .list .row', { hasText: 'Bäcker' }).innerText()), 'Lebensmittel Bar | Di, 27.10. · Bäcker | −45,50 €', 'Bar-Badge')
+  must(await page.locator('main .badge').count(), 1, 'Genau ein Bar-Badge')
+  await search_('Einzahlung'); must(await rowCount(), 1, 'Suche „Einzahlung“'); await search_('Geldautomat'); must(await rowCount(), 1, 'Suche Notiz der Abhebung')
+  await search_('45,5'); must(await rowCount(), 1, 'Suche Barbetrag'); await search_('')
+  ok('Alle Buchungen mit Umbuchungen: 14 Zeilen (11 Buchungen + Abhebung + Einzahlung + Bar), „Bar“-Badge nur bei der Barbuchung, Suche findet Umbuchungen („Einzahlung“, „Geldautomat“)')
+
+  // 4) Umbuchung bearbeiten (Abhebung 200 → 150) und 5) Einzahlung löschen
+  await openCash()
+  await wRow.click()
+  await dlg().waitFor()
+  must(await dlg().getAttribute('aria-label'), 'Umbuchung bearbeiten', 'Titel Bearbeiten')
+  must(await page.inputValue('#tr-amount'), '200,00', 'Abhebung: Betrag im Sheet'); must(await page.inputValue('#tr-note'), 'Geldautomat', 'Abhebung: Notiz im Sheet')
+  await page.fill('#tr-amount', '150')
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(await cashBal(), '74,50 €', 'Bargeld nach Bearbeiten')
+  await mustHub('−323,10 €', '74,50 €', '−248,60 €', 'Nach Bearbeiten der Abhebung')
+  await openCash()
+  await page.locator('main .list .row', { hasText: 'Bargeld → Konto' }).click()
+  await dlg().waitFor()
+  await page.getByRole('button', { name: 'Umbuchung löschen' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Löschen' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(await cashBal(), '124,50 €', 'Bargeld nach Löschen der Einzahlung')
+  must(await heads(), 'Oktober 2026 | 2 Einträge', 'Kopf nach Löschen')
+  await mustHub('−373,10 €', '124,50 €', '−248,60 €', 'Nach Löschen der Einzahlung')
+  ok('Umbuchung bearbeiten (Abhebung 200,00 → 150,00 €: Konto −323,10 €, Bargeld 74,50 €) und Einzahlung löschen (Konto −373,10 €, Bargeld 124,50 €); Gesamt bleibt −248,60 €')
+
+  // Konto einer Buchung ändern
+  await openCash()
+  await cRow.click()
+  await dlg().waitFor()
+  must(await pressed('Bargeld'), true, 'Bearbeiten behält Bargeld')
+  await dlg().getByRole('button', { name: 'Konto', exact: true }).click()
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(await cashBal(), '170,00 €', 'Barbuchung aufs Konto verschoben')
+  await mustHub('−418,60 €', '170,00 €', '−248,60 €', 'Nach Kontowechsel')
+  await openBookings()
+  await page.getByRole('button', { name: /Bäcker/ }).click()
+  await dlg().waitFor()
+  await dlg().getByRole('button', { name: 'Bargeld', exact: true }).click()
+  await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  await mustHub('−373,10 €', '124,50 €', '−248,60 €', 'Nach Rückwechsel')
+  ok('Konto einer Buchung ändern: Bäcker 45,50 € Bargeld → Konto (Konto −418,60 €, Bargeld 170,00 €) und zurück')
+
+  // --- Backup mit Umbuchung und Konto ---
+  await tab('Einstellungen').click()
+  const [dl2] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Exportieren' }).click()])
+  const file2 = `${SHOTS}/../backup-test.json`
+  await dl2.saveAs(file2)
+  const j2 = JSON.parse(fs.readFileSync(file2, 'utf8'))
+  must(j2.version, 4, 'Export Version'); must(j2.settings.startCashCents, 2000, 'Export Startbestand Bargeld')
+  must(JSON.stringify(j2.transfers.map((t) => [t.direction, t.amountCents, t.date, t.note])), '[["withdrawal",15000,"2026-10-27","Geldautomat"]]', 'Export Umbuchungen')
+  must(j2.transactions.filter((t) => t.account === 'bargeld').map((t) => t.amountCents).join(), '4550', 'Export: Barbuchung')
+  must(j2.transactions.length, 12, 'Export: 12 Buchungen')
+  await tab('Start').click()
+  await addTx({ amount: '999', category: 'Sonstiges', account: 'Bargeld' })
+  await openCash()
+  await page.getByRole('button', { name: 'Abhebung', exact: true }).click()
+  await page.fill('#tr-amount', '10'); await page.getByRole('button', { name: 'Sichern' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  await tab('Einstellungen').click()
+  fs.writeFileSync(`${SHOTS}/../kaputt.json`, JSON.stringify({ ...j2, transfers: [{ ...j2.transfers[0], direction: 'sideways' }] }))
+  await page.locator('input[type=file]').setInputFiles(`${SHOTS}/../kaputt.json`)
+  await page.getByRole('alert').waitFor({ timeout: 3000 })
+  await expectText('Ungültige Sicherungsdatei: Eine Umbuchung hat eine ungültige Richtung.')
+  fs.writeFileSync(`${SHOTS}/../kaputt.json`, JSON.stringify({ ...j2, transactions: j2.transactions.map((t, i) => (i ? t : { ...t, account: 'tresor' })) }))
+  await page.locator('input[type=file]').setInputFiles(`${SHOTS}/../kaputt.json`)
+  await expectText('Ungültige Sicherungsdatei: Eine Buchung hat ein ungültiges Konto.')
+  await page.locator('input[type=file]').setInputFiles(file2)
+  await page.getByRole('alertdialog').waitFor()
+  await page.getByRole('alertdialog').getByRole('button').last().click()
+  await expectText('Import erfolgreich: 12 Buchungen')
+  must(await page.inputValue('#start-cash'), '20,00', 'Startbestand Bargeld nach Import')
+  await mustHub('−373,10 €', '124,50 €', '−248,60 €', 'Nach Import')
+  const st2 = await stored()
+  must(st2.transfers.length, 1, 'Umbuchung nach Import'); must(st2.transactions.filter((t) => t.account === 'bargeld').length, 1, 'Barbuchung nach Import')
+  ok('Backup: Export Version 4 mit Umbuchung (Abhebung 150,00 €), Barbuchung und Startbestand 20,00 €; ungültige Richtung / ungültiges Konto werden abgelehnt; Import stellt Konto −373,10 € / Bargeld 124,50 € wieder her')
+
+  // --- Negativer Bargeldbestand wird rot ---
+  await openCash()
+  await wRow.click()
+  await dlg().waitFor()
+  await page.getByRole('button', { name: 'Umbuchung löschen' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Löschen' }).click()
+  await dlg().waitFor({ state: 'detached' })
+  must(await cashBal(), '−25,50 €', 'Negativer Bargeldbestand') // 20,00 − 45,50
+  must(await css(page.getByTestId('cash-balance'), 'color'), RED, 'Negativer Bestand rot')
+  await mustHub('−223,10 €', '−25,50 €', '−248,60 €', 'Nach Löschen der Abhebung')
+  await page.screenshot({ path: `${SHOTS}/26c-bargeld-negativ.png`, fullPage: true })
+  ok('Bargeld ohne Abhebung: −25,50 € (20,00 − 45,50) wird rot angezeigt; Konto −223,10 €, Gesamt −248,60 €')
+
+  // --- Dark Mode ---
+  await tab('Start').click()
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.screenshot({ path: `${SHOTS}/28-start-dark.png`, fullPage: true })
+  await hubRow('Alle Buchungen').click()
+  await page.screenshot({ path: `${SHOTS}/28b-alle-buchungen-dark.png` })
+  await page.emulateMedia({ colorScheme: 'light' })
+  await tab('Start').click()
+  ok('Dark Mode: Start-Übersicht und Alle Buchungen ohne Konsolenfehler')
+}
+
+// ---------- Migration v3 → v4 beim Laden (frischer Kontext mit altem localStorage) ----------
+{
+  const ctx3 = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+  const p3 = await ctx3.newPage()
+  p3.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  p3.on('pageerror', (e) => errors.push(e.message))
+  await p3.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+  await p3.goto(URL)
+  const cat = (kind, name, builtIn = false) => ({ id: `${kind}-${name.toLowerCase()}`, name, kind, builtIn })
+  const oldData = {
+    version: 3,
+    settings: { startBalanceCents: 100000 },
+    categories: [
+      ...['Lebensmittel', 'Fixkosten', 'Mobilität', 'Freizeit', 'Kleidung', 'Gesundheit'].map((n) => cat('expense', n)),
+      cat('expense', 'Sonstiges', true), cat('income', 'Gehalt'), cat('income', 'Nebeneinkünfte'), cat('income', 'Sonstiges', true),
+    ],
+    transactions: [{ id: 'old1', kind: 'expense', amountCents: 4599, date: '2026-10-02', categoryId: 'expense-lebensmittel', note: 'Alt', createdAt: 1 }],
+    recurring: [],
+  }
+  await p3.evaluate((d) => localStorage.setItem('finanz-app:v1', JSON.stringify(d)), oldData)
+  await p3.reload()
+  await p3.getByTestId('balance').waitFor()
+  const hub3 = nbsp(await p3.locator('body').innerText())
+  if (!hub3.includes('954,01 €') || !hub3.includes('Bargeld 0,00 € · Gesamt 954,01 €')) throw new Error('Migration v3: Kontostand falsch: ' + hub3.slice(0, 200))
+  await p3.getByRole('button', { name: /^Alle Buchungen/ }).click()
+  await p3.getByRole('button', { name: /Alt/ }).click()
+  if ((await p3.getByRole('dialog').getByRole('button', { name: 'Konto', exact: true }).getAttribute('aria-pressed')) !== 'true') throw new Error('Migrierte Buchung liegt nicht auf dem Konto')
+  await p3.getByRole('button', { name: 'Sichern' }).click() // speichert den migrierten Stand
+  await p3.waitForTimeout(200)
+  const s3 = await p3.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  if (s3.version !== 4 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
+    throw new Error('Migration v3: gespeicherte Daten falsch ' + JSON.stringify(s3).slice(0, 300))
+  await ctx3.close()
+  ok('Migration v3 → v4 beim Laden: Kontostand 954,01 €, „Bargeld 0,00 € · Gesamt 954,01 €“, alte Buchung liegt auf dem Konto, gespeichert als Version 4 (startCashCents 0, keine Umbuchungen)')
+}
+
 // ---------- Datumswechsel mit page.clock (frischer Kontext, fester Start 31.10.2026 10:00) ----------
 {
   const ctx2 = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
@@ -715,8 +1126,9 @@ ok('Regeln gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bleib
   }
   const stored = () => p2.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
   const nav2 = (name) => p2.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
-  await nav2('Einstellungen').click()
-  await p2.getByRole('button', { name: 'Wiederkehrende Buchung hinzufügen' }).click()
+  await nav2('Start').click()
+  await p2.getByRole('button', { name: /^Verträge/ }).click()
+  await p2.getByRole('button', { name: 'Vertrag hinzufügen' }).click()
   await p2.fill('#rc-amount', '10')
   await p2.selectOption('#rc-cat', { label: 'Freizeit' })
   await p2.fill('#rc-note', 'Abo')

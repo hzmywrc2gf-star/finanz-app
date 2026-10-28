@@ -6,7 +6,7 @@ import { LocalStorageRepository } from '../data/localStorageRepo'
 import { todayISO } from '../domain/dates'
 import { bookDue } from '../domain/recurring'
 import * as A from './actions'
-import type { RecurringInput, TransactionInput } from './actions'
+import type { RecurringInput, TransactionInput, TransferInput } from './actions'
 
 export interface FinanceApi {
   data: AppData
@@ -16,6 +16,10 @@ export interface FinanceApi {
   updateTransaction(id: string, input: TransactionInput): void
   deleteTransaction(id: string): void
   setStartBalance(cents: number): void
+  setStartCash(cents: number): void
+  addTransfer(input: TransferInput): void
+  updateTransfer(id: string, input: TransferInput): void
+  deleteTransfer(id: string): void
   addCategory(kind: Kind, name: string): void
   renameCategory(id: string, name: string): void
   deleteCategory(id: string): void
@@ -111,6 +115,10 @@ export function FinanceProvider({
       updateTransaction: (id, i) => apply((d) => A.updateTransaction(d, id, i)),
       deleteTransaction: (id) => apply((d) => A.deleteTransaction(d, id)),
       setStartBalance: (c) => apply((d) => A.setStartBalance(d, c)),
+      setStartCash: (c) => apply((d) => A.setStartCash(d, c)),
+      addTransfer: (i) => apply((d) => A.addTransfer(d, i)),
+      updateTransfer: (id, i) => apply((d) => A.updateTransfer(d, id, i)),
+      deleteTransfer: (id) => apply((d) => A.deleteTransfer(d, id)),
       addCategory: (k, n) => apply((d) => A.addCategory(d, k, n)),
       renameCategory: (id, n) => apply((d) => A.renameCategory(d, id, n)),
       deleteCategory: (id) => apply((d) => A.deleteCategory(d, id)),

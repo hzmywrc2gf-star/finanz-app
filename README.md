@@ -9,10 +9,11 @@ Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, di
 
 ## Funktionen
 
-- **Kontostand**: Startguthaben + Einnahmen − Ausgaben, groß auf der Startseite.
+- **Start-Übersicht**: Kontostand groß, darunter Bargeld und Gesamt; Zeilen zu „Alle Buchungen“ (gruppiert nach Monat, mit Suche), „Bargeld“ und „Verträge“.
+- **Bargeld**: eigener Bestand mit „Bar bezahlt“, „Bar erhalten“, Abhebung (Konto → Bargeld) und Einzahlung aufs Konto. Umbuchungen zählen nicht als Einnahme oder Ausgabe.
 - **Buchungen**: Einnahme/Ausgabe, Betrag, Datum, Kategorie, Notiz – bearbeiten und löschen per Tippen auf die Buchung.
 - **Kategorien**: Standard-Kategorien plus eigene (hinzufügen, umbenennen, löschen). Buchungen gelöschter Kategorien wandern nach „Sonstiges“.
-- **Wiederkehrende Buchungen**: Miete, Abos, Gehalt (monatlich, vierteljährlich, jährlich) werden automatisch gebucht, mit optionalem Nachbuchen vergangener Termine und „Demnächst fällig“ auf der Startseite.
+- **Verträge**: Miete, Abos, Gehalt (monatlich, vierteljährlich, jährlich) werden automatisch gebucht, mit optionalem Nachbuchen vergangener Termine, „Fixkosten pro Monat“ und „Demnächst fällig“ auf der Startseite (ohne Gehalt).
 - **Monatsbudgets**: pro Ausgaben-Kategorie ein Budget festlegen (Tab „Budgets“), Fortschrittsbalken grün/orange/rot, Gesamtbudget, Monatsnavigation und Hinweis auf der Startseite ab 80 % Verbrauch.
 - **Monatsauswertung** (Tab „Monat“): Einnahmen, Ausgaben, Saldo, Sparquote, Vergleich zum Vormonat, 6-Monats-Verlauf als Diagramm mit Tabelle, Ausgaben/Einnahmen nach Kategorie die größten Ausgaben und alle Buchungen des Monats (neueste zuerst, Tippen zum Bearbeiten, „+“ zum Hinzufügen).
 - **Backup**: Export/Import aller Daten als JSON (Einstellungen → Datensicherung).
@@ -53,4 +54,4 @@ React + Vite + TypeScript, `vite-plugin-pwa` (Manifest, Service Worker). Beträg
 
 1. **Sparziele** mit Zielbetrag und Datum.
 2. **Sync zwischen Handy und PC** – neues Repository-Backend (z. B. Supabase oder PocketBase), Login optional.
-3. Kleinere Ideen: Suche/Filter, CSV-Export, Haptik/Swipe-to-delete.
+3. Kleinere Ideen: CSV-Export, Haptik/Swipe-to-delete.

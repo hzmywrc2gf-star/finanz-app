@@ -3,13 +3,14 @@ import { createDefaultData } from '../domain/defaults'
 import { bookDue } from '../domain/recurring'
 import {
   addCategory, addRecurring, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
-  renameCategory, setCategoryBudget, setStartBalance, updateRecurring, updateTransaction,
+  addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
+  updateTransaction, updateTransfer,
 } from './actions'
 import type { RecurringInput } from './actions'
 
 const base = () => createDefaultData()
 const meta = { id: 'x1', createdAt: 5 }
-const input = { kind: 'expense' as const, amountCents: 1250, date: '2026-10-27', categoryId: 'expense-lebensmittel' }
+const input = { kind: 'expense' as const, amountCents: 1250, date: '2026-10-27', categoryId: 'expense-lebensmittel', account: 'konto' as const }
 
 describe('transactions', () => {
   it('add, update, delete', () => {
@@ -26,6 +27,13 @@ describe('transactions', () => {
     expect(() => addTransaction(base(), { ...input, amountCents: 0 })).toThrow()
     expect(() => addTransaction(base(), { ...input, categoryId: 'income-gehalt' })).toThrow()
     expect(() => addTransaction(base(), { ...input, date: '2026-13-01' })).toThrow()
+    expect(() => addTransaction(base(), { ...input, account: 'tresor' as never })).toThrow(/Konto/)
+  })
+  it('keeps the account and can move a booking to the cash account', () => {
+    let d = addTransaction(base(), { ...input, account: 'bargeld' }, meta)
+    expect(d.transactions[0].account).toBe('bargeld')
+    d = updateTransaction(d, 'x1', { ...input, account: 'konto' })
+    expect(d.transactions[0].account).toBe('konto')
   })
   it('sets start balance', () => {
     expect(setStartBalance(base(), 100000).settings.startBalanceCents).toBe(100000)
@@ -55,7 +63,7 @@ describe('categories', () => {
     expect(d.categories.some((c) => c.id === 'c1')).toBe(false)
     expect(d.transactions[0].categoryId).toBe('expense-sonstiges')
     let i = addCategory(base(), 'income', 'Zins', 'c2')
-    i = addTransaction(i, { kind: 'income', amountCents: 100, date: '2026-10-27', categoryId: 'c2' }, meta)
+    i = addTransaction(i, { kind: 'income', amountCents: 100, date: '2026-10-27', categoryId: 'c2', account: 'konto' }, meta)
     expect(deleteCategory(i, 'c2').transactions[0].categoryId).toBe('income-sonstiges')
   })
   it('cannot delete Sonstiges', () => {
@@ -124,7 +132,7 @@ describe('recurring', () => {
   it('editing a generated transaction keeps its recurringId', () => {
     let d = addRecurring(base(), rin, { today, catchUp: true, id: 'r1' })
     const t = d.transactions[0]
-    d = updateTransaction(d, t.id, { kind: 'expense', amountCents: 79000, date: t.date, categoryId: t.categoryId })
+    d = updateTransaction(d, t.id, { kind: 'expense', amountCents: 79000, date: t.date, categoryId: t.categoryId, account: 'konto' })
     expect(d.transactions[0]).toMatchObject({ amountCents: 79000, recurringId: 'r1' })
   })
   it('deleteCategory reassigns rules to Sonstiges of the same kind', () => {
@@ -165,5 +173,29 @@ describe('category budgets', () => {
     let d = addCategory(base(), 'expense', 'Haustier', 'c1')
     d = renameCategory(setCategoryBudget(d, 'c1', 5000), 'c1', 'Tiere')
     expect(budget(d, 'c1')).toBe(5000)
+  })
+})
+
+describe('transfers and start cash', () => {
+  const tin = { direction: 'withdrawal' as const, amountCents: 20000, date: '2026-10-27' }
+  it('add, update, delete', () => {
+    let d = addTransfer(base(), { ...tin, note: '  Geldautomat ' }, meta)
+    expect(d.transfers).toEqual([{ ...tin, id: 'x1', createdAt: 5, note: 'Geldautomat' }])
+    d = updateTransfer(d, 'x1', { ...tin, direction: 'deposit', amountCents: 5000, note: '' })
+    expect(d.transfers[0]).toEqual({ id: 'x1', createdAt: 5, direction: 'deposit', amountCents: 5000, date: '2026-10-27' })
+    d = deleteTransfer(d, 'x1')
+    expect(d.transfers).toHaveLength(0)
+  })
+  it('rejects invalid input with German messages', () => {
+    expect(() => addTransfer(base(), { ...tin, amountCents: 0 })).toThrow(/größer als 0/)
+    expect(() => addTransfer(base(), { ...tin, amountCents: 1.5 })).toThrow(/größer als 0/)
+    expect(() => addTransfer(base(), { ...tin, date: '2026-02-30' })).toThrow(/Datum/)
+    expect(() => addTransfer(base(), { ...tin, direction: 'x' as never })).toThrow(/Richtung/)
+    expect(() => updateTransfer(base(), 'nope', tin)).toThrow(/nicht gefunden/)
+  })
+  it('sets the start cash like the start balance', () => {
+    expect(setStartCash(base(), 2000).settings).toEqual({ startBalanceCents: 0, startCashCents: 2000 })
+    expect(setStartCash(base(), -500).settings.startCashCents).toBe(-500)
+    expect(() => setStartCash(base(), 1.5)).toThrow()
   })
 })

@@ -1,28 +1,64 @@
-import type { Transaction } from '../domain/types'
-import { currentBalance } from '../domain/calc'
-import { compareTransactionsDesc } from '../domain/calc'
+import type { ReactNode } from 'react'
+import { accountBalance, totalBalance } from '../domain/calc'
 import { todayISO, formatShortDay } from '../domain/dates'
 import { formatCents, formatPercent, formatSigned } from '../domain/money'
 import { budgetAlerts } from '../domain/budget'
-import { recurringTitle, upcoming } from '../domain/recurring'
+import { builtInId } from '../domain/defaults'
+import { monthlyEquivalent, recurringTitle, upcoming } from '../domain/recurring'
 import { useFinance } from '../state/FinanceContext'
-import { TransactionList } from '../components/TransactionList'
 import { Fab } from '../components/Fab'
+import { CashIcon, ChevronRight, ContractIcon, ListIcon } from '../components/Icons'
+
+export type StartView = 'hub' | 'bookings' | 'cash' | 'contracts'
+
+/** Salary is expected anyway, so it stays out of "Demnächst fällig". */
+const HIDDEN_FROM_UPCOMING = [builtInId('income', 'Gehalt')]
+
+function MenuRow({
+  icon,
+  tone,
+  title,
+  value,
+  onClick,
+}: {
+  icon: ReactNode
+  tone: 'blue' | 'green' | 'orange'
+  title: string
+  value: string
+  onClick: () => void
+}) {
+  return (
+    <li>
+      <button className="row menu-row" onClick={onClick}>
+        <span className={`menu-icon ${tone}`}>{icon}</span>
+        <span className="row-main">
+          <div className="row-title">{title}</div>
+        </span>
+        <span className="row-value num">{value}</span>
+        <span className="chev">
+          <ChevronRight />
+        </span>
+      </button>
+    </li>
+  )
+}
 
 export function StartPage({
   onAdd,
-  onEdit,
   onOpenBudgets,
+  onNavigate,
 }: {
   onAdd: () => void
-  onEdit: (t: Transaction) => void
   onOpenBudgets: () => void
+  onNavigate: (view: StartView) => void
 }) {
   const { data } = useFinance()
-  const balance = currentBalance(data)
-  const alerts = budgetAlerts(data, todayISO())
-  const due = upcoming(data, todayISO())
-  const recent = [...data.transactions].sort(compareTransactionsDesc).slice(0, 8)
+  const today = todayISO()
+  const balance = accountBalance(data, 'konto')
+  const cash = accountBalance(data, 'bargeld')
+  const alerts = budgetAlerts(data, today)
+  const due = upcoming(data, today, 7, { excludeCategoryIds: HIDDEN_FROM_UPCOMING })
+  const contracts = monthlyEquivalent(data.recurring, today)
 
   return (
     <>
@@ -34,6 +70,9 @@ export function StartPage({
           data-testid="balance"
         >
           {formatCents(balance)}
+        </div>
+        <div className="balance-sub num" data-testid="balance-sub">
+          Bargeld {formatCents(cash)} · Gesamt {formatCents(totalBalance(data))}
         </div>
       </div>
 
@@ -83,16 +122,29 @@ export function StartPage({
         </>
       )}
 
-      <div className="section-title">Letzte Buchungen</div>
-      {recent.length === 0 ? (
-        <div className="card empty">
-          Noch keine Buchungen.
-          <br />
-          Tippe auf „+“, um die erste zu erfassen.
-        </div>
-      ) : (
-        <TransactionList transactions={recent} categories={data.categories} onSelect={onEdit} />
-      )}
+      <ul className="list card menu-list">
+        <MenuRow
+          icon={<ListIcon />}
+          tone="blue"
+          title="Alle Buchungen"
+          value={String(data.transactions.length)}
+          onClick={() => onNavigate('bookings')}
+        />
+        <MenuRow
+          icon={<CashIcon />}
+          tone="green"
+          title="Bargeld"
+          value={formatCents(cash)}
+          onClick={() => onNavigate('cash')}
+        />
+        <MenuRow
+          icon={<ContractIcon />}
+          tone="orange"
+          title="Verträge"
+          value={contracts.activeCount === 0 ? 'Keine' : `${contracts.activeCount} · ${formatCents(contracts.monthlyCents)}/Monat`}
+          onClick={() => onNavigate('contracts')}
+        />
+      </ul>
       <Fab onClick={onAdd} />
     </>
   )

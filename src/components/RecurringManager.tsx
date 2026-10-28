@@ -21,12 +21,11 @@ export function RecurringManager() {
 
   return (
     <>
-      <div className="section-title">Wiederkehrende Buchungen</div>
       <ul className="list card">
         {data.recurring.length === 0 && (
           <li>
             <div className="empty">
-              Noch keine wiederkehrenden Buchungen.
+              Noch keine Verträge.
               <br />
               Miete, Abos oder Gehalt werden dann automatisch gebucht.
             </div>
@@ -49,7 +48,7 @@ export function RecurringManager() {
         ))}
         <li>
           <button className="row row-add" onClick={() => setForm({})}>
-            Wiederkehrende Buchung hinzufügen
+            Vertrag hinzufügen
           </button>
         </li>
       </ul>

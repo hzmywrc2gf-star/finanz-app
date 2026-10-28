@@ -100,7 +100,7 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
   }
 
   return (
-    <Sheet title={rule ? 'Wiederkehrende Buchung' : 'Neue wiederkehrende Buchung'} onClose={onClose}>
+    <Sheet title={rule ? 'Vertrag' : 'Neuer Vertrag'} onClose={onClose}>
       <form onSubmit={submit} noValidate>
         <SegmentedControl<Kind>
           label="Art der Buchung"
@@ -201,7 +201,7 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
       </form>
       {confirmDelete && rule && (
         <ConfirmDialog
-          title="Wiederkehrende Buchung löschen?"
+          title="Vertrag löschen?"
           message="Es werden keine weiteren Termine gebucht. Bereits gebuchte Einträge bleiben erhalten."
           confirmLabel="Löschen"
           danger

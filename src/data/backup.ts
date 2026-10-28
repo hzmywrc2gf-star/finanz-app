@@ -1,4 +1,4 @@
-import type { AppData, Category, Interval, Kind, RecurringRule, Transaction } from '../domain/types'
+import type { Account, AppData, Category, Interval, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
 import { isValidISODate } from '../domain/dates'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { migrate } from './migrate'
@@ -16,20 +16,29 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 
 const isKind = (v: unknown): v is Kind => v === 'income' || v === 'expense'
 
+const isAccount = (v: unknown): v is Account => v === 'konto' || v === 'bargeld'
+
+const isDirection = (v: unknown): v is TransferDirection => v === 'withdrawal' || v === 'deposit'
+
 const isInterval = (v: unknown): v is Interval => v === 'monthly' || v === 'quarterly' || v === 'yearly'
 
-/** Strictly validates a parsed object of the current version (3); also used for stored data. Throws German Error. */
+/** Strictly validates a parsed object of the current version (4); also used for stored data. Throws German Error. */
 export function validateAppData(raw: unknown): AppData {
   if (!isObj(raw)) return fail('Kein gültiges Objekt.')
-  if (raw.version !== 3) return fail('Unbekannte Version.')
+  if (raw.version !== 4) return fail('Unbekannte Version.')
   if (!isObj(raw.settings)) return fail('Einstellungen fehlen.')
   const start = raw.settings.startBalanceCents
   if (typeof start !== 'number' || !Number.isSafeInteger(start)) {
     return fail('Startguthaben ist keine ganze Zahl (Cent).')
   }
+  const startCash = raw.settings.startCashCents
+  if (typeof startCash !== 'number' || !Number.isSafeInteger(startCash)) {
+    return fail('Startbestand Bargeld ist keine ganze Zahl (Cent).')
+  }
   if (!Array.isArray(raw.categories)) return fail('Kategorien fehlen.')
   if (!Array.isArray(raw.transactions)) return fail('Buchungen fehlen.')
   if (!Array.isArray(raw.recurring)) return fail('Wiederkehrende Buchungen fehlen.')
+  if (!Array.isArray(raw.transfers)) return fail('Umbuchungen fehlen.')
 
   const categories: Category[] = []
   const catIds = new Map<string, Category>()
@@ -74,6 +83,7 @@ export function validateAppData(raw: unknown): AppData {
     if (!cat) return fail('Eine Buchung verweist auf eine unbekannte Kategorie.')
     if (cat.kind !== t.kind) return fail('Art von Buchung und Kategorie stimmen nicht überein.')
     if (t.note !== undefined && typeof t.note !== 'string') return fail('Eine Notiz ist ungültig.')
+    if (!isAccount(t.account)) return fail('Eine Buchung hat ein ungültiges Konto.')
     if (typeof t.createdAt !== 'number' || !Number.isFinite(t.createdAt)) {
       return fail('Ein Erstellungszeitpunkt ist ungültig.')
     }
@@ -83,6 +93,7 @@ export function validateAppData(raw: unknown): AppData {
       amountCents: t.amountCents,
       date: t.date,
       categoryId: t.categoryId,
+      account: t.account,
       createdAt: t.createdAt,
     }
     if (t.note) tx.note = t.note
@@ -137,7 +148,41 @@ export function validateAppData(raw: unknown): AppData {
     recurring.push(rule)
   }
 
-  return { version: 3, settings: { startBalanceCents: start }, categories, transactions, recurring }
+  const transfers: Transfer[] = []
+  const transferIds = new Set<string>()
+  for (const tr of raw.transfers as unknown[]) {
+    if (!isObj(tr)) return fail('Eine Umbuchung ist ungültig.')
+    if (typeof tr.id !== 'string' || !tr.id) return fail('Eine Umbuchung hat keine ID.')
+    if (transferIds.has(tr.id)) return fail('Doppelte Umbuchungs-ID.')
+    transferIds.add(tr.id)
+    if (!isDirection(tr.direction)) return fail('Eine Umbuchung hat eine ungültige Richtung.')
+    if (typeof tr.amountCents !== 'number' || !Number.isSafeInteger(tr.amountCents) || tr.amountCents <= 0) {
+      return fail('Ein Betrag bei Umbuchungen ist keine positive ganze Zahl (Cent).')
+    }
+    if (typeof tr.date !== 'string' || !isValidISODate(tr.date)) return fail('Ein Datum bei Umbuchungen ist ungültig.')
+    if (tr.note !== undefined && typeof tr.note !== 'string') return fail('Eine Notiz bei Umbuchungen ist ungültig.')
+    if (typeof tr.createdAt !== 'number' || !Number.isFinite(tr.createdAt)) {
+      return fail('Ein Erstellungszeitpunkt bei Umbuchungen ist ungültig.')
+    }
+    const transfer: Transfer = {
+      id: tr.id,
+      direction: tr.direction,
+      amountCents: tr.amountCents,
+      date: tr.date,
+      createdAt: tr.createdAt,
+    }
+    if (tr.note) transfer.note = tr.note
+    transfers.push(transfer)
+  }
+
+  return {
+    version: 4,
+    settings: { startBalanceCents: start, startCashCents: startCash },
+    categories,
+    transactions,
+    recurring,
+    transfers,
+  }
 }
 
 export function parseBackup(text: string): AppData {

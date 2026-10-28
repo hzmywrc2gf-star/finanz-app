@@ -9,6 +9,9 @@ export interface Category {
   monthlyBudgetCents?: number
 }
 
+/** Where the money lives: bank account or cash. */
+export type Account = 'konto' | 'bargeld'
+
 export interface Transaction {
   id: string
   kind: Kind
@@ -18,6 +21,8 @@ export interface Transaction {
   date: string
   categoryId: string
   note?: string
+  /** Account the booking belongs to (recurring bookings always use 'konto'). */
+  account: Account
   createdAt: number
   /** Set on bookings generated from a recurring rule (the rule may be deleted later). */
   recurringId?: string
@@ -43,14 +48,32 @@ export interface RecurringRule {
   bookedThrough: string
 }
 
+/** withdrawal = Abhebung (Konto → Bargeld), deposit = Einzahlung (Bargeld → Konto). */
+export type TransferDirection = 'withdrawal' | 'deposit'
+
+/** Moves money between the accounts; neither income nor expense. */
+export interface Transfer {
+  id: string
+  direction: TransferDirection
+  /** Positive integer amount in cents. */
+  amountCents: number
+  /** Local calendar date, 'YYYY-MM-DD'. */
+  date: string
+  note?: string
+  createdAt: number
+}
+
 export interface Settings {
   startBalanceCents: number
+  /** Cash on hand at the start, integer cents. */
+  startCashCents: number
 }
 
 export interface AppData {
-  version: 3
+  version: 4
   settings: Settings
   categories: Category[]
   transactions: Transaction[]
   recurring: RecurringRule[]
+  transfers: Transfer[]
 }

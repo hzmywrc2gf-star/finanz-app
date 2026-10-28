@@ -1,14 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultData } from '../domain/defaults'
-import { addRecurring, addTransaction, setCategoryBudget } from '../state/actions'
+import { addRecurring, addTransaction, addTransfer, setCategoryBudget, setStartCash } from '../state/actions'
 import { exportJSON, parseBackup } from './backup'
 
 const sample = () =>
   addRecurring(
-    addTransaction(
-      createDefaultData(),
-      { kind: 'income', amountCents: 250000, date: '2026-10-01', categoryId: 'income-gehalt', note: 'Okt' },
-      { id: 'a', createdAt: 1 },
+    addTransfer(
+      setStartCash(
+        addTransaction(
+          addTransaction(
+            createDefaultData(),
+            { kind: 'income', amountCents: 250000, date: '2026-10-01', categoryId: 'income-gehalt', account: 'konto', note: 'Okt' },
+            { id: 'a', createdAt: 1 },
+          ),
+          { kind: 'expense', amountCents: 4550, date: '2026-10-02', categoryId: 'expense-lebensmittel', account: 'bargeld' },
+          { id: 'b', createdAt: 2 },
+        ),
+        2000,
+      ),
+      { direction: 'withdrawal', amountCents: 20000, date: '2026-10-03', note: 'Automat' },
+      { id: 't1', createdAt: 3 },
     ),
     {
       kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: 'Miete', interval: 'monthly',
@@ -31,7 +42,7 @@ describe('backup', () => {
   it('rejects invalid input with German errors', () => {
     expect(() => parseBackup('nope')).toThrow(/JSON/)
     expect(() => parseBackup('[]')).toThrow(/Ungültige Sicherungsdatei/)
-    expect(() => parseBackup(mutate((d) => (d.version = 4)))).toThrow(/Version/)
+    expect(() => parseBackup(mutate((d) => (d.version = 5)))).toThrow(/Version/)
     expect(() => parseBackup(mutate((d) => (d.transactions = {})))).toThrow(/Buchungen/)
     expect(() => parseBackup(mutate((d) => (d.categories = null)))).toThrow(/Kategorien/)
     expect(() => parseBackup(mutate((d) => (d.settings.startBalanceCents = 1.5)))).toThrow()
@@ -44,13 +55,42 @@ describe('backup', () => {
     expect(() => parseBackup(mutate((d) => (d.transactions[0].kind = 'x')))).toThrow(/Art/)
     expect(() => parseBackup(mutate((d) => (d.categories = d.categories.filter((c: any) => c.id !== 'expense-sonstiges'))))).toThrow(/Sonstiges/)
   })
-  it('exports version 3', () => {
-    expect(JSON.parse(exportJSON(sample())).version).toBe(3)
+  it('exports version 4 with accounts, start cash and transfers', () => {
+    const out = JSON.parse(exportJSON(sample()))
+    expect(out.version).toBe(4)
+    expect(out.settings.startCashCents).toBe(2000)
+    expect(out.transactions.map((t: any) => t.account)).toEqual(['konto', 'bargeld'])
+    expect(out.transfers).toEqual([{ id: 't1', direction: 'withdrawal', amountCents: 20000, date: '2026-10-03', note: 'Automat', createdAt: 3 }])
+  })
+  it('validates the account, start cash and transfers strictly', () => {
+    const bad = (fn: (d: any) => void, re: RegExp) => expect(() => parseBackup(mutate(fn))).toThrow(re)
+    bad((d) => (d.transactions[0].account = 'tresor'), /Konto/)
+    bad((d) => delete d.transactions[0].account, /Konto/)
+    bad((d) => (d.settings.startCashCents = 1.5), /Bargeld/)
+    bad((d) => delete d.settings.startCashCents, /Bargeld/)
+    bad((d) => (d.transfers = null), /Umbuchungen/)
+    bad((d) => (d.transfers[0].direction = 'sideways'), /Richtung/)
+    bad((d) => (d.transfers[0].amountCents = 0), /Betrag/)
+    bad((d) => (d.transfers[0].amountCents = 2.5), /Betrag/)
+    bad((d) => (d.transfers[0].amountCents = '200'), /Betrag/)
+    bad((d) => (d.transfers[0].date = '03.10.2026'), /Datum/)
+    bad((d) => (d.transfers[0].date = '2026-02-30'), /Datum/)
+    bad((d) => (d.transfers[0].note = 5), /Notiz/)
+    bad((d) => (d.transfers[0].createdAt = 'x'), /Erstellungszeitpunkt/)
+    bad((d) => (d.transfers[0].id = ''), /ID/)
+    bad((d) => d.transfers.push({ ...d.transfers[0] }), /Doppelte/)
+    bad((d) => (d.transfers = [5]), /Umbuchung/)
   })
   it('migrates a v1 backup to v2 with empty rules', () => {
     const v1 = { version: 1, settings: { startBalanceCents: 5 }, categories: createDefaultData().categories, transactions: [] }
     const out = parseBackup(JSON.stringify(v1))
-    expect(out).toEqual({ ...v1, version: 3, recurring: [] })
+    expect(out).toEqual({
+      ...v1,
+      version: 4,
+      settings: { startBalanceCents: 5, startCashCents: 0 },
+      recurring: [],
+      transfers: [],
+    })
   })
   it('validates recurring rules strictly', () => {
     const bad = (fn: (r: any) => void, re: RegExp) =>
@@ -77,10 +117,29 @@ describe('backup', () => {
     expect(parseBackup(JSON.stringify(d)).transactions[0].recurringId).toBe('gone')
     expect(() => parseBackup(mutate((x) => (x.transactions[0].recurringId = 5)))).toThrow(/Regel/)
   })
-  it('migrates a v2 backup to v3 unchanged apart from the version', () => {
+  it('migrates a v2 backup up to v4 (everything on the Konto)', () => {
     const v2 = { ...JSON.parse(exportJSON(sample())), version: 2 }
     const out = parseBackup(JSON.stringify(v2))
-    expect(out).toEqual({ ...v2, version: 3 })
+    expect(out.version).toBe(4)
+    expect(out.transactions.every((t) => t.account === 'konto')).toBe(true)
+    expect(out.transfers).toEqual([])
+    expect(out.settings.startCashCents).toBe(0)
+  })
+  it('migrates a v3 backup to v4: account konto, no transfers, start cash 0', () => {
+    const v3 = JSON.parse(exportJSON(sample()))
+    v3.version = 3
+    delete v3.transfers
+    delete v3.settings.startCashCents
+    for (const t of v3.transactions) delete t.account
+    const out = parseBackup(JSON.stringify(v3))
+    expect(out.version).toBe(4)
+    expect(out.settings).toEqual({ startBalanceCents: 0, startCashCents: 0 })
+    expect(out.transfers).toEqual([])
+    expect(out.transactions.map((t) => [t.id, t.account, t.amountCents])).toEqual([['a', 'konto', 250000], ['b', 'konto', 4550]])
+    expect(out.recurring).toEqual(JSON.parse(exportJSON(sample())).recurring)
+  })
+  it('migrate leaves broken v3 shapes for the validation to reject', () => {
+    expect(() => parseBackup(JSON.stringify({ version: 3, settings: 5, transactions: 'x' }))).toThrow(/Einstellungen/)
   })
   it('roundtrips and validates category budgets', () => {
     const withBudget = setCategoryBudget(sample(), 'expense-lebensmittel', 40000)

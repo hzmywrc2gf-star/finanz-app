@@ -1,11 +1,24 @@
-import type { AppData, Category, Transaction } from './types'
+import type { Account, AppData, Category, Transaction } from './types'
 
-export function currentBalance(data: AppData): number {
-  let sum = data.settings.startBalanceCents
+/**
+ * Balance of one account. Transfers move money between the accounts:
+ * a withdrawal lowers the Konto and raises the cash, a deposit does the opposite.
+ */
+export function accountBalance(data: AppData, account: Account): number {
+  let sum = account === 'konto' ? data.settings.startBalanceCents : data.settings.startCashCents
   for (const t of data.transactions) {
-    sum += t.kind === 'income' ? t.amountCents : -t.amountCents
+    if (t.account === account) sum += t.kind === 'income' ? t.amountCents : -t.amountCents
+  }
+  for (const tr of data.transfers) {
+    const toCash = tr.direction === 'withdrawal'
+    sum += toCash === (account === 'bargeld') ? tr.amountCents : -tr.amountCents
   }
   return sum
+}
+
+/** Konto + Bargeld. */
+export function totalBalance(data: AppData): number {
+  return accountBalance(data, 'konto') + accountBalance(data, 'bargeld')
 }
 
 /** Newest first: date desc, then createdAt desc. */

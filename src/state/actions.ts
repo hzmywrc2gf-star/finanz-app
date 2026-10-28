@@ -1,4 +1,4 @@
-import type { AppData, Category, Interval, Kind, RecurringRule, Transaction } from '../domain/types'
+import type { Account, AppData, Category, Interval, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { addDays, isValidISODate } from '../domain/dates'
 import { bookDue } from '../domain/recurring'
@@ -8,6 +8,7 @@ export interface TransactionInput {
   amountCents: number
   date: string
   categoryId: string
+  account: Account
   note?: string
 }
 
@@ -29,6 +30,7 @@ function validateTransactionInput(data: AppData, input: TransactionInput): void 
   const cat = data.categories.find((c) => c.id === input.categoryId)
   if (!cat) throw new Error('Die Kategorie existiert nicht.')
   if (cat.kind !== input.kind) throw new Error('Die Kategorie passt nicht zur Art der Buchung.')
+  if (input.account !== 'konto' && input.account !== 'bargeld') throw new Error('Ungültiges Konto.')
 }
 
 export function addTransaction(
@@ -43,6 +45,7 @@ export function addTransaction(
     amountCents: input.amountCents,
     date: input.date,
     categoryId: input.categoryId,
+    account: input.account,
     createdAt: meta.createdAt,
   }
   const note = cleanNote(input.note)
@@ -60,6 +63,7 @@ export function updateTransaction(data: AppData, id: string, input: TransactionI
     amountCents: input.amountCents,
     date: input.date,
     categoryId: input.categoryId,
+    account: input.account,
     createdAt: existing.createdAt,
   }
   if (existing.recurringId) updated.recurringId = existing.recurringId
@@ -75,6 +79,64 @@ export function deleteTransaction(data: AppData, id: string): AppData {
 export function setStartBalance(data: AppData, cents: number): AppData {
   if (!Number.isSafeInteger(cents)) throw new Error('Ungültiger Betrag.')
   return { ...data, settings: { ...data.settings, startBalanceCents: cents } }
+}
+
+export function setStartCash(data: AppData, cents: number): AppData {
+  if (!Number.isSafeInteger(cents)) throw new Error('Ungültiger Betrag.')
+  return { ...data, settings: { ...data.settings, startCashCents: cents } }
+}
+
+export interface TransferInput {
+  direction: TransferDirection
+  amountCents: number
+  date: string
+  note?: string
+}
+
+function validateTransferInput(input: TransferInput): void {
+  if (input.direction !== 'withdrawal' && input.direction !== 'deposit') throw new Error('Ungültige Richtung.')
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
+    throw new Error('Der Betrag muss größer als 0 sein.')
+  }
+  if (!isValidISODate(input.date)) throw new Error('Ungültiges Datum.')
+}
+
+export function addTransfer(
+  data: AppData,
+  input: TransferInput,
+  meta: TransactionMeta = { id: crypto.randomUUID(), createdAt: Date.now() },
+): AppData {
+  validateTransferInput(input)
+  const tr: Transfer = {
+    id: meta.id,
+    direction: input.direction,
+    amountCents: input.amountCents,
+    date: input.date,
+    createdAt: meta.createdAt,
+  }
+  const note = cleanNote(input.note)
+  if (note) tr.note = note
+  return { ...data, transfers: [...data.transfers, tr] }
+}
+
+export function updateTransfer(data: AppData, id: string, input: TransferInput): AppData {
+  validateTransferInput(input)
+  const existing = data.transfers.find((t) => t.id === id)
+  if (!existing) throw new Error('Die Umbuchung wurde nicht gefunden.')
+  const updated: Transfer = {
+    id,
+    direction: input.direction,
+    amountCents: input.amountCents,
+    date: input.date,
+    createdAt: existing.createdAt,
+  }
+  const note = cleanNote(input.note)
+  if (note) updated.note = note
+  return { ...data, transfers: data.transfers.map((t) => (t.id === id ? updated : t)) }
+}
+
+export function deleteTransfer(data: AppData, id: string): AppData {
+  return { ...data, transfers: data.transfers.filter((t) => t.id !== id) }
 }
 
 function validateCategoryName(
