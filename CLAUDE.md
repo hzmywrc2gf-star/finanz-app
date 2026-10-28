@@ -68,6 +68,7 @@ React 19 + Vite + TypeScript, vite-plugin-pwa (autoUpdate, precache), Vitest. Ke
 
 ## ECC-Bausteine (`.claude/agents`, `.claude/skills`)
 - Ausgewählte Agenten/Skills aus everything-claude-code (MIT), Details und Lizenz in `.claude/ECC-NOTICE.md`.
+- Design-Prüfung: `.claude/skills/finanzklar-design-review` (aus taste-skill `tells.md`/`critique.md` angepasst, Originale + MIT-Hinweis in `vendor/`): Gegencheck auf KI-Design-Fehler mit Finanzklar-Ausnahmen (iOS-Symbol-Kacheln, Großbuchstaben-Abschnittstitel, gezielte Verläufe, dezentes Nachschwingen erlaubt) und Kritik-Runden an Screenshots (375/390/430 px, Hell+Dunkel, Raster Bedienbarkeit 40 / Gestaltung 35 / Bewegung 15 / Inhalt 10, max. 3 Runden). Nur bei Design-Arbeit, Pflicht beim Design-Ziel „Erlebnis beim Scrollen“. Den restlichen taste-skill bewusst nicht übernommen (Websites, verbietet Verläufe/Nachschwingen/iOS-Kacheln).
 - Regel (Nutzerwunsch): nur einsetzen, was für die aktuelle Aufgabe Sinn ergibt – nie routinemäßig alle. Kleine Änderungen ohne ECC-Agent; `react-reviewer`/`typescript-reviewer`/`code-reviewer` nur vor dem Merge bei nennenswertem Code; `security-reviewer` nur bei Verschlüsselung/Sperre/Backup/Import; `performance-optimizer` nur bei messbarem Ruckeln (`e2e/perf.mjs`); `a11y-architect` nur bei UI-Umbauten; `planner` für größere Schritte.
 
 ## Projektgraph (Graphify)
