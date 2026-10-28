@@ -5,18 +5,21 @@
   --text: #1e293b;
   --text-2: #5b6b80;
   --sep: rgba(30, 41, 59, 0.14);
-  /* Links und Textknöpfe; Hauptknöpfe nutzen --btn-bg (Schiefer), Grün steht für Wachstum */
-  --accent: #047857;
+  /* Rot/Grün nur für Umsätze (--income/--expense). Links/Textknöpfe neutral (--accent), Hauptknöpfe --btn-bg,
+     Warnungen (Löschen, Fehler, über Budget) orange (--danger/--over), fast aufgebraucht bernstein (--warn). */
+  --accent: #334155;
   --income: #059669;
   --income-text: #047857;
   --expense: #dc2626;
   --expense-text: #dc2626;
-  --ok: #059669;
-  --ok-text: #047857;
+  --ok: #475569;
+  --ok-text: #334155;
   --warn: #d97706;
   --warn-text: #b45309;
-  --over: var(--expense);
-  --over-text: var(--expense-text);
+  --over: #c2410c;
+  --over-text: #c2410c;
+  --danger: #c2410c;
+  --danger-text: #c2410c;
   --tabbar-bg: rgba(255, 255, 255, 0.86);
   --backdrop: rgba(15, 23, 42, 0.4);
   --seg-bg: rgba(100, 116, 139, 0.14);
@@ -25,18 +28,17 @@
   --btn-text: #ffffff;
   --tab-active: #1e293b;
   --tab-inactive: #64748b;
-  --switch-on: #059669;
+  --switch-on: #1e293b;
   --toast-bg: #1e293b;
   --toast-text: #ffffff;
-  --toast-action: #34d399;
   --tile-1: #1e293b;
   --tile-1-fg: #ffffff;
-  --tile-2: #059669;
+  --tile-2: #475569;
   --tile-3: #64748b;
   --tile-ring: transparent;
   --radius: 15px;
   --tabbar-h: 56px;
-  --delete-bg: #dc2626;
+  --delete-bg: var(--danger);
   color-scheme: light dark;
 }
 
@@ -57,15 +59,21 @@
     --text: #f1f5f9;
     --text-2: #94a3b8;
     --sep: rgba(148, 163, 184, 0.22);
-    --accent: #34d399;
+    --accent: #e2e8f0;
     --income: #34d399;
     --income-text: #34d399;
     --expense: #f87171;
     --expense-text: #f87171;
-    --ok: #34d399;
-    --ok-text: #34d399;
+    --ok: #94a3b8;
+    --ok-text: #cbd5e1;
     --warn: #fbbf24;
     --warn-text: #fbbf24;
+    --over: #fb923c;
+    --over-text: #fb923c;
+    --danger: #fb923c;
+    --danger-text: #fb923c;
+    --delete-bg: #c2410c;
+    --switch-on: #64748b;
     --tabbar-bg: rgba(30, 41, 59, 0.86);
     --backdrop: rgba(0, 0, 0, 0.6);
     --seg-bg: rgba(148, 163, 184, 0.2);
@@ -90,15 +98,21 @@
   --text: #f1f5f9;
   --text-2: #94a3b8;
   --sep: rgba(148, 163, 184, 0.22);
-  --accent: #34d399;
+  --accent: #e2e8f0;
   --income: #34d399;
   --income-text: #34d399;
   --expense: #f87171;
   --expense-text: #f87171;
-  --ok: #34d399;
-  --ok-text: #34d399;
+  --ok: #94a3b8;
+  --ok-text: #cbd5e1;
   --warn: #fbbf24;
   --warn-text: #fbbf24;
+  --over: #fb923c;
+  --over-text: #fb923c;
+  --danger: #fb923c;
+  --danger-text: #fb923c;
+  --delete-bg: #c2410c;
+  --switch-on: #64748b;
   --tabbar-bg: rgba(30, 41, 59, 0.86);
   --backdrop: rgba(0, 0, 0, 0.6);
   --seg-bg: rgba(148, 163, 184, 0.2);
@@ -303,7 +317,9 @@ button.row:is(:active, [data-pressed]),
 .toast button {
   min-height: 44px;
   padding: 0 14px;
-  color: var(--toast-action);
+  color: var(--toast-text);
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
   font-weight: 600;
   font-size: 15px;
 }
@@ -739,7 +755,7 @@ button.row:is(:active, [data-pressed]) {
   font-weight: 600;
 }
 .dialog .actions button.danger {
-  color: var(--expense-text);
+  color: var(--danger-text);
 }
 
 .dialog .actions.stacked {
@@ -846,12 +862,12 @@ button.row:is(:active, [data-pressed]) {
   color: var(--text-2);
 }
 .error {
-  color: var(--expense-text);
+  color: var(--danger-text);
   font-size: 14px;
   margin: 8px 16px 0;
 }
 .success {
-  color: var(--income-text);
+  color: var(--text);
   font-size: 14px;
   margin: 8px 16px 0;
 }
@@ -873,7 +889,7 @@ button.row:is(:active, [data-pressed]) {
 }
 .btn.danger {
   background: var(--card);
-  color: var(--expense-text);
+  color: var(--danger-text);
   margin-top: 12px;
 }
 .btn-row {
@@ -896,7 +912,7 @@ button.row:is(:active, [data-pressed]) {
   font-size: 15px;
 }
 .cat-actions button.danger {
-  color: var(--expense-text);
+  color: var(--danger-text);
 }
 .inline-form {
   display: flex;
@@ -1456,7 +1472,7 @@ button.row:is(:active, [data-pressed]) {
 .plain-export {
   display: block;
   margin: 8px auto 0;
-  color: var(--expense-text);
+  color: var(--danger-text);
   font-size: 15px;
 }
 .btn:disabled {
@@ -1555,7 +1571,7 @@ button.row:is(:active, [data-pressed]) {
   font-weight: 600;
 }
 .strength[data-level='weak'] {
-  color: var(--expense-text);
+  color: var(--danger-text);
 }
 .strength[data-level='medium'] {
   color: var(--warn-text);
@@ -1603,7 +1619,7 @@ button.row:is(:active, [data-pressed]) {
 }
 .row-action.danger,
 .danger-text {
-  color: var(--expense-text);
+  color: var(--danger-text);
 }
 /* Zeilen der App-Sperre: lange Titel umbrechen statt abzuschneiden, Titel + Untertitel untereinander */
 .lock-rows .row-main {
