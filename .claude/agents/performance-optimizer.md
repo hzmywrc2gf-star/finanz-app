@@ -1,6 +1,6 @@
 ---
 name: performance-optimizer
-description: Performance analysis and optimization specialist. Use PROACTIVELY for identifying bottlenecks, optimizing slow code, reducing bundle sizes, and improving runtime performance. Profiling, memory leaks, render optimization, and algorithmic improvements.
+description: Performance analysis and optimization specialist. Profiling, memory leaks, render optimization, and algorithmic improvements. Finanzklar: only use when the current task clearly needs it (see .claude/ECC-NOTICE.md); never routinely.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 ---

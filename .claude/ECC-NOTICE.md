@@ -1,6 +1,6 @@
 # ECC-Bausteine (Everything Claude Code)
 
-Ausgewählte Agenten und Skills aus [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code), Stand `25278e7`, unverändert übernommen. Lizenz: MIT, Copyright (c) 2026 Affaan Mustafa (Lizenztext unten).
+Ausgewählte Agenten und Skills aus [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code), Stand `25278e7`, übernommen; einzige Änderung: in den Agenten-Beschreibungen (`description`) wurden „PROACTIVELY“/„MUST BE USED“ entfernt und ein Hinweis auf gezielten Einsatz ergänzt. Lizenz: MIT, Copyright (c) 2026 Affaan Mustafa (Lizenztext unten).
 
 Vor der Übernahme gelesen und geprüft: keine Hooks, keine Skripte, keine Netzwerkzugriffe; nur Markdown-Anweisungen.
 
@@ -17,7 +17,7 @@ Vor der Übernahme gelesen und geprüft: keine Hooks, keine Skripte, keine Netzw
 
 Bewusst nicht übernommen: Hooks (würden automatisch Programme ausführen), `e2e-runner` (setzt auf ein anderes Testwerkzeug als unser Playwright-`e2e/smoke.mjs`), sprach-/framework-fremde Teile.
 
-Die Agenten sind teils als „PROACTIVELY / MUST BE USED“ beschrieben. Im Projekt gilt trotzdem: gezielt einsetzen (Review-Schritt), um das Nutzungslimit zu schonen.
+**Regel (Nutzerwunsch):** Nur nutzen, was für die aktuelle Aufgabe Sinn ergibt – nicht alle Agenten/Skills bei jeder Änderung. Kleine Änderungen (Texte, Farben, Abstände) brauchen keinen ECC-Agenten. Reviewer vor dem Merge nur bei nennenswertem Code; `security-reviewer` nur bei Verschlüsselung/Sperre/Backup/Import; `performance-optimizer` nur bei messbarem Ruckeln; `a11y-architect` nur bei UI-Umbauten; Skills nur als Nachschlagewerk zum jeweiligen Thema.
 
 ## Lizenz
 ```

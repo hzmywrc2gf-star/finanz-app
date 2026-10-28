@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Expert planning specialist for complex features and refactoring. Use PROACTIVELY when users request feature implementation, architectural changes, or complex refactoring. Automatically activated for planning tasks.
+description: Expert planning specialist for complex features and refactoring. Automatically activated for planning tasks. Finanzklar: only use when the current task clearly needs it (see .claude/ECC-NOTICE.md); never routinely.
 tools: Read, Grep, Glob
 model: opus
 ---

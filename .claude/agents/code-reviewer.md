@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Expert code review specialist. Proactively reviews code for quality, security, and maintainability. Use immediately after writing or modifying code. MUST BE USED for all code changes.
+description: Expert code review specialist. reviews code for quality, security, and maintainability. Finanzklar: only use when the current task clearly needs it (see .claude/ECC-NOTICE.md); never routinely.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
