@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Account, Kind, Transaction } from '../domain/types'
+import type { TransactionInput } from '../state/actions'
 import { todayISO } from '../domain/dates'
 import { centsToInputString, parseEuroInput } from '../domain/money'
 import { useFinance } from '../state/FinanceContext'
@@ -15,11 +16,20 @@ export interface AddPreset {
   defaultAccount?: Account
 }
 
+/** For booking a contract's occurrence: prefilled values, own title/button and own save action (always Konto). */
+export interface ContractBooking {
+  title: string
+  submitLabel: string
+  initial: { kind: Kind; amountCents: number; date: string; categoryId: string; note?: string }
+  onSubmit: (input: TransactionInput) => void
+}
+
 export function TransactionForm({
   transaction,
   defaultDate,
   defaultKind,
   defaultAccount,
+  booking,
   onClose,
 }: {
   transaction?: Transaction
@@ -27,15 +37,18 @@ export function TransactionForm({
   defaultKind?: Kind
   /** For new bookings: where the opener lives (cash page → 'bargeld'). Editing keeps the booking's account. */
   defaultAccount?: Account
+  /** Confirm/"Jetzt buchen" mode: replaces the add/update call and hides the account switch. */
+  booking?: ContractBooking
   onClose: () => void
 }) {
   const { data, addTransaction, updateTransaction, deleteTransaction } = useFinance()
-  const [kind, setKind] = useState<Kind>(transaction?.kind ?? defaultKind ?? 'expense')
+  const start = booking?.initial ?? transaction
+  const [kind, setKind] = useState<Kind>(start?.kind ?? defaultKind ?? 'expense')
   const [account, setAccount] = useState<Account>(transaction?.account ?? defaultAccount ?? 'konto')
-  const [amount, setAmount] = useState(transaction ? centsToInputString(transaction.amountCents) : '')
-  const [date, setDate] = useState(transaction?.date ?? defaultDate ?? todayISO())
-  const [categoryId, setCategoryId] = useState(transaction?.categoryId ?? '')
-  const [note, setNote] = useState(transaction?.note ?? '')
+  const [amount, setAmount] = useState(start ? centsToInputString(start.amountCents) : '')
+  const [date, setDate] = useState(start?.date ?? defaultDate ?? todayISO())
+  const [categoryId, setCategoryId] = useState(start?.categoryId ?? '')
+  const [note, setNote] = useState(start?.note ?? '')
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -65,7 +78,8 @@ export function TransactionForm({
     }
     const input = { kind, amountCents: cents, date, categoryId: effectiveCategory, account, note }
     try {
-      if (transaction) updateTransaction(transaction.id, input)
+      if (booking) booking.onSubmit(input)
+      else if (transaction) updateTransaction(transaction.id, input)
       else addTransaction(input)
       onClose()
     } catch (err) {
@@ -74,7 +88,7 @@ export function TransactionForm({
   }
 
   return (
-    <Sheet title={transaction ? 'Buchung bearbeiten' : 'Neue Buchung'} onClose={onClose}>
+    <Sheet title={booking?.title ?? (transaction ? 'Buchung bearbeiten' : 'Neue Buchung')} onClose={onClose}>
       <form onSubmit={submit} noValidate>
         <SegmentedControl<Kind>
           label="Art der Buchung"
@@ -85,17 +99,19 @@ export function TransactionForm({
             { value: 'income', label: 'Einnahme' },
           ]}
         />
-        <div style={{ marginTop: 12 }}>
-          <SegmentedControl<Account>
-            label="Konto oder Bargeld"
-            value={account}
-            onChange={setAccount}
-            options={[
-              { value: 'konto', label: 'Konto' },
-              { value: 'bargeld', label: 'Bargeld' },
-            ]}
-          />
-        </div>
+        {!booking && (
+          <div style={{ marginTop: 12 }}>
+            <SegmentedControl<Account>
+              label="Konto oder Bargeld"
+              value={account}
+              onChange={setAccount}
+              options={[
+                { value: 'konto', label: 'Konto' },
+                { value: 'bargeld', label: 'Bargeld' },
+              ]}
+            />
+          </div>
+        )}
         <div className="card" style={{ marginTop: 16 }}>
           <div className="field">
             <label htmlFor="tx-amount">Betrag</label>
@@ -107,7 +123,7 @@ export function TransactionForm({
               placeholder="0,00 €"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              autoFocus={!transaction}
+              autoFocus={!start}
             />
           </div>
           <div className="field">
@@ -141,7 +157,7 @@ export function TransactionForm({
           </div>
         )}
         <button className="btn" type="submit">
-          Sichern
+          {booking?.submitLabel ?? 'Sichern'}
         </button>
         {transaction && (
           <button className="btn danger" type="button" onClick={() => setConfirmDelete(true)}>

@@ -3,15 +3,19 @@ import type { FormEvent } from 'react'
 import type { Interval, Kind, RecurringRule } from '../domain/types'
 import { addDays, formatDateDE, todayISO } from '../domain/dates'
 import { centsToInputString, parseEuroInput } from '../domain/money'
-import { INTERVAL_LABELS, dayOfMonthOf, occurrencesBetween } from '../domain/recurring'
+import { INTERVAL_LABELS, dayOfMonthOf, nextOccurrence, occurrencesBetween } from '../domain/recurring'
 import type { RecurringInput } from '../state/actions'
 import { useFinance } from '../state/FinanceContext'
 import { Sheet } from './Sheet'
 import { SegmentedControl } from './SegmentedControl'
 import { ConfirmDialog } from './ConfirmDialog'
+import { TransactionForm } from './TransactionForm'
+
+/** While the nested "Jetzt buchen" sheet is open, Escape/backdrop must only close that one. */
+const ignoreClose = () => {}
 
 export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose: () => void }) {
-  const { data, addRecurring, updateRecurring, deleteRecurring } = useFinance()
+  const { data, addRecurring, updateRecurring, deleteRecurring, bookNextNow } = useFinance()
   const [kind, setKind] = useState<Kind>(rule?.kind ?? 'expense')
   const [amount, setAmount] = useState(rule ? centsToInputString(rule.amountCents) : '')
   const [categoryId, setCategoryId] = useState(rule?.categoryId ?? '')
@@ -21,14 +25,17 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
   // until the day is edited by hand it follows the start date
   const [day, setDay] = useState<string | null>(rule ? String(rule.dayOfMonth) : null)
   const [end, setEnd] = useState(rule?.endDate ?? '')
+  const [autoBook, setAutoBook] = useState(rule?.autoBook ?? true)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [bookNow, setBookNow] = useState(false)
   const [pastPrompt, setPastPrompt] = useState<{ input: RecurringInput; count: number } | null>(null)
 
   const categories = data.categories.filter((c) => c.kind === kind)
   const effectiveCategory = categories.some((c) => c.id === categoryId)
     ? categoryId
     : (categories.find((c) => !c.builtIn) ?? categories[0])?.id ?? ''
+  const nextDate = rule ? nextOccurrence(rule, rule.bookedThrough) : null
   const dayText = day ?? (start ? String(dayOfMonthOf(start)) : '')
 
   function submit(e: FormEvent) {
@@ -68,6 +75,7 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
       dayOfMonth: dayNum,
       startDate: start,
       endDate: end || undefined,
+      autoBook,
     }
     try {
       if (rule) {
@@ -100,7 +108,7 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
   }
 
   return (
-    <Sheet title={rule ? 'Vertrag' : 'Neuer Vertrag'} onClose={onClose}>
+    <Sheet title={rule ? 'Vertrag' : 'Neuer Vertrag'} onClose={bookNow ? ignoreClose : onClose}>
       <form onSubmit={submit} noValidate>
         <SegmentedControl<Kind>
           label="Art der Buchung"
@@ -185,6 +193,37 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
         </div>
         <div className="footnote">Am 29.–31. wird in kürzeren Monaten am Monatsletzten gebucht.</div>
 
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="field switch-row">
+            <label htmlFor="rc-auto">Automatisch buchen</label>
+            <input
+              id="rc-auto"
+              className="switch"
+              type="checkbox"
+              role="switch"
+              checked={autoBook}
+              onChange={(e) => setAutoBook(e.target.checked)}
+            />
+          </div>
+        </div>
+        <div className="footnote">
+          Aus: Am Fälligkeitstag erscheint auf der Startseite eine Bestätigung, Betrag und Datum lassen sich dann anpassen.
+          {rule && !rule.autoBook && autoBook && ' Offene Termine werden dann automatisch gebucht.'}
+        </div>
+
+        {rule && (
+          <>
+            <div style={{ marginTop: 16 }}>
+              <button type="button" className="btn secondary" disabled={!nextDate} onClick={() => setBookNow(true)}>
+                Jetzt buchen
+              </button>
+            </div>
+            <div className="footnote">
+              {nextDate ? `Erledigt den Termin am ${formatDateDE(nextDate)}.` : 'Der Vertrag ist beendet, es gibt keinen weiteren Termin.'}
+            </div>
+          </>
+        )}
+
         {error && (
           <div className="error" role="alert">
             {error}
@@ -212,11 +251,31 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
           }}
         />
       )}
+      {bookNow && rule && nextDate && (
+        <TransactionForm
+          booking={{
+            title: 'Jetzt buchen',
+            submitLabel: 'Buchen',
+            initial: {
+              kind: rule.kind,
+              amountCents: rule.amountCents,
+              date: todayISO(),
+              categoryId: rule.categoryId,
+              note: rule.note,
+            },
+            onSubmit: (input) => {
+              bookNextNow(rule.id, input)
+              onClose() // the contract sheet closes along with the booking sheet
+            },
+          }}
+          onClose={() => setBookNow(false)}
+        />
+      )}
       {pastPrompt && (
         <ConfirmDialog
-          title="Vergangene Termine nachbuchen?"
-          message={`${pastPrompt.count} ${pastPrompt.count === 1 ? 'Termin seit' : 'Termine seit'} ${formatDateDE(pastPrompt.input.startDate)} ${pastPrompt.count === 1 ? 'liegt' : 'liegen'} in der Vergangenheit.`}
-          confirmLabel="Nachbuchen"
+          title={pastPrompt.input.autoBook ? 'Vergangene Termine nachbuchen?' : 'Vergangene Termine?'}
+          message={`${pastPrompt.count} ${pastPrompt.count === 1 ? 'Termin seit' : 'Termine seit'} ${formatDateDE(pastPrompt.input.startDate)} ${pastPrompt.count === 1 ? 'liegt' : 'liegen'} in der Vergangenheit.${pastPrompt.input.autoBook ? '' : ' Sie lassen sich auf der Startseite einzeln bestätigen.'}`}
+          confirmLabel={pastPrompt.input.autoBook ? 'Nachbuchen' : 'Als offen anzeigen'}
           secondaryLabel="Nur künftige"
           onCancel={() => setPastPrompt(null)}
           onSecondary={() => addWithChoice(false)}

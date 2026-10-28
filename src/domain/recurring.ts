@@ -62,9 +62,10 @@ export function nextOccurrence(rule: RecurringRule, afterExclusive: string): str
 }
 
 /**
- * Creates the transactions of all occurrences that became due and moves bookedThrough forward.
- * Idempotent per day; returns the same object if nothing changed. Deleted bookings are not
- * recreated because bookedThrough only moves forward.
+ * Creates the transactions of all automatic rules' occurrences that became due and moves
+ * bookedThrough forward. Rules with autoBook = false are left alone: their occurrences wait as
+ * pending confirmations. Idempotent per day; returns the same object if nothing changed.
+ * Deleted bookings are not recreated because bookedThrough only moves forward.
  */
 export function bookDue(data: AppData, today: string, now: number = Date.now()): AppData {
   const created: Transaction[] = []
@@ -72,7 +73,7 @@ export function bookDue(data: AppData, today: string, now: number = Date.now()):
   const recurring = data.recurring.map((rule) => {
     // Always advance to today (not to endDate): extending an ended rule later must not
     // book the occurrences in between retroactively. occurrencesBetween respects endDate.
-    if (today <= rule.bookedThrough) return rule
+    if (!rule.autoBook || today <= rule.bookedThrough) return rule
     changed = true
     for (const date of occurrencesBetween(rule, rule.bookedThrough, today)) {
       const t: Transaction = {
@@ -92,6 +93,23 @@ export function bookDue(data: AppData, today: string, now: number = Date.now()):
   })
   if (!changed) return data
   return { ...data, recurring, transactions: [...data.transactions, ...created] }
+}
+
+export interface PendingConfirmation {
+  rule: RecurringRule
+  date: string
+}
+
+/** Occurrences of manual rules in (bookedThrough, today], oldest first, then by title. */
+export function pendingConfirmations(data: AppData, today: string): PendingConfirmation[] {
+  return data.recurring
+    .filter((rule) => !rule.autoBook)
+    .flatMap((rule) => occurrencesBetween(rule, rule.bookedThrough, today).map((date) => ({ rule, date })))
+    .sort(
+      (a, b) =>
+        (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) ||
+        recurringTitle(a.rule, data.categories).localeCompare(recurringTitle(b.rule, data.categories), 'de'),
+    )
 }
 
 export interface UpcomingItem {

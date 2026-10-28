@@ -22,10 +22,10 @@ const isDirection = (v: unknown): v is TransferDirection => v === 'withdrawal' |
 
 const isInterval = (v: unknown): v is Interval => v === 'monthly' || v === 'quarterly' || v === 'yearly'
 
-/** Strictly validates a parsed object of the current version (4); also used for stored data. Throws German Error. */
+/** Strictly validates a parsed object of the current version (5); also used for stored data. Throws German Error. */
 export function validateAppData(raw: unknown): AppData {
   if (!isObj(raw)) return fail('Kein gültiges Objekt.')
-  if (raw.version !== 4) return fail('Unbekannte Version.')
+  if (raw.version !== 5) return fail('Unbekannte Version.')
   if (!isObj(raw.settings)) return fail('Einstellungen fehlen.')
   const start = raw.settings.startBalanceCents
   if (typeof start !== 'number' || !Number.isSafeInteger(start)) {
@@ -133,6 +133,7 @@ export function validateAppData(raw: unknown): AppData {
     if (typeof r.bookedThrough !== 'string' || !isValidISODate(r.bookedThrough)) {
       return fail('Ein Buchungsstand bei wiederkehrenden Buchungen ist ungültig.')
     }
+    if (typeof r.autoBook !== 'boolean') return fail('Eine wiederkehrende Buchung hat keine Angabe zum automatischen Buchen.')
     const rule: RecurringRule = {
       id: r.id,
       kind: r.kind,
@@ -142,6 +143,7 @@ export function validateAppData(raw: unknown): AppData {
       dayOfMonth: r.dayOfMonth,
       startDate: r.startDate,
       bookedThrough: r.bookedThrough,
+      autoBook: r.autoBook,
     }
     if (r.note) rule.note = r.note
     if (r.endDate !== undefined) rule.endDate = r.endDate
@@ -176,7 +178,7 @@ export function validateAppData(raw: unknown): AppData {
   }
 
   return {
-    version: 4,
+    version: 5,
     settings: { startBalanceCents: start, startCashCents: startCash },
     categories,
     transactions,

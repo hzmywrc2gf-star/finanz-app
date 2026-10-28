@@ -2,7 +2,7 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
- * Brings stored/imported raw data to the current version (4). Pure; unknown shapes
+ * Brings stored/imported raw data to the current version (5). Pure; unknown shapes
  * are returned unchanged so validation can reject them with a proper message.
  */
 export function migrate(raw: unknown): unknown {
@@ -25,6 +25,16 @@ export function migrate(raw: unknown): unknown {
         ? data.transactions.map((t) => (isObj(t) ? { ...t, account: 'konto' } : t))
         : data.transactions,
       transfers: [],
+    }
+  }
+  if (isObj(data) && data.version === 4) {
+    // v4 -> v5: contracts can wait for a confirmation; all existing ones keep booking automatically
+    data = {
+      ...data,
+      version: 5,
+      recurring: Array.isArray(data.recurring)
+        ? data.recurring.map((r) => (isObj(r) ? { ...r, autoBook: true } : r))
+        : data.recurring,
     }
   }
   return data

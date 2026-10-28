@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultData } from '../domain/defaults'
-import { bookDue } from '../domain/recurring'
+import { bookDue, pendingConfirmations } from '../domain/recurring'
 import {
-  addCategory, addRecurring, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
+  addCategory, addRecurring, bookNextNow, confirmOccurrence, skipOccurrence, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
   addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
   updateTransaction, updateTransfer,
 } from './actions'
@@ -75,7 +75,7 @@ describe('categories', () => {
 describe('recurring', () => {
   const rin: RecurringInput = {
     kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: ' Miete ',
-    interval: 'monthly', dayOfMonth: 1, startDate: '2026-08-01',
+    interval: 'monthly', dayOfMonth: 1, startDate: '2026-08-01', autoBook: true,
   }
   const today = '2026-10-27'
 
@@ -83,7 +83,7 @@ describe('recurring', () => {
     const d = addRecurring(base(), rin, { today, catchUp: true, id: 'r1', now: 7 })
     expect(d.recurring[0]).toEqual({
       id: 'r1', kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: 'Miete',
-      interval: 'monthly', dayOfMonth: 1, startDate: '2026-08-01', bookedThrough: today,
+      interval: 'monthly', dayOfMonth: 1, startDate: '2026-08-01', bookedThrough: today, autoBook: true,
     })
     expect(d.transactions.map((t) => t.date)).toEqual(['2026-08-01', '2026-09-01', '2026-10-01'])
     expect(d.transactions.every((t) => t.recurringId === 'r1' && t.note === 'Miete')).toBe(true)
@@ -142,6 +142,114 @@ describe('recurring', () => {
     d = addRecurring(d, { ...rin, kind: 'income', categoryId: 'c2', startDate: '2026-11-01' }, { today, catchUp: true, id: 'r2' })
     d = deleteCategory(deleteCategory(d, 'c1'), 'c2')
     expect(d.recurring.map((r) => r.categoryId)).toEqual(['expense-sonstiges', 'income-sonstiges'])
+  })
+})
+
+describe('manual contracts', () => {
+  const salary: RecurringInput = {
+    kind: 'income', amountCents: 200000, categoryId: 'income-gehalt', note: 'Gehalt',
+    interval: 'monthly', dayOfMonth: 25, startDate: '2026-10-01', autoBook: false,
+  }
+  const booking = { kind: 'income' as const, amountCents: 215000, date: '2026-10-26', categoryId: 'income-gehalt', note: 'Gehalt' }
+  const today = '2026-10-27'
+  const withRule = (input = salary, startToday = today) => addRecurring(base(), input, { today: startToday, catchUp: true, id: 'r1' })
+
+  it('addRecurring keeps manual rules pending when catching up, "Nur künftige" skips them', () => {
+    const d = withRule()
+    expect(d.transactions).toEqual([])
+    expect(d.recurring[0]).toMatchObject({ autoBook: false, bookedThrough: '2026-09-30' })
+    expect(pendingConfirmations(d, today).map((p) => p.date)).toEqual(['2026-10-25'])
+    const future = addRecurring(base(), salary, { today, catchUp: false, id: 'r1' })
+    expect(future.recurring[0].bookedThrough).toBe(today)
+    expect(pendingConfirmations(future, today)).toEqual([])
+  })
+
+  it('confirmOccurrence books the edited values with recurringId and moves bookedThrough to the occurrence', () => {
+    const d = confirmOccurrence(withRule(), 'r1', '2026-10-25', booking, 42)
+    expect(d.transactions).toEqual([
+      { id: 'r1:2026-10-25', kind: 'income', amountCents: 215000, date: '2026-10-26', categoryId: 'income-gehalt', note: 'Gehalt', account: 'konto', createdAt: 42, recurringId: 'r1' },
+    ])
+    expect(d.recurring[0].bookedThrough).toBe('2026-10-25')
+    expect(pendingConfirmations(d, today)).toEqual([])
+    expect(bookDue(d, today)).toBe(d)
+  })
+  it('always books to the Konto, even if another account is passed', () => {
+    const d = confirmOccurrence(withRule(), 'r1', '2026-10-25', { ...booking, account: 'bargeld' })
+    expect(d.transactions[0].account).toBe('konto')
+  })
+  it('validates the input and leaves the occurrence pending on errors', () => {
+    const d = withRule()
+    expect(() => confirmOccurrence(d, 'r1', '2026-10-25', { ...booking, amountCents: 0 })).toThrow(/Betrag/)
+    expect(() => confirmOccurrence(d, 'r1', '2026-10-25', { ...booking, categoryId: 'expense-fixkosten' })).toThrow(/Kategorie/)
+    expect(() => confirmOccurrence(d, 'nope', '2026-10-25', booking)).toThrow(/nicht gefunden/)
+    expect(pendingConfirmations(d, today)).toHaveLength(1)
+  })
+
+  const twoPending = () => withRule({ ...salary, startDate: '2026-09-01', dayOfMonth: 5 })
+  it('only the oldest pending occurrence can be confirmed or skipped', () => {
+    const d = twoPending()
+    expect(pendingConfirmations(d, today).map((p) => p.date)).toEqual(['2026-09-05', '2026-10-05'])
+    expect(() => confirmOccurrence(d, 'r1', '2026-10-05', booking)).toThrow('Bitte zuerst den älteren Termin bestätigen.')
+    expect(() => skipOccurrence(d, 'r1', '2026-10-05')).toThrow('Bitte zuerst den älteren Termin bestätigen.')
+  })
+  it('rejects an occurrence that is already handled', () => {
+    const d = skipOccurrence(twoPending(), 'r1', '2026-09-05')
+    expect(() => confirmOccurrence(d, 'r1', '2026-09-05', booking)).toThrow(/bereits erledigt/)
+    expect(() => skipOccurrence(d, 'r1', '2026-09-05')).toThrow(/bereits erledigt/)
+  })
+  it('skipOccurrence books nothing and moves bookedThrough; then the next one can be confirmed', () => {
+    let d = skipOccurrence(twoPending(), 'r1', '2026-09-05')
+    expect(d.transactions).toEqual([])
+    expect(d.recurring[0].bookedThrough).toBe('2026-09-05')
+    d = confirmOccurrence(d, 'r1', '2026-10-05', { ...booking, date: '2026-10-05' })
+    expect(d.transactions.map((t) => [t.id, t.date])).toEqual([['r1:2026-10-05', '2026-10-05']])
+    expect(pendingConfirmations(d, today)).toEqual([])
+  })
+
+  it('bookNextNow before the due date (salary arrives early): booked today, the 30th is done and not auto-booked', () => {
+    const early: RecurringInput = { ...salary, dayOfMonth: 30, startDate: '2026-10-01' }
+    let d = withRule(early, '2026-10-28')
+    d = { ...d, recurring: [{ ...d.recurring[0], bookedThrough: '2026-10-28' }] }
+    expect(pendingConfirmations(d, '2026-10-28')).toEqual([])
+    d = bookNextNow(d, 'r1', { ...booking, date: '2026-10-28' }, 1)
+    expect(d.transactions).toEqual([
+      expect.objectContaining({ id: 'r1:2026-10-30', date: '2026-10-28', amountCents: 215000, recurringId: 'r1', account: 'konto' }),
+    ])
+    expect(d.recurring[0].bookedThrough).toBe('2026-10-30')
+    expect(pendingConfirmations(d, '2026-10-30')).toEqual([])
+    expect(bookDue(d, '2026-10-31')).toBe(d)
+    expect(pendingConfirmations(d, '2026-11-30').map((p) => p.date)).toEqual(['2026-11-30'])
+  })
+  it('bookNextNow with a pending occurrence covers exactly that one (the oldest)', () => {
+    const d = bookNextNow(twoPending(), 'r1', booking)
+    expect(d.recurring[0].bookedThrough).toBe('2026-09-05')
+    expect(d.transactions.map((t) => t.id)).toEqual(['r1:2026-09-05'])
+    expect(pendingConfirmations(d, today).map((p) => p.date)).toEqual(['2026-10-05'])
+  })
+  it('bookNextNow also works for automatic rules and keeps them from booking that occurrence again', () => {
+    let d = addRecurring(base(), { ...salary, autoBook: true, dayOfMonth: 30 }, { today, catchUp: true, id: 'r1' })
+    d = bookNextNow(d, 'r1', { ...booking, date: today })
+    expect(d.recurring[0].bookedThrough).toBe('2026-10-30')
+    expect(bookDue(d, '2026-10-31').transactions).toHaveLength(1)
+    expect(bookDue(d, '2026-11-30').transactions.map((t) => t.date)).toEqual([today, '2026-11-30'])
+  })
+  it('bookNextNow fails for an ended rule', () => {
+    const d = withRule({ ...salary, endDate: '2026-10-25' })
+    const done = confirmOccurrence(d, 'r1', '2026-10-25', booking)
+    expect(() => bookNextNow(done, 'r1', booking)).toThrow(/beendet/)
+  })
+  it('updateRecurring toggles autoBook and keeps bookedThrough', () => {
+    let d = withRule()
+    d = updateRecurring(d, 'r1', { ...salary, autoBook: true })
+    expect(d.recurring[0]).toMatchObject({ autoBook: true, bookedThrough: '2026-09-30' })
+    expect(bookDue(d, today).transactions.map((t) => t.date)).toEqual(['2026-10-25'])
+    d = updateRecurring(bookDue(d, today), 'r1', { ...salary, autoBook: false })
+    expect(d.recurring[0]).toMatchObject({ autoBook: false, bookedThrough: today })
+  })
+  it('is idempotent: confirming twice fails instead of booking twice', () => {
+    const d = confirmOccurrence(withRule(), 'r1', '2026-10-25', booking)
+    expect(() => confirmOccurrence(d, 'r1', '2026-10-25', booking)).toThrow(/bereits erledigt/)
+    expect(d.transactions).toHaveLength(1)
   })
 })
 

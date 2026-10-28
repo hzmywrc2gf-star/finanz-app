@@ -182,9 +182,9 @@ await dl.saveAs(file)
 const json = JSON.parse(fs.readFileSync(file, 'utf8'))
 if (dl.suggestedFilename() !== 'finanz-backup-2026-10-27.json' || json.transactions.length !== 5 || json.settings.startBalanceCents !== 100000)
   throw new Error('Export unvollständig ' + dl.suggestedFilename())
-if (json.version !== 4 || json.settings.startCashCents !== 0 || json.transfers.length !== 0 || json.transactions.some((t) => t.account !== 'konto'))
-  throw new Error('Export: Version 4 / Bargeld-Felder fehlen')
-ok(`Export ${dl.suggestedFilename()}: Version 4, 5 Buchungen (alle auf dem Konto), Startguthaben 100000 Cent, Startbestand Bargeld 0, keine Umbuchungen`)
+if (json.version !== 5 || json.settings.startCashCents !== 0 || json.transfers.length !== 0 || json.transactions.some((t) => t.account !== 'konto'))
+  throw new Error('Export: Version 5 / Bargeld-Felder fehlen')
+ok(`Export ${dl.suggestedFilename()}: Version 5, 5 Buchungen (alle auf dem Konto), Startguthaben 100000 Cent, Startbestand Bargeld 0, keine Umbuchungen`)
 // Daten ändern, dann Backup wieder einspielen
 await tab('Start').click()
 await addTx({ amount: '999', category: 'Sonstiges' })
@@ -497,9 +497,9 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await tab('Budgets').click()
   await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 23,10 € drüber | 105,8 %', 'Nach Reload')
   const st = await stored()
-  if (st.version !== 4 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
+  if (st.version !== 5 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
     throw new Error('Gespeicherte Daten: Version/Budget falsch')
-  ok('Budget bleibt nach Neuladen erhalten (gespeichert als Version 4, monthlyBudgetCents 40000)')
+  ok('Budget bleibt nach Neuladen erhalten (gespeichert als Version 5, monthlyBudgetCents 40000)')
 
   // Entfernen
   for (const name of ['Fixkosten', 'Freizeit', 'Lebensmittel']) {
@@ -1023,7 +1023,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const file2 = `${SHOTS}/../backup-test.json`
   await dl2.saveAs(file2)
   const j2 = JSON.parse(fs.readFileSync(file2, 'utf8'))
-  must(j2.version, 4, 'Export Version'); must(j2.settings.startCashCents, 2000, 'Export Startbestand Bargeld')
+  must(j2.version, 5, 'Export Version'); must(j2.settings.startCashCents, 2000, 'Export Startbestand Bargeld')
   must(JSON.stringify(j2.transfers.map((t) => [t.direction, t.amountCents, t.date, t.note])), '[["withdrawal",15000,"2026-10-27","Geldautomat"]]', 'Export Umbuchungen')
   must(j2.transactions.filter((t) => t.account === 'bargeld').map((t) => t.amountCents).join(), '4550', 'Export: Barbuchung')
   must(j2.transactions.length, 12, 'Export: 12 Buchungen')
@@ -1049,7 +1049,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await mustHub('−373,10 €', '124,50 €', '−248,60 €', 'Nach Import')
   const st2 = await stored()
   must(st2.transfers.length, 1, 'Umbuchung nach Import'); must(st2.transactions.filter((t) => t.account === 'bargeld').length, 1, 'Barbuchung nach Import')
-  ok('Backup: Export Version 4 mit Umbuchung (Abhebung 150,00 €), Barbuchung und Startbestand 20,00 €; ungültige Richtung / ungültiges Konto werden abgelehnt; Import stellt Konto −373,10 € / Bargeld 124,50 € wieder her')
+  ok('Backup: Export Version 5 mit Umbuchung (Abhebung 150,00 €), Barbuchung und Startbestand 20,00 €; ungültige Richtung / ungültiges Konto werden abgelehnt; Import stellt Konto −373,10 € / Bargeld 124,50 € wieder her')
 
   // --- Negativer Bargeldbestand wird rot ---
   await openCash()
@@ -1073,6 +1073,216 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await page.emulateMedia({ colorScheme: 'light' })
   await tab('Start').click()
   ok('Dark Mode: Start-Übersicht und Alle Buchungen ohne Konsolenfehler')
+}
+
+// ---------- Verträge mit „Automatisch buchen“ aus: Bestätigen, Überspringen, Jetzt buchen (frischer Kontext, Heute = 27.10.2026) ----------
+{
+  const ctx5 = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+  const p5 = await ctx5.newPage()
+  p5.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  p5.on('pageerror', (e) => errors.push(e.message))
+  await p5.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+  await p5.goto(URL)
+  const nav5 = (name) => p5.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
+  const text5 = async () => nbsp(await p5.locator('body').innerText())
+  const has5 = async (t) => { for (let i = 0; i < 20; i++) { if ((await text5()).includes(t)) return; await p5.waitForTimeout(100) } throw new Error(`Text nicht gefunden: "${t}"`) }
+  const hasNot5 = async (t) => { await p5.waitForTimeout(150); if ((await text5()).includes(t)) throw new Error(`Text sollte fehlen: "${t}"`) }
+  const bal5 = async () => { await nav5('Start').click(); return nbsp(await p5.getByTestId('balance').innerText()) }
+  const mustBal5 = async (expected, what) => { const b = await bal5(); if (b !== expected) throw new Error(`${what}: erwartet ${expected}, war ${b}`) }
+  const stored5 = () => p5.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const rec5 = () => p5.locator('[aria-label="wiederkehrend"]').count()
+  const open5 = async () => { await nav5('Start').click(); await p5.getByRole('button', { name: /^Verträge/ }).click(); await p5.getByRole('button', { name: 'Zurück', exact: true }).waitFor() }
+  async function rule5({ kind = 'Ausgabe', amount, category, note, day, start, manual = true }) {
+    await open5()
+    await p5.getByRole('button', { name: 'Vertrag hinzufügen' }).click()
+    await p5.getByRole('button', { name: kind, exact: true }).click()
+    await p5.fill('#rc-amount', amount)
+    await p5.selectOption('#rc-cat', { label: category })
+    if (note) await p5.fill('#rc-note', note)
+    await p5.fill('#rc-start', start)
+    if (day) await p5.fill('#rc-day', day)
+    const sw = p5.getByRole('switch', { name: 'Automatisch buchen' })
+    if ((await sw.isChecked()) !== true) throw new Error('„Automatisch buchen“ muss bei neuen Verträgen an sein')
+    if (manual) await sw.uncheck()
+    await p5.getByRole('button', { name: 'Sichern' }).click()
+  }
+  const card5 = (title) => p5.locator('li').filter({ hasText: title }).filter({ has: p5.getByRole('button', { name: /^Buchen/ }) })
+
+  // 1) Manueller Gehaltsvertrag, Tag 25, Start 01.10. → Termin vom 25.10. ist offen
+  await rule5({ kind: 'Einnahme', amount: '2.000,00', category: 'Gehalt', note: 'Gehalt', day: '25', start: '2026-10-01' })
+  await p5.getByRole('alertdialog').waitFor()
+  await has5('Vergangene Termine?'); await has5('1 Termin seit 01.10.2026 liegt in der Vergangenheit.')
+  await p5.getByRole('alertdialog').getByRole('button', { name: 'Als offen anzeigen' }).click()
+  await has5('bestätigen'); await has5('nächste: 25.11.')
+  await mustBal5('0,00 €', 'Manueller Vertrag bucht nichts von selbst')
+  let t = await text5()
+  if (!t.includes('ZU BESTÄTIGEN') || !t.includes('fällig 25.10.') || !t.includes('+2.000,00 €')) throw new Error('Karte „Zu bestätigen“ fehlt: ' + t.slice(0, 300))
+  if (t.indexOf('ZU BESTÄTIGEN') < t.indexOf('Kontostand') || t.indexOf('ZU BESTÄTIGEN') > t.indexOf('Alle Buchungen')) throw new Error('„Zu bestätigen“ steht an der falschen Stelle')
+  if ((await stored5()).transactions.length !== 0) throw new Error('Es wurde automatisch gebucht')
+  await p5.waitForTimeout(200)
+  await p5.screenshot({ path: `${SHOTS}/29-start-bestaetigen.png`, fullPage: true })
+  await p5.setViewportSize({ width: 375, height: 667 })
+  await p5.screenshot({ path: `${SHOTS}/29b-start-bestaetigen-se.png`, fullPage: true })
+  if (await p5.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Zu bestätigen: horizontaler Überlauf bei 375 px')
+  await p5.setViewportSize({ width: 390, height: 664 })
+  await p5.emulateMedia({ colorScheme: 'dark' })
+  await p5.waitForTimeout(150)
+  await p5.screenshot({ path: `${SHOTS}/32-start-bestaetigen-dark.png`, fullPage: true })
+  await p5.emulateMedia({ colorScheme: 'light' })
+  ok('Manueller Gehaltsvertrag (2.000,00 €, Tag 25, ab 01.10.): Dialog „Als offen anzeigen“, Start zeigt „Zu bestätigen“ direkt unter dem Kontostand mit „fällig 25.10.“ und +2.000,00 €, Kontostand unverändert 0,00 €, Vertragsliste mit Hinweis „bestätigen“')
+
+  // 2) Buchen mit geändertem Betrag und Datum
+  await p5.getByRole('button', { name: /^Buchen/ }).click()
+  await p5.getByRole('dialog', { name: 'Termin buchen' }).waitFor()
+  if ((await p5.inputValue('#tx-amount')) !== '2000,00' || (await p5.inputValue('#tx-date')) !== '2026-10-25' || (await p5.inputValue('#tx-note')) !== 'Gehalt')
+    throw new Error('Formular nicht vorausgefüllt')
+  if (await p5.getByRole('dialog').getByRole('button', { name: 'Bargeld', exact: true }).count()) throw new Error('Vertragsbuchung darf nur aufs Konto gehen')
+  await p5.waitForTimeout(450)
+  await p5.screenshot({ path: `${SHOTS}/31-buchen-vorausgefuellt.png` })
+  await p5.fill('#tx-amount', '2.150,00')
+  await p5.fill('#tx-date', '2026-10-26')
+  await p5.getByRole('dialog').getByRole('button', { name: 'Buchen', exact: true }).click()
+  await mustBal5('2.150,00 €', 'Nach Bestätigung mit 2.150,00')
+  await hasNot5('ZU BESTÄTIGEN')
+  await p5.getByRole('button', { name: /^Alle Buchungen/ }).click()
+  await has5('Mo, 26.10.'); await has5('+2.150,00 €')
+  if ((await rec5()) !== 1) throw new Error('Erwartet 1 Buchung mit ↻')
+  const s1 = await stored5()
+  if (s1.recurring[0].bookedThrough !== '2026-10-25' || s1.transactions[0].recurringId !== s1.recurring[0].id || s1.transactions[0].account !== 'konto')
+    throw new Error('Gespeicherte Bestätigung falsch: ' + JSON.stringify(s1.transactions[0]))
+  ok('„Buchen“ mit 2.150,00 € am 26.10.: Kontostand genau +2.150,00 € (2.150,00 €), Karte verschwindet, Alle Buchungen zeigt „Mo, 26.10.“ mit ↻, bookedThrough = 25.10.')
+
+  // 3) Zwei offene Termine: „+1 weiterer“, Überspringen (ältester), dann Buchen
+  await rule5({ amount: '10,00', category: 'Freizeit', note: 'Zeitung', day: '5', start: '2026-09-01' })
+  await p5.getByRole('alertdialog').getByRole('button', { name: 'Als offen anzeigen' }).click()
+  await nav5('Start').click()
+  await has5('fällig 05.09.'); await has5('+1 weiterer offener Termin')
+  await mustBal5('2.150,00 €', 'Zwei offene Termine buchen nichts')
+  await card5('Zeitung').getByRole('button', { name: /^Überspringen/ }).click()
+  await has5('Termin überspringen?'); await has5('„Zeitung“ vom 05.09. wird nicht gebucht.')
+  await p5.getByRole('alertdialog').getByRole('button', { name: 'Abbrechen' }).click()
+  await has5('fällig 05.09.')
+  await card5('Zeitung').getByRole('button', { name: /^Überspringen/ }).click()
+  await p5.getByRole('alertdialog').getByRole('button', { name: 'Überspringen' }).click()
+  await has5('fällig 05.10.'); await hasNot5('fällig 05.09.'); await hasNot5('weiterer offener Termin')
+  await mustBal5('2.150,00 €', 'Überspringen bucht nichts')
+  await card5('Zeitung').getByRole('button', { name: /^Buchen/ }).click()
+  if ((await p5.inputValue('#tx-date')) !== '2026-10-05' || (await p5.inputValue('#tx-amount')) !== '10,00') throw new Error('Zweiter Termin falsch vorausgefüllt')
+  await p5.getByRole('dialog').getByRole('button', { name: 'Buchen', exact: true }).click()
+  await mustBal5('2.140,00 €', 'Zeitung gebucht')
+  await hasNot5('Zeitung')
+  await p5.getByRole('button', { name: /^Alle Buchungen/ }).click()
+  await has5('Mo, 05.10.'); await hasNot5('Sa, 05.09.')
+  if ((await rec5()) !== 2) throw new Error('Erwartet 2 Buchungen mit ↻')
+  ok('Vertrag „Zeitung“ mit 2 offenen Terminen: „+1 weiterer offener Termin“, Überspringen (Abbrechen ändert nichts) erledigt 05.09. ohne Buchung, danach Buchen für 05.10.: Kontostand genau 2.140,00 €, 2 Buchungen mit ↻')
+
+  // 4) Automatisch buchen nachträglich einschalten: offene Termine werden gebucht
+  await rule5({ amount: '30,00', category: 'Freizeit', note: 'Handy', day: '3', start: '2026-10-01' })
+  await p5.getByRole('alertdialog').getByRole('button', { name: 'Als offen anzeigen' }).click()
+  await nav5('Start').click()
+  await has5('Handy'); await has5('fällig 03.10.')
+  await open5()
+  await p5.getByRole('button', { name: /Handy/ }).click()
+  await p5.waitForTimeout(450)
+  const sw5 = p5.getByRole('switch', { name: 'Automatisch buchen' })
+  if (await sw5.isChecked()) throw new Error('Schalter müsste aus sein')
+  await hasNot5('Offene Termine werden dann automatisch gebucht.')
+  await has5('Erledigt den Termin am 03.10.2026.')
+  await sw5.check()
+  await has5('Offene Termine werden dann automatisch gebucht.')
+  await p5.getByRole('button', { name: 'Sichern' }).click()
+  await mustBal5('2.110,00 €', 'Handy automatisch nachgebucht')
+  await hasNot5('ZU BESTÄTIGEN')
+  const s4 = await stored5()
+  if (s4.recurring.find((r) => r.note === 'Handy').autoBook !== true) throw new Error('autoBook nicht gespeichert')
+  ok('Schalter „Automatisch buchen“ bei „Handy“ (offener Termin 03.10.) an: Hinweis „Offene Termine werden dann automatisch gebucht.“, nach Sichern ist 30,00 € gebucht (2.110,00 €) und die Karte weg')
+
+  // 5) Formular-Screenshot (Schalter + Jetzt buchen), Neuladen behält den offenen Termin
+  await rule5({ amount: '19,99', category: 'Freizeit', note: 'Streaming', day: '28', start: '2026-10-01' })
+  await p5.getByRole('button', { name: /Streaming/ }).click()
+  await p5.waitForTimeout(450)
+  await p5.evaluate(() => { const sh = document.querySelector('.sheet'); sh.scrollTop = sh.scrollHeight })
+  await p5.waitForTimeout(150)
+  await p5.screenshot({ path: `${SHOTS}/30-vertrag-formular.png` })
+  await p5.getByRole('button', { name: 'Abbrechen' }).first().click()
+  await rule5({ amount: '5,00', category: 'Freizeit', note: 'Magazin', day: '1', start: '2026-10-01' })
+  await p5.getByRole('alertdialog').getByRole('button', { name: 'Als offen anzeigen' }).click()
+  await p5.reload()
+  await p5.getByTestId('balance').waitFor()
+  await has5('Magazin'); await has5('fällig 01.10.')
+  await mustBal5('2.110,00 €', 'Nach Neuladen')
+  ok('Formular mit Schalter und „Jetzt buchen“ (Erledigt den Termin am 28.10.2026.); offener Termin „Magazin“ bleibt nach Neuladen bestehen, Kontostand unverändert 2.110,00 €')
+  await ctx5.close()
+}
+
+// ---------- Jetzt buchen und Datumswechsel mit manuellen Verträgen (frischer Kontext, Start 28.10.2026 10:00) ----------
+{
+  const ctx6 = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+  const p6 = await ctx6.newPage()
+  p6.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  p6.on('pageerror', (e) => errors.push(e.message))
+  await p6.clock.install({ time: new Date('2026-10-28T10:00:00+01:00') })
+  await p6.goto(URL)
+  const nav6 = (name) => p6.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
+  const bal6 = async () => nbsp(await p6.locator('[data-testid="balance"]').innerText())
+  const waitBal6 = async (expected) => {
+    for (let i = 0; i < 30; i++) { if ((await bal6()) === expected) return; await p6.waitForTimeout(100) }
+    throw new Error(`Jetzt buchen: Kontostand erwartet ${expected}, war ${await bal6()}`)
+  }
+  const stored6 = () => p6.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  const body6 = async () => nbsp(await p6.locator('body').innerText())
+  const tick6 = async () => { await p6.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await p6.waitForTimeout(250) }
+  await nav6('Start').click()
+  await p6.getByRole('button', { name: /^Verträge/ }).click()
+  // automatischer Vertrag (Standard) und manueller Gehaltsvertrag, beide ohne vergangene Termine
+  await p6.getByRole('button', { name: 'Vertrag hinzufügen' }).click()
+  await p6.fill('#rc-amount', '10'); await p6.selectOption('#rc-cat', { label: 'Freizeit' }); await p6.fill('#rc-note', 'Abo'); await p6.fill('#rc-day', '1')
+  await p6.getByRole('button', { name: 'Sichern' }).click()
+  await p6.getByRole('button', { name: 'Vertrag hinzufügen' }).click()
+  await p6.getByRole('button', { name: 'Einnahme', exact: true }).click()
+  await p6.fill('#rc-amount', '2.000,00'); await p6.selectOption('#rc-cat', { label: 'Gehalt' }); await p6.fill('#rc-note', 'Gehalt'); await p6.fill('#rc-day', '30')
+  await p6.getByRole('switch', { name: 'Automatisch buchen' }).uncheck()
+  await p6.getByRole('button', { name: 'Sichern' }).click()
+  await p6.getByRole('button', { name: /Gehalt/ }).click()
+  await p6.getByText('Erledigt den Termin am 30.10.2026.').waitFor()
+  await p6.getByRole('button', { name: 'Jetzt buchen', exact: true }).click()
+  await p6.getByRole('dialog', { name: 'Jetzt buchen' }).waitFor()
+  if ((await p6.inputValue('#tx-date')) !== '2026-10-28' || (await p6.inputValue('#tx-amount')) !== '2000,00') throw new Error('Jetzt buchen: falsch vorausgefüllt')
+  await p6.keyboard.press('Escape') // schließt nur das obere Blatt
+  await p6.getByRole('dialog', { name: 'Vertrag' }).waitFor()
+  await p6.getByRole('button', { name: 'Jetzt buchen', exact: true }).click()
+  await p6.getByRole('dialog', { name: 'Jetzt buchen' }).getByRole('button', { name: 'Buchen', exact: true }).click()
+  await p6.getByRole('dialog').waitFor({ state: 'detached' })
+  await nav6('Start').click()
+  await waitBal6('2.000,00 €')
+  let st = await stored6()
+  const sal = st.recurring.find((r) => r.note === 'Gehalt')
+  if (st.transactions.length !== 1 || st.transactions[0].date !== '2026-10-28' || st.transactions[0].recurringId !== sal.id || sal.bookedThrough !== '2026-10-30')
+    throw new Error('Jetzt buchen: gespeicherter Stand falsch ' + JSON.stringify({ t: st.transactions, b: sal.bookedThrough }))
+  if ((await body6()).includes('ZU BESTÄTIGEN')) throw new Error('Nach Jetzt buchen darf nichts offen sein')
+  ok('„Jetzt buchen“ beim Gehaltsvertrag (fällig 30.10., heute 28.10.): Escape schließt nur das obere Blatt, Buchung am 28.10. mit ↻-Verknüpfung, Kontostand 2.000,00 €, Termin 30.10. erledigt')
+
+  await p6.clock.setSystemTime(new Date('2026-10-30T12:00:00+01:00'))
+  await tick6()
+  await waitBal6('2.000,00 €')
+  if ((await body6()).includes('ZU BESTÄTIGEN')) throw new Error('Am 30.10. darf nichts offen sein')
+  await p6.clock.setSystemTime(new Date('2026-11-01T09:00:00+01:00'))
+  await tick6()
+  await waitBal6('1.990,00 €') // nur das automatische Abo (−10,00 €) wurde gebucht
+  st = await stored6()
+  if (st.transactions.length !== 2 || st.transactions.filter((x) => x.date === '2026-11-01').length !== 1 || (await body6()).includes('ZU BESTÄTIGEN'))
+    throw new Error('Rollover 01.11.: ' + JSON.stringify(st.transactions.map((x) => [x.date, x.amountCents])))
+  ok('Rollover 30.10./01.11.: für das vorgezogene Gehalt ist nichts offen und nichts doppelt gebucht; das automatische Abo wird am 01.11. weiter gebucht (1.990,00 €)')
+
+  await p6.clock.setSystemTime(new Date('2026-11-30T09:00:00+01:00'))
+  await tick6()
+  await waitBal6('1.990,00 €')
+  const b6 = await body6()
+  if (!b6.includes('ZU BESTÄTIGEN') || !b6.includes('fällig 30.11.') || !b6.includes('+2.000,00 €')) throw new Error('30.11.: Gehalt müsste zur Bestätigung anstehen')
+  st = await stored6()
+  if (st.transactions.some((x) => x.date === '2026-11-30' && x.recurringId === sal.id)) throw new Error('Manuelles Gehalt wurde automatisch gebucht')
+  ok('Rollover 30.11.: der nächste Gehaltstermin steht zur Bestätigung an („fällig 30.11.“), nichts wird automatisch gebucht (1.990,00 €)')
+  await ctx6.close()
 }
 
 // ---------- Migration v3 → v4 beim Laden (frischer Kontext mit altem localStorage) ----------
@@ -1105,10 +1315,44 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p3.getByRole('button', { name: 'Sichern' }).click() // speichert den migrierten Stand
   await p3.waitForTimeout(200)
   const s3 = await p3.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
-  if (s3.version !== 4 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
+  if (s3.version !== 5 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
     throw new Error('Migration v3: gespeicherte Daten falsch ' + JSON.stringify(s3).slice(0, 300))
   await ctx3.close()
-  ok('Migration v3 → v4 beim Laden: Kontostand 954,01 €, „Bargeld 0,00 € · Gesamt 954,01 €“, alte Buchung liegt auf dem Konto, gespeichert als Version 4 (startCashCents 0, keine Umbuchungen)')
+  ok('Migration v3 → v4 beim Laden: Kontostand 954,01 €, „Bargeld 0,00 € · Gesamt 954,01 €“, alte Buchung liegt auf dem Konto, gespeichert als Version 5 (startCashCents 0, keine Umbuchungen)')
+}
+
+// ---------- Migration v4 → v5: bestehende Verträge buchen weiter automatisch ----------
+{
+  const ctx4 = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+  const p4 = await ctx4.newPage()
+  p4.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  p4.on('pageerror', (e) => errors.push(e.message))
+  await p4.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+  await p4.goto(URL)
+  const cat = (kind, name, builtIn = false) => ({ id: `${kind}-${name.toLowerCase()}`, name, kind, builtIn })
+  const old4 = {
+    version: 4,
+    settings: { startBalanceCents: 100000, startCashCents: 0 },
+    categories: [
+      ...['Lebensmittel', 'Fixkosten', 'Mobilität', 'Freizeit', 'Kleidung', 'Gesundheit'].map((n) => cat('expense', n)),
+      cat('expense', 'Sonstiges', true), cat('income', 'Gehalt'), cat('income', 'Nebeneinkünfte'), cat('income', 'Sonstiges', true),
+    ],
+    transactions: [],
+    recurring: [{ id: 'rm', kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: 'Miete', interval: 'monthly', dayOfMonth: 1, startDate: '2026-09-01', bookedThrough: '2026-10-01' }],
+    transfers: [],
+  }
+  await p4.evaluate((d) => localStorage.setItem('finanz-app:v1', JSON.stringify(d)), old4)
+  await p4.reload()
+  await p4.getByTestId('balance').waitFor()
+  await p4.getByRole('button', { name: /^Verträge/ }).click()
+  await p4.getByRole('button', { name: /Miete/ }).click()
+  if (!(await p4.getByRole('switch', { name: 'Automatisch buchen' }).isChecked())) throw new Error('Migrierter Vertrag müsste automatisch buchen')
+  await p4.getByRole('button', { name: 'Sichern' }).click()
+  await p4.waitForTimeout(200)
+  const s4m = await p4.evaluate(() => JSON.parse(localStorage.getItem('finanz-app:v1')))
+  if (s4m.version !== 5 || s4m.recurring[0].autoBook !== true) throw new Error('Migration v4: ' + JSON.stringify(s4m.recurring))
+  await ctx4.close()
+  ok('Migration v4 → v5 beim Laden: bestehender Vertrag „Miete“ hat „Automatisch buchen“ an, gespeichert als Version 5 mit autoBook true')
 }
 
 // ---------- Datumswechsel mit page.clock (frischer Kontext, fester Start 31.10.2026 10:00) ----------

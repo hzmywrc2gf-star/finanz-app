@@ -1,13 +1,16 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { accountBalance, totalBalance } from '../domain/calc'
-import { todayISO, formatShortDay } from '../domain/dates'
+import { todayISO, formatDayMonth, formatShortDay } from '../domain/dates'
 import { formatCents, formatPercent, formatSigned } from '../domain/money'
 import { budgetAlerts } from '../domain/budget'
 import { builtInId } from '../domain/defaults'
-import { monthlyEquivalent, recurringTitle, upcoming } from '../domain/recurring'
+import type { PendingConfirmation } from '../domain/recurring'
+import { monthlyEquivalent, pendingConfirmations, recurringTitle, upcoming } from '../domain/recurring'
 import { useFinance } from '../state/FinanceContext'
-import { Fab } from '../components/Fab'
-import { CashIcon, ChevronRight, ContractIcon, ListIcon } from '../components/Icons'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { TransactionForm } from '../components/TransactionForm'
+import { CashIcon, ChevronRight, ContractIcon, ListIcon, PlusIcon } from '../components/Icons'
 
 export type StartView = 'hub' | 'bookings' | 'cash' | 'contracts'
 
@@ -52,13 +55,20 @@ export function StartPage({
   onOpenBudgets: () => void
   onNavigate: (view: StartView) => void
 }) {
-  const { data } = useFinance()
+  const { data, confirmOccurrence, skipOccurrence } = useFinance()
+  const [booking, setBooking] = useState<PendingConfirmation | null>(null)
+  const [skipping, setSkipping] = useState<PendingConfirmation | null>(null)
   const today = todayISO()
   const balance = accountBalance(data, 'konto')
   const cash = accountBalance(data, 'bargeld')
   const alerts = budgetAlerts(data, today)
   const due = upcoming(data, today, 7, { excludeCategoryIds: HIDDEN_FROM_UPCOMING })
   const contracts = monthlyEquivalent(data.recurring, today)
+  // per contract only the oldest open occurrence is shown (it has to be handled first), plus a count of the rest
+  const pending = pendingConfirmations(data, today)
+  const toConfirm = pending
+    .filter((p, i) => pending.findIndex((q) => q.rule.id === p.rule.id) === i)
+    .map((p) => ({ ...p, more: pending.filter((q) => q.rule.id === p.rule.id).length - 1 }))
 
   return (
     <>
@@ -75,6 +85,48 @@ export function StartPage({
           Bargeld {formatCents(cash)} · Gesamt {formatCents(totalBalance(data))}
         </div>
       </div>
+      {/* Inline instead of the floating Fab: the start page is short, a Fab would cover the last row. */}
+      <button className="btn add-btn" onClick={onAdd} aria-label="Buchung hinzufügen">
+        <PlusIcon /> Buchung hinzufügen
+      </button>
+
+      {toConfirm.length > 0 && (
+        <>
+          <div className="section-title">Zu bestätigen</div>
+          <ul className="list card">
+            {toConfirm.map(({ rule, date, more }) => {
+              const title = recurringTitle(rule, data.categories)
+              return (
+                <li key={rule.id}>
+                  <div className="row-static confirm-row">
+                    <div className="confirm-info">
+                      <span className="dot" style={{ background: rule.kind === 'income' ? 'var(--income)' : 'var(--expense)' }} />
+                      <span className="row-main">
+                        <div className="row-title">{title}</div>
+                        <div className="row-sub">fällig {formatDayMonth(date)}</div>
+                        {more > 0 && (
+                          <div className="row-sub">+{more} {more === 1 ? 'weiterer offener Termin' : 'weitere offene Termine'}</div>
+                        )}
+                      </span>
+                      <span className={`row-amount num ${rule.kind === 'income' ? 'income-text' : 'expense-text'}`}>
+                        {formatSigned(rule.amountCents, rule.kind)}
+                      </span>
+                    </div>
+                    <div className="confirm-actions">
+                      <button className="primary" aria-label={`Buchen: ${title}`} onClick={() => setBooking({ rule, date })}>
+                        Buchen
+                      </button>
+                      <button aria-label={`Überspringen: ${title}`} onClick={() => setSkipping({ rule, date })}>
+                        Überspringen
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
 
       {alerts.length > 0 && (
         <>
@@ -141,11 +193,46 @@ export function StartPage({
           icon={<ContractIcon />}
           tone="orange"
           title="Verträge"
-          value={contracts.activeCount === 0 ? 'Keine' : `${contracts.activeCount} · ${formatCents(contracts.monthlyCents)}/Monat`}
+          value={
+            contracts.activeCount === 0
+              ? 'Keine'
+              : contracts.monthlyCents === 0
+                ? `${contracts.activeCount} ${contracts.activeCount === 1 ? 'Vertrag' : 'Verträge'}`
+                : `${contracts.activeCount} · ${formatCents(contracts.monthlyCents)}/Monat`
+          }
           onClick={() => onNavigate('contracts')}
         />
       </ul>
-      <Fab onClick={onAdd} />
+      {booking && (
+        <TransactionForm
+          key={`${booking.rule.id}:${booking.date}`}
+          booking={{
+            title: 'Termin buchen',
+            submitLabel: 'Buchen',
+            initial: {
+              kind: booking.rule.kind,
+              amountCents: booking.rule.amountCents,
+              date: booking.date,
+              categoryId: booking.rule.categoryId,
+              note: booking.rule.note,
+            },
+            onSubmit: (input) => confirmOccurrence(booking.rule.id, booking.date, input),
+          }}
+          onClose={() => setBooking(null)}
+        />
+      )}
+      {skipping && (
+        <ConfirmDialog
+          title="Termin überspringen?"
+          message={`„${recurringTitle(skipping.rule, data.categories)}“ vom ${formatDayMonth(skipping.date)} wird nicht gebucht.`}
+          confirmLabel="Überspringen"
+          onCancel={() => setSkipping(null)}
+          onConfirm={() => {
+            skipOccurrence(skipping.rule.id, skipping.date)
+            setSkipping(null)
+          }}
+        />
+      )}
     </>
   )
 }

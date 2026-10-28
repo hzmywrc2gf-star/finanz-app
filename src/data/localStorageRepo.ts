@@ -4,7 +4,7 @@ import { validateAppData } from './backup'
 import { migrate } from './migrate'
 import type { FinanceRepository } from './repository'
 
-// Key stays 'v1' although the data is version 4: renaming it would orphan existing user data.
+// Key stays 'v1' although the data is version 5: renaming it would orphan existing user data.
 // The data version lives inside the payload and is upgraded by `migrate`.
 export const STORAGE_KEY = 'finanz-app:v1'
 

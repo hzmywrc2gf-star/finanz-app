@@ -46,6 +46,8 @@ export interface RecurringRule {
   endDate?: string
   /** Occurrences on or before this date are already handled (booked or skipped). */
   bookedThrough: string
+  /** true: booked automatically when due; false: waits on the start page for a confirmation. */
+  autoBook: boolean
 }
 
 /** withdrawal = Abhebung (Konto → Bargeld), deposit = Einzahlung (Bargeld → Konto). */
@@ -70,7 +72,7 @@ export interface Settings {
 }
 
 export interface AppData {
-  version: 4
+  version: 5
   settings: Settings
   categories: Category[]
   transactions: Transaction[]

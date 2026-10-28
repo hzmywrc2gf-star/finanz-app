@@ -43,7 +43,7 @@ describe('monthBudgets: spent', () => {
     d = { ...d, transactions: [{ id: 'r', kind: 'expense', amountCents: 700, date: '2026-10-01', categoryId: 'expense-lebensmittel', account: 'konto', createdAt: 1, recurringId: 'rule' }] }
     d = {
       ...d,
-      recurring: [{ id: 'rule', kind: 'expense', amountCents: 700, categoryId: 'expense-lebensmittel', interval: 'monthly', dayOfMonth: 30, startDate: '2026-10-01', bookedThrough: '2026-10-01' }],
+      recurring: [{ id: 'rule', kind: 'expense', amountCents: 700, categoryId: 'expense-lebensmittel', interval: 'monthly', dayOfMonth: 30, startDate: '2026-10-01', bookedThrough: '2026-10-01', autoBook: true }],
     }
     expect(item(d).spentCents).toBe(700)
   })

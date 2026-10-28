@@ -1039,6 +1039,77 @@ button.row:active {
   height: 20px;
   margin: 0 -5px;
 }
+.confirm-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.confirm-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.confirm-actions button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 11px;
+  background: var(--card-2);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+}
+.confirm-actions button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.confirm-actions button:active {
+  opacity: 0.7;
+}
+
+/* iOS-style switch (a checkbox with role="switch") */
+.field input.switch {
+  flex: none;
+  width: 51px;
+  min-width: 51px;
+  height: 31px;
+  min-height: 31px;
+  border-radius: 16px;
+  background: var(--seg-bg);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.field input.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease;
+}
+.field input.switch:checked {
+  background: var(--income);
+}
+.field input.switch:checked::after {
+  transform: translateX(20px);
+}
+.field input.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch-row label {
+  flex: 1;
+  width: auto;
+}
 .action-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1059,4 +1130,16 @@ button.row:active {
 }
 .action-row + .today-row {
   margin: 4px 0 0;
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+.add-btn svg {
+  width: 20px;
+  height: 20px;
 }

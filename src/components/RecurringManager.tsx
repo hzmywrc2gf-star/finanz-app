@@ -38,6 +38,7 @@ export function RecurringManager() {
                 <div className="row-title">{recurringTitle(r, data.categories)}</div>
                 <div className="row-sub wrap">
                   {names.get(r.categoryId) ?? 'Unbekannt'} · {recurrenceLabel(r)} · {nextLabel(r)}
+                  {!r.autoBook && <span className="badge">bestätigen</span>}
                 </div>
               </span>
               <span className={`row-amount num ${r.kind === 'income' ? 'income-text' : 'expense-text'}`}>

@@ -1,7 +1,7 @@
 import type { Account, AppData, Category, Interval, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { addDays, isValidISODate } from '../domain/dates'
-import { bookDue } from '../domain/recurring'
+import { bookDue, nextOccurrence } from '../domain/recurring'
 
 export interface TransactionInput {
   kind: Kind
@@ -232,6 +232,8 @@ export interface RecurringInput {
   dayOfMonth: number
   startDate: string
   endDate?: string
+  /** false: occurrences wait for a confirmation instead of being booked automatically. */
+  autoBook: boolean
 }
 
 function validateRecurringInput(data: AppData, input: RecurringInput): void {
@@ -245,6 +247,7 @@ function validateRecurringInput(data: AppData, input: RecurringInput): void {
   if (!Number.isInteger(input.dayOfMonth) || input.dayOfMonth < 1 || input.dayOfMonth > 31) {
     throw new Error('Der Tag im Monat muss zwischen 1 und 31 liegen.')
   }
+  if (typeof input.autoBook !== 'boolean') throw new Error('Ungültige Angabe zum automatischen Buchen.')
   if (!isValidISODate(input.startDate)) throw new Error('Ungültiges Startdatum.')
   if (input.endDate !== undefined) {
     if (!isValidISODate(input.endDate)) throw new Error('Ungültiges Enddatum.')
@@ -260,6 +263,7 @@ function ruleFields(input: RecurringInput): Omit<RecurringRule, 'id' | 'bookedTh
     interval: input.interval,
     dayOfMonth: input.dayOfMonth,
     startDate: input.startDate,
+    autoBook: input.autoBook,
   }
   const note = cleanNote(input.note)
   if (note) fields.note = note
@@ -269,7 +273,10 @@ function ruleFields(input: RecurringInput): Omit<RecurringRule, 'id' | 'bookedTh
 
 export interface AddRecurringOptions {
   today: string
-  /** true: book occurrences since startDate that lie in the past; false: skip them. */
+  /**
+   * true: book occurrences since startDate that lie in the past (manual rules: show them as
+   * pending confirmations); false: skip them.
+   */
   catchUp: boolean
   id?: string
   now?: number
@@ -286,7 +293,10 @@ export function addRecurring(data: AppData, input: RecurringInput, opts: AddRecu
   return bookDue({ ...data, recurring: [...data.recurring, rule] }, opts.today, opts.now)
 }
 
-/** Changes apply to future occurrences only: bookedThrough and existing bookings stay as they are. */
+/**
+ * Changes apply to future occurrences only: bookedThrough and existing bookings stay as they are.
+ * Switching a manual rule to automatic books its pending occurrences on the next bookDue.
+ */
 export function updateRecurring(data: AppData, id: string, input: RecurringInput): AppData {
   validateRecurringInput(data, input)
   const existing = data.recurring.find((r) => r.id === id)
@@ -298,4 +308,83 @@ export function updateRecurring(data: AppData, id: string, input: RecurringInput
 /** Already booked transactions stay. */
 export function deleteRecurring(data: AppData, id: string): AppData {
   return { ...data, recurring: data.recurring.filter((r) => r.id !== id) }
+}
+
+/** What the user confirms or edits when a contract is booked; contracts always book to the Konto. */
+export type ContractBookingInput = Omit<TransactionInput, 'account'> & { account?: Account }
+
+function findRule(data: AppData, id: string): RecurringRule {
+  const rule = data.recurring.find((r) => r.id === id)
+  if (!rule) throw new Error('Die wiederkehrende Buchung wurde nicht gefunden.')
+  return rule
+}
+
+/** Only the oldest unhandled occurrence can be confirmed or skipped, so bookedThrough never leaves gaps. */
+function requireOldestPending(rule: RecurringRule, occurrenceDate: string): void {
+  const oldest = nextOccurrence(rule, rule.bookedThrough)
+  if (oldest === null || occurrenceDate < oldest) throw new Error('Dieser Termin ist bereits erledigt.')
+  if (occurrenceDate > oldest) throw new Error('Bitte zuerst den älteren Termin bestätigen.')
+}
+
+/** Books the (possibly edited) input as the rule's occurrence and marks the occurrence as handled. */
+function bookOccurrence(
+  data: AppData,
+  rule: RecurringRule,
+  occurrenceDate: string,
+  input: ContractBookingInput,
+  now: number,
+): AppData {
+  const full: TransactionInput = { ...input, account: 'konto' }
+  validateTransactionInput(data, full)
+  const t: Transaction = {
+    id: `${rule.id}:${occurrenceDate}`,
+    kind: full.kind,
+    amountCents: full.amountCents,
+    date: full.date,
+    categoryId: full.categoryId,
+    account: 'konto',
+    createdAt: now,
+    recurringId: rule.id,
+  }
+  const note = cleanNote(full.note)
+  if (note) t.note = note
+  return {
+    ...data,
+    transactions: [...data.transactions, t],
+    recurring: data.recurring.map((r) => (r.id === rule.id ? { ...r, bookedThrough: occurrenceDate } : r)),
+  }
+}
+
+/** Confirms the oldest pending occurrence with the given (possibly edited) amount, date, category and note. */
+export function confirmOccurrence(
+  data: AppData,
+  ruleId: string,
+  occurrenceDate: string,
+  input: ContractBookingInput,
+  now: number = Date.now(),
+): AppData {
+  const rule = findRule(data, ruleId)
+  requireOldestPending(rule, occurrenceDate)
+  return bookOccurrence(data, rule, occurrenceDate, input, now)
+}
+
+/** Marks the oldest pending occurrence as handled without booking anything. */
+export function skipOccurrence(data: AppData, ruleId: string, occurrenceDate: string): AppData {
+  const rule = findRule(data, ruleId)
+  requireOldestPending(rule, occurrenceDate)
+  return {
+    ...data,
+    recurring: data.recurring.map((r) => (r.id === ruleId ? { ...r, bookedThrough: occurrenceDate } : r)),
+  }
+}
+
+/**
+ * "Jetzt buchen": handles the next unhandled occurrence now (the oldest pending one, or the next
+ * one in the future, e.g. salary that arrives early). The booking date comes from the input.
+ */
+export function bookNextNow(data: AppData, ruleId: string, input: ContractBookingInput, now: number = Date.now()): AppData {
+  const rule = findRule(data, ruleId)
+  const next = nextOccurrence(rule, rule.bookedThrough)
+  if (next === null) throw new Error('Dieser Vertrag ist beendet, es gibt keinen weiteren Termin.')
+  return bookOccurrence(data, rule, next, input, now)
 }

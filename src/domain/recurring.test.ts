@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultData } from './defaults'
 import type { AppData, RecurringRule } from './types'
 import {
-  bookDue, monthlyEquivalent, nextOccurrence, occurrencesBetween, recurrenceLabel, recurringTitle, upcoming,
+  bookDue, monthlyEquivalent, nextOccurrence, occurrencesBetween, pendingConfirmations, recurrenceLabel, recurringTitle, upcoming,
 } from './recurring'
 
 const rule = (over: Partial<RecurringRule> = {}): RecurringRule => ({
@@ -14,6 +14,7 @@ const rule = (over: Partial<RecurringRule> = {}): RecurringRule => ({
   dayOfMonth: 1,
   startDate: '2026-08-01',
   bookedThrough: '2026-07-31',
+  autoBook: true,
   ...over,
 })
 const withRules = (...recurring: RecurringRule[]): AppData => ({ ...createDefaultData(), recurring })
@@ -117,6 +118,67 @@ describe('bookDue', () => {
   })
 })
 
+describe('bookDue with manual rules', () => {
+  it('skips rules with autoBook = false entirely: no booking, bookedThrough stays', () => {
+    const manual = rule({ id: 'm', autoBook: false, bookedThrough: '2026-08-01' })
+    const auto = rule({ id: 'a', bookedThrough: '2026-08-01' })
+    const d = withRules(manual, auto)
+    const out = bookDue(d, '2026-10-27', 1)
+    expect(out.transactions.map((t) => [t.recurringId, t.date])).toEqual([['a', '2026-09-01'], ['a', '2026-10-01']])
+    expect(out.recurring.map((r) => [r.id, r.bookedThrough])).toEqual([['m', '2026-08-01'], ['a', '2026-10-27']])
+    expect(bookDue(withRules(manual), '2026-10-27')).toEqual(withRules(manual))
+    expect(bookDue(out, '2026-10-27')).toBe(out)
+  })
+  it('switching a manual rule to automatic books its pending occurrences on the next bookDue', () => {
+    const d = withRules(rule({ autoBook: false, bookedThrough: '2026-08-01' }))
+    expect(pendingConfirmations(d, '2026-10-27')).toHaveLength(2)
+    const auto = { ...d, recurring: [{ ...d.recurring[0], autoBook: true }] }
+    const out = bookDue(auto, '2026-10-27')
+    expect(out.transactions.map((t) => t.date)).toEqual(['2026-09-01', '2026-10-01'])
+    expect(pendingConfirmations(out, '2026-10-27')).toEqual([])
+    expect(bookDue(out, '2026-10-27')).toBe(out)
+  })
+  it('switching an automatic rule to manual keeps bookedThrough, later occurrences become pending', () => {
+    const booked = bookDue(withRules(rule()), '2026-10-27')
+    const manual = { ...booked, recurring: [{ ...booked.recurring[0], autoBook: false }] }
+    expect(bookDue(manual, '2026-11-02')).toBe(manual)
+    expect(pendingConfirmations(manual, '2026-11-02').map((p) => p.date)).toEqual(['2026-11-01'])
+  })
+})
+
+describe('pendingConfirmations', () => {
+  const manual = (over: Partial<RecurringRule> = {}) => rule({ autoBook: false, ...over })
+  it('lists all occurrences in (bookedThrough, today] of manual rules only', () => {
+    const d = withRules(manual({ bookedThrough: '2026-08-01' }), rule({ id: 'auto', bookedThrough: '2026-08-01' }))
+    expect(pendingConfirmations(d, '2026-10-27').map((p) => [p.rule.id, p.date])).toEqual([['r1', '2026-09-01'], ['r1', '2026-10-01']])
+  })
+  it('includes today, excludes the future and bookedThrough itself', () => {
+    const d = withRules(manual({ dayOfMonth: 27, startDate: '2026-01-01', bookedThrough: '2026-09-27' }))
+    expect(pendingConfirmations(d, '2026-10-27').map((p) => p.date)).toEqual(['2026-10-27'])
+    expect(pendingConfirmations(d, '2026-10-26')).toEqual([])
+  })
+  it('respects endDate and a start date in the future', () => {
+    const ended = withRules(manual({ endDate: '2026-09-15', bookedThrough: '2026-07-31' }))
+    expect(pendingConfirmations(ended, '2026-12-01').map((p) => p.date)).toEqual(['2026-08-01', '2026-09-01'])
+    const future = withRules(manual({ startDate: '2026-11-01', bookedThrough: '2026-10-31' }))
+    expect(pendingConfirmations(future, '2026-10-27')).toEqual([])
+  })
+  it('sorts by date, then by title', () => {
+    const d = withRules(
+      manual({ id: 'z', note: 'Zeitung', dayOfMonth: 5, startDate: '2026-10-01', bookedThrough: '2026-09-30' }),
+      manual({ id: 'a', note: 'Abo', dayOfMonth: 5, startDate: '2026-10-01', bookedThrough: '2026-09-30' }),
+      manual({ id: 'm', note: 'Miete', dayOfMonth: 1, startDate: '2026-10-01', bookedThrough: '2026-09-30' }),
+      manual({ id: 'o', note: 'Alt', dayOfMonth: 3, startDate: '2026-09-01', bookedThrough: '2026-08-31' }),
+    )
+    expect(pendingConfirmations(d, '2026-10-27').map((p) => [p.date, p.rule.id])).toEqual([
+      ['2026-09-03', 'o'], ['2026-10-01', 'm'], ['2026-10-03', 'o'], ['2026-10-05', 'a'], ['2026-10-05', 'z'],
+    ])
+  })
+  it('is empty without manual rules', () => {
+    expect(pendingConfirmations(withRules(rule()), '2026-10-27')).toEqual([])
+  })
+})
+
 describe('upcoming', () => {
   it('lists the next 7 days sorted, excluding today', () => {
     const a = rule({ id: 'a', dayOfMonth: 2, startDate: '2026-01-01', bookedThrough: '2026-10-27' })
@@ -135,6 +197,14 @@ describe('upcoming', () => {
     const hidden = upcoming(data, '2026-10-27', 7, { excludeCategoryIds: ['income-gehalt'] })
     expect(hidden.map((u) => u.rule.id)).toEqual(['n', 'm'])
     expect(upcoming(data, '2026-10-27', 7, { excludeCategoryIds: [] })).toHaveLength(3)
+  })
+})
+
+describe('upcoming and monthlyEquivalent with manual rules', () => {
+  it('still list manual rules', () => {
+    const m = rule({ autoBook: false, dayOfMonth: 28, startDate: '2026-01-01', bookedThrough: '2026-10-27' })
+    expect(upcoming(withRules(m), '2026-10-27').map((u) => u.date)).toEqual(['2026-10-28'])
+    expect(monthlyEquivalent([m], '2026-10-27')).toEqual({ activeCount: 1, monthlyCents: 80000 })
   })
 })
 

@@ -6,7 +6,7 @@ import { LocalStorageRepository } from '../data/localStorageRepo'
 import { todayISO } from '../domain/dates'
 import { bookDue } from '../domain/recurring'
 import * as A from './actions'
-import type { RecurringInput, TransactionInput, TransferInput } from './actions'
+import type { ContractBookingInput, RecurringInput, TransactionInput, TransferInput } from './actions'
 
 export interface FinanceApi {
   data: AppData
@@ -29,6 +29,12 @@ export interface FinanceApi {
   addRecurring(input: RecurringInput, catchUp: boolean): void
   updateRecurring(id: string, input: RecurringInput): void
   deleteRecurring(id: string): void
+  /** Books the oldest pending occurrence of a manual contract with the given (edited) values. */
+  confirmOccurrence(ruleId: string, occurrenceDate: string, input: ContractBookingInput): void
+  /** Marks the oldest pending occurrence as handled without booking. */
+  skipOccurrence(ruleId: string, occurrenceDate: string): void
+  /** "Jetzt buchen": handles the next unhandled occurrence now, even if it lies in the future. */
+  bookNextNow(ruleId: string, input: ContractBookingInput): void
   replaceAll(data: AppData): void
 }
 
@@ -124,8 +130,12 @@ export function FinanceProvider({
       deleteCategory: (id) => apply((d) => A.deleteCategory(d, id)),
       setCategoryBudget: (id, c) => apply((d) => A.setCategoryBudget(d, id, c)),
       addRecurring: (i, catchUp) => apply((d) => A.addRecurring(d, i, { today: todayISO(), catchUp })),
-      updateRecurring: (id, i) => apply((d) => A.updateRecurring(d, id, i)),
+      // switching a rule to automatic books its pending occurrences right away
+      updateRecurring: (id, i) => apply((d) => bookDue(A.updateRecurring(d, id, i), todayISO())),
       deleteRecurring: (id) => apply((d) => A.deleteRecurring(d, id)),
+      confirmOccurrence: (id, date, i) => apply((d) => A.confirmOccurrence(d, id, date, i)),
+      skipOccurrence: (id, date) => apply((d) => A.skipOccurrence(d, id, date)),
+      bookNextNow: (id, i) => apply((d) => A.bookNextNow(d, id, i)),
       // an older backup may already have occurrences due
       replaceAll: (nd) => apply(() => bookDue(nd, todayISO())),
     }
