@@ -15,6 +15,8 @@ const nbsp = (s) => s.replace(/ /g, ' ')
 const browser = await chromium.launch()
 const ctx = await browser.newContext({ ...devices['iPhone 13'], acceptDownloads: true, locale: 'de-DE', timezoneId: 'Europe/Berlin' })
 const page = await ctx.newPage()
+// Alle erwarteten Werte gehen von „heute = Di, 27.10.2026“ aus – Uhr festsetzen, damit der Test an jedem Tag läuft.
+await page.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 page.on('pageerror', (e) => errors.push(e.message))
 
