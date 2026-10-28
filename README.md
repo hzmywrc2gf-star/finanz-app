@@ -52,6 +52,8 @@ React + Vite + TypeScript, `vite-plugin-pwa` (Manifest, Service Worker). Beträg
 
 ## Nächste Ausbaustufen
 
-1. **Sparziele** mit Zielbetrag und Datum.
-2. **Sync zwischen Handy und PC** – neues Repository-Backend (z. B. Supabase oder PocketBase), Login optional.
-3. Kleinere Ideen: CSV-Export, Haptik/Swipe-to-delete.
+1. **Investitionen – Depot-Übersicht**: Positionen von Hand eintragen (z. B. ETF, Stückzahl, Kaufkurs), aktuellen Kurs nachtragen, Wert und Gewinn/Verlust anzeigen.
+2. **Investitionen – Sparpläne**: als Vertrag, der monatlich vom Konto ins Depot geht und – wie eine Bargeld-Abhebung – nicht als Ausgabe zählt.
+3. **Sparziele** mit Zielbetrag und Datum.
+4. **Sync zwischen Handy und PC** – neues Repository-Backend (z. B. Supabase oder PocketBase), Login optional.
+5. Kleinere Ideen: CSV-Export, Haptik/Swipe-to-delete.

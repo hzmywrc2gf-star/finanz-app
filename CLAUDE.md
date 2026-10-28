@@ -29,4 +29,7 @@ React 19 + Vite + TypeScript, vite-plugin-pwa (autoUpdate, precache), Vitest. Ke
 `npm test` · `npm run build` · `npm run preview` + `npm run e2e` (Playwright, 62 Durchklick-Prüfungen inkl. Offline, Verträge, Budgets, Monatsauswertung, Start-Übersicht, Alle Buchungen mit Suche, Bargeld/Umbuchungen, Migration v3→v4 und Datumswechsel per `page.clock`).
 
 ## Backlog (nicht in v1)
-Sparziele, Sync Handy/PC.
+- Investitionen, Depot-Übersicht: Positionen manuell (Name/ISIN, Stückzahl, Kaufkurs), Kurs manuell nachtragen, Wert + Gewinn/Verlust; offline, keine Kurs-APIs (CORS, inoffizielle Quellen).
+- Investitionen, Sparpläne: Vertrag Konto → Depot, zählt wie eine Umbuchung nicht als Ausgabe.
+- Sparziele, Sync Handy/PC.
+- Bewusst nicht: das Day-Trader-Skill-Paket (github.com/Jakeschincariol/day-trader-skill) – US-Day-Trading, Python/Chat-basiert, passt nicht in die Offline-PWA.
