@@ -7,6 +7,7 @@ import { VaultError, vault } from '../data/vault'
 import type { AutoLockMinutes, VaultSession } from '../data/vault'
 import { Greeting } from '../components/Greeting'
 import { LockScreen, NewPasswordScreen } from '../components/LockScreen'
+import { LockSetupScreen } from '../components/LockSetupScreen'
 import type { LockControls } from '../components/LockScreen'
 import { greetingText } from '../lib/greeting'
 import { haptic } from '../lib/haptics'
@@ -27,8 +28,9 @@ type LockReason = 'start' | 'auto' | 'manual'
 const readHeader = () => vault.info()
 
 /**
- * Decides whether the finance app or the lock screen is shown. Owns the in-memory vault session (data key), auto-lock,
- * privacy cover and the greeting. With the lock off it is just the FinanceProvider on plain local storage.
+ * Decides whether the finance app, the lock screen or the mandatory setup is shown. Owns the in-memory vault session
+ * (data key), auto-lock, privacy cover and the greeting. The app never opens without a vault: while none exists, only
+ * the setup screen is shown (inside a FinanceProvider on plain local storage, so existing data is carried into the vault).
  */
 export function LockProvider({ children }: { children: ReactNode }) {
   const [enabled, setEnabled] = useState(() => vault.exists())
@@ -38,6 +40,8 @@ export function LockProvider({ children }: { children: ReactNode }) {
   const [reason, setReason] = useState<LockReason>('start')
   const [greeting, setGreeting] = useState<string | null>(null)
   const [passkeyLikely, setPasskeyLikely] = useState(false)
+  // the setup screen stays until its last step ("Fertig"), even though the vault already exists after step 2
+  const [settingUp, setSettingUp] = useState(() => !vault.exists())
 
   const unlockedRef = useRef(unlocked)
   const locking = useRef(false)
@@ -68,6 +72,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
       setUnlocked(null) // unmounts the whole app: sheets, undo toast and all data leave React state
       setPending(null)
       setGreeting(null)
+      setSettingUp(false) // locked during the optional Face ID step: after unlocking, the app opens directly
       setHeader(readHeader())
     } finally {
       locking.current = false
@@ -229,16 +234,6 @@ export function LockProvider({ children }: { children: ReactNode }) {
         setUnlocked({ session, repo: new EncryptedRepository(session.dek) })
         haptic()
       },
-      async disable(password) {
-        const u = current()
-        await u.repo.flush()
-        await vault.disable(password) // throws on a wrong password; plaintext is verified before the vault goes
-        u.repo.close()
-        unlockedRef.current = null
-        setUnlocked(null)
-        setEnabled(false)
-        setHeader(null)
-      },
       async changePassword(oldPassword, newPassword) {
         setSession(await vault.changePassword(current().session, oldPassword, newPassword))
       },
@@ -265,6 +260,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
   }, [enabled, minutes, hasPasskey, passkeyLikely, lock])
 
   const clearGreeting = useCallback(() => setGreeting(null), [])
+  const finishSetup = useCallback(() => setSettingUp(false), [])
 
   let body: ReactNode
   if (enabled && !unlocked) {
@@ -278,7 +274,9 @@ export function LockProvider({ children }: { children: ReactNode }) {
       <LockScreen {...controls} />
     )
   } else {
-    body = <FinanceProvider repository={unlocked?.repo ?? localRepo}>{children}</FinanceProvider>
+    // no vault yet (or setup not finished): only the setup screen, never the app on unprotected data
+    const content = enabled && unlocked && !settingUp ? children : <LockSetupScreen onDone={finishSetup} />
+    body = <FinanceProvider repository={unlocked?.repo ?? localRepo}>{content}</FinanceProvider>
   }
   return (
     <LockContext.Provider value={api}>

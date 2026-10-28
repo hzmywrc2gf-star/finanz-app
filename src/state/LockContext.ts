@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { AutoLockMinutes } from '../data/vault'
 import type { AppData } from '../domain/types'
 
-/** What the settings need from the app lock (the unlocked app only; the lock screen has its own controls). */
+/** What the setup screen and the settings need from the app lock (the lock screen has its own controls). The lock cannot be turned off. */
 export interface LockApi {
   enabled: boolean
   autoLockMinutes: AutoLockMinutes
@@ -11,7 +11,6 @@ export interface LockApi {
   passkeyLikely: boolean
   /** Turns the lock on with the data currently shown; `recoveryKey` was already shown to the user. */
   enable(data: AppData, password: string, recoveryKey: string): Promise<void>
-  disable(password: string): Promise<void>
   changePassword(oldPassword: string, newPassword: string): Promise<void>
   /** Returns the new key; the old one stops working. */
   regenerateRecoveryKey(): Promise<string>

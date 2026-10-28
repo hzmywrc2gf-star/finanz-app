@@ -209,7 +209,7 @@ export const SettingsPage = memo(function SettingsPage() {
 
       <CategoryManager />
 
-      <AppLockSettings onExportBackup={() => setExporting(true)} />
+      <AppLockSettings />
 
       <div className="section-title">Datensicherung</div>
       <div className="card btn-row">
