@@ -2,9 +2,9 @@ import { memo, useMemo, useState } from 'react'
 import type { Category } from '../domain/types'
 import { addMonths, monthLabel, monthStart, todayISO } from '../domain/dates'
 import { monthBudgets } from '../domain/budget'
-import type { BudgetStatus } from '../domain/budget'
 import { formatCents, formatPercent } from '../domain/money'
 import { useFinance } from '../state/FinanceContext'
+import { BudgetBar } from '../components/BudgetBar'
 import { BudgetForm } from '../components/BudgetForm'
 import { ChevronLeft, ChevronRight } from '../components/Icons'
 import { SwipePane } from '../components/SwipePane'
@@ -13,22 +13,7 @@ import { SwipePane } from '../components/SwipePane'
 const remainingText = (remainingCents: number) =>
   remainingCents >= 0 ? `noch ${formatCents(remainingCents)}` : `${formatCents(-remainingCents)} drüber`
 
-function Progress({ percent, status, label }: { percent: number; status: BudgetStatus; label: string }) {
-  return (
-    <div
-      className="bar-track budget-track"
-      role="progressbar"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(percent)}
-      aria-valuetext={`${formatPercent(percent)} verbraucht`}
-      data-status={status}
-    >
-      <div className="bar-fill" style={{ width: `${Math.min(percent, 100)}%`, background: `var(--${status})` }} />
-    </div>
-  )
-}
+const TINTS = ['lav', 'mist', 'sand', 'sky'] as const
 
 export const BudgetPage = memo(function BudgetPage() {
   const { data } = useFinance()
@@ -44,14 +29,14 @@ export const BudgetPage = memo(function BudgetPage() {
     <>
       <h1 className="page-title">Budgets</h1>
       <SwipePane onStep={(step) => setMonth((m) => addMonths(m, step))}>
-        <div className="week-nav">
-          <button className="icon-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Vorheriger Monat">
+        <div className="month-switch">
+          <button className="round-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Vorheriger Monat">
             <ChevronLeft />
           </button>
-          <div className="label" aria-live="polite">
+          <div className="month-pill" aria-live="polite">
             {monthLabel(month)}
           </div>
-          <button className="icon-btn" onClick={() => setMonth(addMonths(month, 1))} aria-label="Nächster Monat">
+          <button className="round-btn" onClick={() => setMonth(addMonths(month, 1))} aria-label="Nächster Monat">
             <ChevronRight />
           </button>
         </div>
@@ -64,57 +49,49 @@ export const BudgetPage = memo(function BudgetPage() {
         )}
 
         {items.length > 0 && (
-          <div className="card card-pad budget-total" data-status={total.status}>
-            <div className="bar-head">
+          <section className="budget-card total tint-sky" aria-label="Gesamt" data-status={total.status}>
+            <div className="budget-top">
               <span className="budget-name">Gesamt</span>
-              <span className="num budget-remaining" style={{ color: `var(--${total.status}-text)` }}>
-                {remainingText(total.remainingCents)}
-              </span>
+              <span className={`budget-pct num c-${total.status}`}>{formatPercent(total.percent)}</span>
             </div>
             <div className="budget-amounts num">
               {formatCents(total.spentCents)} von {formatCents(total.budgetCents)}
             </div>
-            <Progress percent={total.percent} status={total.status} label="Gesamtbudget" />
-          </div>
+            <BudgetBar percent={total.percent} status={total.status} label="Gesamtbudget" />
+            <div className={`budget-note num c-${total.status}`}>{remainingText(total.remainingCents)}</div>
+          </section>
         )}
 
-        <div className="section-title">Kategorien</div>
-        <ul className="list card">
-          {categories.map((c) => {
-            const item = itemById.get(c.id)
-            return (
-              <li key={c.id}>
-                <button className="row budget-row" onClick={() => setEditing(c)}>
-                  {item ? (
-                    <span className="budget-body" data-status={item.status}>
-                      <span className="bar-head">
-                        <span className="budget-name">{c.name}</span>
-                        <span className="num budget-amounts">
-                          {formatCents(item.spentCents)} von {formatCents(item.budgetCents)}
-                        </span>
-                      </span>
-                      <span className="bar-head budget-sub">
-                        <span className="num" style={{ color: `var(--${item.status}-text)` }}>
-                          {remainingText(item.remainingCents)}
-                        </span>
-                        <span className="num muted">{formatPercent(item.percent)}</span>
-                      </span>
-                      <Progress percent={item.percent} status={item.status} label={`Budget ${c.name}`} />
-                    </span>
-                  ) : (
-                    <span className="budget-body">
-                      <span className="bar-head">
-                        <span className="budget-name">{c.name}</span>
-                        <span className="num budget-amounts">{formatCents(spentById.get(c.id) ?? 0)}</span>
-                      </span>
-                      <span className="budget-sub muted">Budget festlegen</span>
-                    </span>
-                  )}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+        <div className="cat-title">Kategorien</div>
+        {categories.map((c, i) => {
+          const item = itemById.get(c.id)
+          const tint = `tint-${TINTS[i % TINTS.length]}`
+          return item ? (
+            <button key={c.id} className={`budget-card ${tint}`} data-status={item.status} onClick={() => setEditing(c)}>
+              <span className="budget-top">
+                <span>
+                  <span className="budget-name" style={{ display: 'block' }}>{c.name}</span>
+                  <span className="budget-amounts num" style={{ display: 'block' }}>
+                    {formatCents(item.spentCents)} von {formatCents(item.budgetCents)}
+                  </span>
+                </span>
+                <span className={`budget-pct num c-${item.status}`}>{formatPercent(item.percent)}</span>
+              </span>
+              <BudgetBar percent={item.percent} status={item.status} label={`Budget ${c.name}`} />
+              <span className={`budget-note num c-${item.status}`} style={{ display: 'block' }}>
+                {remainingText(item.remainingCents)}
+              </span>
+            </button>
+          ) : (
+            <button key={c.id} className={`budget-card ${tint}`} onClick={() => setEditing(c)}>
+              <span className="budget-top">
+                <span className="budget-name">{c.name}</span>
+                <span className="budget-amounts num">{formatCents(spentById.get(c.id) ?? 0)}</span>
+              </span>
+              <span className="budget-empty" style={{ display: 'block' }}>Budget festlegen</span>
+            </button>
+          )
+        })}
         {items.length === 0 && <div className="footnote">Tippe auf eine Kategorie, um ein Monatsbudget festzulegen.</div>}
       </SwipePane>
 

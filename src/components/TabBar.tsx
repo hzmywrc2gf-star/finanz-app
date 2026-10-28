@@ -21,7 +21,7 @@ export function TabBar({ active, onChange }: { active: TabId; onChange: (t: TabI
             aria-current={active === t.id ? 'page' : undefined}
             onClick={() => onChange(t.id)}
           >
-            {t.icon}
+            <span className="tab-ind">{t.icon}</span>
             <span>{t.label}</span>
           </button>
         ))}

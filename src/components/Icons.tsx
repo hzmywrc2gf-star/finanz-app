@@ -61,3 +61,8 @@ export const RepeatIcon = () => (
     <path d="M20 4v5h-5" />
   </svg>
 )
+
+export const LockIcon = ({ size = 20 }: { size?: number }) =>
+  wrap(<><rect x="5" y="11" width="14" height="9.5" rx="2.2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>, size)
+/** Decorative ↻ for contract rows (RepeatIcon carries a label for lists of bookings). */
+export const RefreshIcon = () => wrap(<><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></>, 20)
