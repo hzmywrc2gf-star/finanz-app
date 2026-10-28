@@ -19,7 +19,6 @@ const wrap = (children: ReactNode, size?: number) => (
 )
 
 export const HomeIcon = () => wrap(<><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v9.5h13V10" /><path d="M10 19.5v-5h4v5" /></>)
-export const WeekIcon = () => wrap(<><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>)
 export const MonthIcon = () =>
   wrap(<><rect x="4" y="11" width="4" height="9" rx="1" /><rect x="10" y="4" width="4" height="16" rx="1" /><rect x="16" y="8" width="4" height="12" rx="1" /></>)
 export const BudgetIcon = () =>

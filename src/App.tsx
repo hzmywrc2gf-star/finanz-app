@@ -5,7 +5,6 @@ import { TabBar } from './components/TabBar'
 import type { TabId } from './components/TabBar'
 import { TransactionForm } from './components/TransactionForm'
 import { StartPage } from './pages/StartPage'
-import { WeekPage } from './pages/WeekPage'
 import { MonthPage } from './pages/MonthPage'
 import { BudgetPage } from './pages/BudgetPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -27,13 +26,12 @@ export default function App() {
             onOpenBudgets={() => setTab('budgets')}
           />
         )}
-        {tab === 'week' && (
-          <WeekPage
+        {tab === 'month' && (
+          <MonthPage
             onAdd={(defaultDate) => setForm({ defaultDate })}
             onEdit={(transaction) => setForm({ transaction })}
           />
         )}
-        {tab === 'month' && <MonthPage onEdit={(transaction) => setForm({ transaction })} />}
         {tab === 'budgets' && <BudgetPage />}
         {tab === 'settings' && <SettingsPage />}
       </main>

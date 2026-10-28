@@ -1,5 +1,4 @@
 import type { AppData, Category, Transaction } from './types'
-import { addDays } from './dates'
 
 export function currentBalance(data: AppData): number {
   let sum = data.settings.startBalanceCents
@@ -47,7 +46,7 @@ function categorySums(
     .sort((a, b) => b.cents - a.cents || a.name.localeCompare(b.name, 'de'))
 }
 
-/** Totals and per-category sums for the inclusive date range [from, to] (shared by week and month). */
+/** Totals and per-category sums for the inclusive date range [from, to] (used by the month summary). */
 export function summarizeRange(
   transactions: Transaction[],
   categories: Category[],
@@ -76,28 +75,5 @@ export function summarizeRange(
     expenseByCategory: categorySums(expenseSums, expenseCents, names),
     incomeByCategory: categorySums(incomeSums, incomeCents, names),
     transactions: inRange,
-  }
-}
-
-export interface WeekSummary {
-  incomeCents: number
-  expenseCents: number
-  saldoCents: number
-  byCategory: CategorySum[]
-  transactions: Transaction[]
-}
-
-export function weekSummary(
-  transactions: Transaction[],
-  categories: Category[],
-  weekStart: string,
-): WeekSummary {
-  const r = summarizeRange(transactions, categories, weekStart, addDays(weekStart, 6))
-  return {
-    incomeCents: r.incomeCents,
-    expenseCents: r.expenseCents,
-    saldoCents: r.incomeCents - r.expenseCents,
-    byCategory: r.expenseByCategory,
-    transactions: r.transactions,
   }
 }

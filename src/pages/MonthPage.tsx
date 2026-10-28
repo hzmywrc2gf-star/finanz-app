@@ -6,6 +6,7 @@ import type { MonthPoint } from '../domain/month'
 import { formatCents, formatDelta, formatPercent } from '../domain/money'
 import { useFinance } from '../state/FinanceContext'
 import { TransactionList } from '../components/TransactionList'
+import { Fab } from '../components/Fab'
 import { ChevronLeft, ChevronRight } from '../components/Icons'
 
 /** "Oktober 2026 · Einnahmen 2.500,00 € · Ausgaben 850,00 € · Saldo 1.650,00 €" */
@@ -109,7 +110,13 @@ function TrendChart({ points, selected }: { points: MonthPoint[]; selected: stri
   )
 }
 
-export function MonthPage({ onEdit }: { onEdit: (t: Transaction) => void }) {
+export function MonthPage({
+  onAdd,
+  onEdit,
+}: {
+  onAdd: (defaultDate: string) => void
+  onEdit: (t: Transaction) => void
+}) {
   const { data } = useFinance()
   const [month, setMonth] = useState(() => monthStart(todayISO()))
   const currentMonth = monthStart(todayISO())
@@ -263,8 +270,12 @@ export function MonthPage({ onEdit }: { onEdit: (t: Transaction) => void }) {
               <TransactionList transactions={summary.topExpenses} categories={data.categories} onSelect={onEdit} />
             </>
           )}
+
+          <div className="section-title">Alle Buchungen</div>
+          <TransactionList transactions={summary.transactions} categories={data.categories} onSelect={onEdit} />
         </>
       )}
+      <Fab onClick={() => onAdd(month === currentMonth ? todayISO() : month)} />
     </>
   )
 }

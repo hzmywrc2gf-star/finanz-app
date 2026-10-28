@@ -88,11 +88,21 @@ describe('monthSummary', () => {
     expect(top.map((t) => [t.amountCents, t.note])).toEqual([[900, undefined], [500, 'b'], [500, 'a'], [300, undefined], [200, undefined]])
   })
 
+  it('lists all booked transactions of the month newest first', () => {
+    const a = tx({ kind: 'expense', amountCents: 100, date: '2026-10-05', createdAt: 1 })
+    const b = tx({ kind: 'expense', amountCents: 200, date: '2026-10-05', createdAt: 2 })
+    const c = tx({ kind: 'income', amountCents: 300, date: '2026-10-31', createdAt: 0 })
+    const d = tx({ kind: 'expense', amountCents: 400, date: '2026-11-01' })
+    const e = tx({ kind: 'expense', amountCents: 500, date: '2026-09-30' })
+    expect(monthSummary(withTx([a, d, b, e, c]), '2026-10-01').transactions).toEqual([c, b, a])
+  })
+
   it('is empty for a month without bookings', () => {
     const s = monthSummary(withTx([]), '2026-10-01')
     expect(s.transactionCount).toBe(0)
     expect(s.expenseByCategory).toEqual([])
     expect(s.topExpenses).toEqual([])
+    expect(s.transactions).toEqual([])
     expect(s.previous.transactionCount).toBe(0)
   })
 })

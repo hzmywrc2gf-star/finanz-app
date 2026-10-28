@@ -4,7 +4,7 @@ Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, di
 
 <p>
   <img src="docs/start.png" width="260" alt="Startseite mit Kontostand">
-  <img src="docs/woche-buchungen.png" width="260" alt="Wochenübersicht">
+  <img src="docs/monat.png" width="260" alt="Monatsauswertung">
 </p>
 
 ## Funktionen
@@ -12,10 +12,9 @@ Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, di
 - **Kontostand**: Startguthaben + Einnahmen − Ausgaben, groß auf der Startseite.
 - **Buchungen**: Einnahme/Ausgabe, Betrag, Datum, Kategorie, Notiz – bearbeiten und löschen per Tippen auf die Buchung.
 - **Kategorien**: Standard-Kategorien plus eigene (hinzufügen, umbenennen, löschen). Buchungen gelöschter Kategorien wandern nach „Sonstiges“.
-- **Wochenübersicht** (Mo–So): Einnahmen, Ausgaben, Saldo, Ausgaben pro Kategorie mit Prozent und Balken, alle Buchungen der Woche.
 - **Wiederkehrende Buchungen**: Miete, Abos, Gehalt (monatlich, vierteljährlich, jährlich) werden automatisch gebucht, mit optionalem Nachbuchen vergangener Termine und „Demnächst fällig“ auf der Startseite.
 - **Monatsbudgets**: pro Ausgaben-Kategorie ein Budget festlegen (Tab „Budgets“), Fortschrittsbalken grün/orange/rot, Gesamtbudget, Monatsnavigation und Hinweis auf der Startseite ab 80 % Verbrauch.
-- **Monatsauswertung** (Tab „Monat“): Einnahmen, Ausgaben, Saldo, Sparquote, Vergleich zum Vormonat, 6-Monats-Verlauf als Diagramm mit Tabelle, Ausgaben/Einnahmen nach Kategorie und die größten Ausgaben.
+- **Monatsauswertung** (Tab „Monat“): Einnahmen, Ausgaben, Saldo, Sparquote, Vergleich zum Vormonat, 6-Monats-Verlauf als Diagramm mit Tabelle, Ausgaben/Einnahmen nach Kategorie die größten Ausgaben und alle Buchungen des Monats (neueste zuerst, Tippen zum Bearbeiten, „+“ zum Hinzufügen).
 - **Backup**: Export/Import aller Daten als JSON (Einstellungen → Datensicherung).
 - **Offline-fähig** und als App auf dem Home-Bildschirm installierbar.
 
@@ -26,7 +25,7 @@ Voraussetzung: [Node.js](https://nodejs.org) 20 oder neuer.
 ```bash
 npm install
 npm run dev        # Entwicklungsserver auf http://localhost:5173
-npm test           # Unit-Tests (Geldformat, Wochen, Kontostand, Backup)
+npm test           # Unit-Tests (Geldformat, Datum, Kontostand, Monat, Backup)
 npm run build      # Produktions-Build nach dist/
 npm run preview    # Build lokal ansehen auf http://localhost:4173
 npm run e2e        # Durchklick-Test (braucht laufendes `npm run preview` und Playwright)

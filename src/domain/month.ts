@@ -23,6 +23,8 @@ export interface MonthSummary extends MonthTotals {
   incomeByCategory: CategorySum[]
   /** The 5 largest expenses; ties newest first. */
   topExpenses: Transaction[]
+  /** All booked transactions of the month, newest first. */
+  transactions: Transaction[]
   previous: MonthTotals & { transactionCount: number }
   transactionCount: number
 }
@@ -55,6 +57,7 @@ export function monthSummary(data: AppData, month: string): MonthSummary {
     topExpenses: [...expenses]
       .sort((a, b) => b.amountCents - a.amountCents || compareTransactionsDesc(a, b))
       .slice(0, TOP_EXPENSES),
+    transactions: cur.transactions,
     previous: {
       incomeCents: prev.incomeCents,
       expenseCents: prev.expenseCents,
