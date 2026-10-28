@@ -21,6 +21,7 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 page.on('pageerror', (e) => errors.push(e.message))
 
 const tab = (name) => page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
+const tabOn = (p, name) => p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
 const bodyText = async () => nbsp(await page.locator('body').innerText())
 async function expectText(t) {
   for (let i = 0; i < 20; i++) { if ((await bodyText()).includes(t)) return; await page.waitForTimeout(100) }
@@ -1649,6 +1650,116 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     must((await pr.locator('.week-nav .label').innerText()).trim(), 'November 2026', 'Reduzierte Bewegung: Monat wischen')
     await ctxR.close()
     ok(`Bewegung reduzieren: Push/Pop, Kanten-Wischen, Sheet-Wischen (Überblendung statt Slide) und Monat-Wischen funktionieren (Push ${pushMs} ms)`)
+  }
+}
+
+// Darstellung: Automatisch / Hell / Dunkel (eigener Key, kein Teil der Daten)
+{
+  const mk = async (colorScheme) => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', colorScheme, serviceWorkers: 'block', acceptDownloads: true })
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+    return { c, p }
+  }
+  const css = (p, sel, prop) => p.locator(sel).first().evaluate((el, pr) => getComputedStyle(el)[pr], prop)
+  const metas = (p) => p.evaluate(() => [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => m.content))
+  const pick = async (p, name) => { await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click(); await p.getByRole('group', { name: 'Darstellung' }).getByRole('button', { name, exact: true }).click() }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const mustEq = (a, b, what) => { if (a !== b) throw new Error(`${what}: ${a} ≠ ${b}`) }
+
+  // 1) Systemhell: Dunkel wählen, sofort dunkel, nach Neuladen weiter dunkel und ohne helles Aufblitzen
+  {
+    const { c, p } = await mk('light')
+    await p.addInitScript(() => {
+      new MutationObserver((_, obs) => {
+        const r = document.getElementById('root')
+        if (r && r.childElementCount) { window.__themeAtMount = document.documentElement.dataset.theme ?? 'none'; obs.disconnect() }
+      }).observe(document, { childList: true, subtree: true })
+    })
+    await p.goto(URL)
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Hell: Hintergrund')
+    await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
+    await sleep(300) // Tab-Einblenden abwarten
+    await p.screenshot({ path: `${SHOTS}/36-einstellungen-darstellung.png` })
+    mustEq(await p.getByRole('group', { name: 'Darstellung' }).getByRole('button', { name: 'Automatisch' }).getAttribute('aria-pressed'), 'true', 'Standard Automatisch')
+    await pick(p, 'Dunkel')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'Dunkel erzwungen: Hintergrund')
+    mustEq(await css(p, '.card', 'backgroundColor'), 'rgb(28, 28, 30)', 'Dunkel erzwungen: Karte')
+    mustEq(await p.evaluate(() => document.documentElement.dataset.theme), 'dark', 'data-theme')
+    mustEq(await p.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark', 'color-scheme')
+    mustEq(await p.evaluate(() => localStorage.getItem('finanz-app:theme')), 'dark', 'Key')
+    const m = await metas(p)
+    if (!m.every((x) => x === '#000000')) throw new Error('theme-color bei Dunkel: ' + m)
+    await tabOn(p, 'Start').click()
+    mustEq(await css(p, 'h1', 'color'), 'rgb(255, 255, 255)', 'Dunkel: Text')
+    await sleep(300)
+    await p.screenshot({ path: `${SHOTS}/37-dunkel-erzwungen.png` })
+    await p.reload()
+    await p.locator('h1').first().waitFor()
+    mustEq(await p.evaluate(() => window.__themeAtMount), 'dark', 'Thema vor dem ersten Rendern')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'Nach Neuladen: Hintergrund')
+    ok('Darstellung: Dunkel bei hellem System sofort wirksam (Hintergrund #000, Karte #1C1C1E, Text hell, color-scheme dark, theme-color #000000), nach Neuladen weiter dunkel und data-theme schon vor dem ersten Rendern gesetzt')
+
+    // Monat-Diagramm in den dunklen Farbvarianten, Datensicherung ohne Darstellung
+    await tabOn(p, 'Start').click()
+    await p.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await p.fill('#tx-amount', '50')
+    await p.getByRole('button', { name: 'Sichern' }).click()
+    await p.getByRole('dialog').waitFor({ state: 'detached' })
+    await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Monat', exact: true }).click()
+    await p.locator('.trend-bar').first().waitFor({ state: 'attached' })
+    mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(48, 209, 88)', 'Dunkel: Einnahmen-Balken')
+    mustEq(await css(p, '.trend-bar:nth-child(2)', 'backgroundColor'), 'rgb(255, 69, 58)', 'Dunkel: Ausgaben-Balken')
+    ok('Darstellung: Monat-Diagramm nutzt unter erzwungenem Dunkel #30D158 / #FF453A')
+    await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.getByRole('button', { name: 'Exportieren' }).click()])
+    const backup = fs.readFileSync(await dl.path(), 'utf8')
+    if (/theme|dark|Darstellung/i.test(backup)) throw new Error('Darstellung steckt im Backup')
+    ok('Darstellung: nicht Teil des JSON-Backups')
+
+    // Automatisch: zurück auf System, folgt emulateMedia live
+    await pick(p, 'Automatisch')
+    mustEq(await p.evaluate(() => document.documentElement.hasAttribute('data-theme')), false, 'data-theme entfernt')
+    mustEq(await p.evaluate(() => localStorage.getItem('finanz-app:theme')), null, 'Key entfernt')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Automatisch + System hell')
+    await p.emulateMedia({ colorScheme: 'dark' })
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'Automatisch + System dunkel')
+    await p.emulateMedia({ colorScheme: 'light' })
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Automatisch + wieder hell')
+    const ms = await p.evaluate(() => [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => [m.media, m.content]))
+    mustEq(JSON.stringify(ms), JSON.stringify([['(prefers-color-scheme: light)', '#F2F2F7'], ['(prefers-color-scheme: dark)', '#000000']]), 'theme-color-Metas bei Automatisch')
+    ok('Darstellung: Automatisch folgt dem System live (emulateMedia hell ↔ dunkel), data-theme entfernt, beide theme-color-Metas wiederhergestellt')
+    await c.close()
+  }
+
+  // 2) Systemdunkel: Hell erzwingen
+  {
+    const { c, p } = await mk('dark')
+    await p.goto(URL)
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(0, 0, 0)', 'System dunkel: Hintergrund')
+    await pick(p, 'Hell')
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Hell erzwungen: Hintergrund')
+    mustEq(await css(p, '.card', 'backgroundColor'), 'rgb(255, 255, 255)', 'Hell erzwungen: Karte')
+    mustEq(await p.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'light', 'color-scheme')
+    const m = await metas(p)
+    if (!m.every((x) => x === '#F2F2F7')) throw new Error('theme-color bei Hell: ' + m)
+    await tabOn(p, 'Start').click()
+    await p.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await p.fill('#tx-amount', '50')
+    await p.getByRole('button', { name: 'Sichern' }).click()
+    await p.getByRole('dialog').waitFor({ state: 'detached' })
+    await tabOn(p, 'Monat').click()
+    await p.locator('.trend-bar').first().waitFor({ state: 'attached' })
+    mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(52, 199, 89)', 'Hell: Einnahmen-Balken')
+    await sleep(300)
+    await p.screenshot({ path: `${SHOTS}/38-hell-erzwungen.png` })
+    await p.reload()
+    await p.locator('h1').first().waitFor()
+    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(242, 242, 247)', 'Hell nach Neuladen')
+    ok('Darstellung: Hell bei dunklem System sofort wirksam und persistent (Hintergrund #F2F2F7, Karte weiß, Balken #34C759, theme-color #F2F2F7)')
+    await c.close()
   }
 }
 

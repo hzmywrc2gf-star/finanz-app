@@ -2,6 +2,13 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Darstellung vor dem ersten Rendern setzen (kein Aufblitzen); Key wie in src/lib/theme.ts
+      try {
+        var t = localStorage.getItem('finanz-app:theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
     <link rel="icon" type="image/png" href="./favicon.png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />

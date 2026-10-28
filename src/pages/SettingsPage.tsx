@@ -7,6 +7,15 @@ import type { AppData } from '../domain/types'
 import { useFinance } from '../state/FinanceContext'
 import { CategoryManager } from '../components/CategoryManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { SegmentedControl } from '../components/SegmentedControl'
+import { useThemePref } from '../hooks/useThemePref'
+import type { ThemePref } from '../lib/theme'
+
+const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
+  { value: 'system', label: 'Automatisch' },
+  { value: 'light', label: 'Hell' },
+  { value: 'dark', label: 'Dunkel' },
+]
 
 export function SettingsPage() {
   const { data, setStartBalance, setStartCash, replaceAll, saveError } = useFinance()
@@ -15,6 +24,7 @@ export function SettingsPage() {
   const [balanceMsg, setBalanceMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [pending, setPending] = useState<AppData | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [theme, setTheme] = useThemePref()
   const fileRef = useRef<HTMLInputElement>(null)
 
   function saveBalance(e: FormEvent) {
@@ -82,6 +92,12 @@ export function SettingsPage() {
           {saveError}
         </div>
       )}
+
+      <div className="section-title">Darstellung</div>
+      <div className="card" style={{ padding: 12 }}>
+        <SegmentedControl label="Darstellung" options={THEME_OPTIONS} value={theme} onChange={setTheme} />
+      </div>
+      <div className="footnote">Automatisch folgt der Einstellung des iPhones.</div>
 
       <div className="section-title">Startguthaben</div>
       <form className="card" onSubmit={saveBalance} noValidate>

@@ -25,8 +25,17 @@
   color-scheme: light dark;
 }
 
+/* Dunkle Palette: Automatisch folgt dem System, „Dunkel“ (data-theme) erzwingt sie; „Hell“ sperrt sie. */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #000000;
     --card: #1c1c1e;
     --card-2: #2c2c2e;
@@ -47,6 +56,29 @@
     --seg-bg: rgba(118, 118, 128, 0.24);
     --seg-active: #636366;
   }
+}
+
+/* Erzwungen dunkel bei hellem System: dieselben Werte (nur hier dupliziert, CSS kann Media-Query und Attribut nicht teilen) */
+:root[data-theme='dark'] {
+  --bg: #000000;
+  --card: #1c1c1e;
+  --card-2: #2c2c2e;
+  --text: #ffffff;
+  --text-2: rgba(235, 235, 245, 0.6);
+  --sep: rgba(84, 84, 88, 0.6);
+  --accent: #0a84ff;
+  --income: #30d158;
+  --income-text: #30d158;
+  --expense: #ff453a;
+  --expense-text: #ff6961;
+  --ok: #30d158;
+  --ok-text: #30d158;
+  --warn: #ff9f0a;
+  --warn-text: #ffb340;
+  --tabbar-bg: rgba(29, 29, 31, 0.86);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --seg-bg: rgba(118, 118, 128, 0.24);
+  --seg-active: #636366;
 }
 
 * {

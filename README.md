@@ -17,6 +17,7 @@ Kleine Web-App (PWA) für Einnahmen und Ausgaben. Läuft komplett im Browser, di
 - **Monatsbudgets**: pro Ausgaben-Kategorie ein Budget festlegen (Tab „Budgets“), Fortschrittsbalken grün/orange/rot, Gesamtbudget, Monatsnavigation und Hinweis auf der Startseite ab 80 % Verbrauch.
 - **Monatsauswertung** (Tab „Monat“): Einnahmen, Ausgaben, Saldo, Sparquote, Vergleich zum Vormonat, 6-Monats-Verlauf als Diagramm mit Tabelle, Ausgaben/Einnahmen nach Kategorie die größten Ausgaben und alle Buchungen des Monats (neueste zuerst, Tippen zum Bearbeiten, „+“ zum Hinzufügen).
 - **Gesten wie auf dem iPhone**: vom linken Rand wischen = zurück (Alle Buchungen, Bargeld, Verträge), Sheets am Griff nach unten wegwischen, auf „Monat“ und „Budgets“ nach links/rechts wischen = nächster/vorheriger Monat; weiche Übergänge beim Öffnen und Schließen. Mit „Bewegung reduzieren“ im System gibt es nur kurze Überblendungen.
+- **Darstellung**: Automatisch (folgt dem iPhone), Hell oder Dunkel – Einstellungen → Darstellung, gilt sofort und wird nur auf diesem Gerät gemerkt (nicht in der Sicherung).
 - **Backup**: Export/Import aller Daten als JSON (Einstellungen → Datensicherung).
 - **Offline-fähig** und als App auf dem Home-Bildschirm installierbar.
 

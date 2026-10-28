@@ -1,22 +1,22 @@
 # Graph Report - finanz-app  (2026-10-28)
 
 ## Corpus Check
-- 65 files · ~42,302 words
+- 68 files · ~43,841 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 2 file(s) not represented in the graph (top: (none) 1, .css 1)
 
 ## Summary
-- 519 nodes · 1529 edges · 15 communities (14 shown, 1 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 41 edges (avg confidence: 0.94)
+- 533 nodes · 1570 edges · 20 communities (18 shown, 2 thin omitted)
+- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 48 edges (avg confidence: 0.94)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `04f04918`
+- Built from commit: `cf51200a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- App.tsx
+- CategoryManager.tsx
 - actions.ts
 - dates.ts
 - StartPage.tsx
@@ -25,57 +25,62 @@
 - recurring.ts
 - deploy.yml
 - gesture.ts
-- types.ts
-- Projektkontext: finanz-app („Finanzklar“)
+- FinanceApi
+- Regeln
 - compilerOptions
 - compilerOptions
 - .oxlintrc.json
 - tsconfig.json
+- ledger.ts
+- backup.ts
+- FinanceContext.tsx
+- types.ts
+- TransferDirection
 
 ## God Nodes (most connected - your core abstractions)
 1. `useFinance()` - 28 edges
-2. `todayISO()` - 25 edges
-3. `react` - 24 edges
-4. `AppData` - 24 edges
+2. `react` - 25 edges
+3. `todayISO()` - 25 edges
+4. `AppData` - 25 edges
 5. `StartPage()` - 24 edges
 6. `formatCents()` - 22 edges
 7. `Architektur` - 22 edges
 8. `FinanceApi` - 21 edges
 9. `MonthPage()` - 20 edges
-10. `Transaction` - 19 edges
+10. `Regeln` - 20 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Technik` --references--> `FinanceRepository`  [INFERRED]
   README.md → src/data/repository.ts
 - `Regeln` --references--> `ConfirmDialog()`  [INFERRED]
   CLAUDE.md → src/components/ConfirmDialog.tsx
+- `Regeln` --references--> `StartStack()`  [INFERRED]
+  CLAUDE.md → src/components/StartStack.tsx
 - `Regeln` --references--> `SubPageHeader()`  [INFERRED]
   CLAUDE.md → src/components/SubPageHeader.tsx
-- `Regeln` --references--> `FinanceRepository`  [INFERRED]
-  CLAUDE.md → src/data/repository.ts
-- `Architektur` --references--> `budgetAlerts()`  [INFERRED]
-  CLAUDE.md → src/domain/budget.ts
+- `Regeln` --references--> `SwipePane()`  [INFERRED]
+  CLAUDE.md → src/components/SwipePane.tsx
 
 ## Import Cycles
 - None detected.
 
-## Communities (15 total, 1 thin omitted)
+## Communities (20 total, 2 thin omitted)
 
-### Community 0 - "App.tsx"
-Cohesion: 0.14
-Nodes (22): react, App(), FormState, StartNav, subOf(), CategoryManager(), CategorySection(), add() (+14 more)
+### Community 0 - "CategoryManager.tsx"
+Cohesion: 0.46
+Nodes (7): CategoryManager(), CategorySection(), add(), saveRename(), errMsg(), countRecurringInCategory(), countTransactionsInCategory()
 
 ### Community 1 - "actions.ts"
-Cohesion: 0.09
-Nodes (47): mutate(), sample(), item(), tx(), withBudget(), isValidISODate(), builtInId(), createDefaultCategories() (+39 more)
+Cohesion: 0.13
+Nodes (37): mutate(), sample(), tx(), withBudget(), createDefaultData(), addCategory(), addRecurring(), AddRecurringOptions (+29 more)
 
 ### Community 2 - "dates.ts"
-Cohesion: 0.13
-Nodes (37): ChevronLeft(), ChevronRight(), BudgetItem, budgetStatus, BudgetTotal, monthBudgets, percentOf(), UnbudgetedSpending (+29 more)
+Cohesion: 0.12
+Nodes (32): BudgetItem, budgetStatus, BudgetTotal, monthBudgets, percentOf(), item(), UnbudgetedSpending, CategorySum (+24 more)
 
 ### Community 3 - "StartPage.tsx"
-Cohesion: 0.08
-Nodes (51): Fab(), base, BudgetIcon(), CashIcon(), ClearIcon(), ContractIcon(), HomeIcon(), ListIcon() (+43 more)
+Cohesion: 0.07
+Nodes (82): react, App(), FormState, StartNav, subOf(), BudgetForm(), save(), submit() (+74 more)
 
 ### Community 4 - "package.json"
 Cohesion: 0.07
@@ -86,8 +91,8 @@ Cohesion: 0.08
 Nodes (27): Prüfen, balance(), bodyText(), { chromium, devices }, countIn(), errors, expectNoText(), expectText() (+19 more)
 
 ### Community 6 - "recurring.ts"
-Cohesion: 0.11
-Nodes (43): BudgetForm(), save(), submit(), RecurringForm(), submit(), RecurringManager(), nextLabel(), SegmentedControl() (+35 more)
+Cohesion: 0.15
+Nodes (26): RecurringManager(), nextLabel(), formatDateDE(), formatDayMonth(), bookDue(), ContractsSummary, daysInMonth(), firstStep() (+18 more)
 
 ### Community 7 - "deploy.yml"
 Cohesion: 0.07
@@ -95,15 +100,15 @@ Nodes (30): runs-on, steps, concurrency, cancel-in-progress, group, environment,
 
 ### Community 8 - "gesture.ts"
 Cohesion: 0.13
-Nodes (40): Architektur, Regeln, react-dom, Sheet(), Phase, StartStack(), SubView, SwipePane() (+32 more)
+Nodes (39): Architektur, react-dom, Sheet(), Phase, StackAnim, StartStack(), SubView, SwipePane() (+31 more)
 
-### Community 9 - "types.ts"
-Cohesion: 0.07
-Nodes (27): AddPreset, ContractBooking, fail(), isAccount(), isDirection(), isInterval(), isKind(), isObj() (+19 more)
+### Community 9 - "FinanceApi"
+Cohesion: 0.11
+Nodes (7): ContractBooking, Interval, Kind, ContractBookingInput, RecurringInput, TransactionInput, FinanceApi
 
-### Community 10 - "Projektkontext: finanz-app („Finanzklar“)"
-Cohesion: 0.15
-Nodes (11): Backlog (nicht in v1), Projektgraph (Graphify), Projektkontext: finanz-app („Finanzklar“), Stack, Auf dem iPhone installieren, Finanzklar – persönliche Haushalts-App, Funktionen, Nächste Ausbaustufen (+3 more)
+### Community 10 - "Regeln"
+Cohesion: 0.10
+Nodes (22): Backlog (nicht in v1), Projektgraph (Graphify), Projektkontext: finanz-app („Finanzklar“), Regeln, Stack, Auf dem iPhone installieren, Finanzklar – persönliche Haushalts-App, Funktionen (+14 more)
 
 ### Community 11 - "compilerOptions"
 Cohesion: 0.10
@@ -117,23 +122,39 @@ Nodes (16): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, lib
 Cohesion: 0.33
 Nodes (5): plugins, rules, react/only-export-components, react/rules-of-hooks, $schema
 
+### Community 15 - "ledger.ts"
+Cohesion: 0.20
+Nodes (9): amountText(), groupByMonth(), LedgerEntry, LedgerMonth, LedgerOptions, matches(), normalize(), data (+1 more)
+
+### Community 16 - "backup.ts"
+Cohesion: 0.28
+Nodes (11): fail(), isAccount(), isDirection(), isInterval(), isKind(), isObj(), parseBackup(), validateAppData() (+3 more)
+
+### Community 17 - "FinanceContext.tsx"
+Cohesion: 0.29
+Nodes (6): LocalStorageRepository, STORAGE_KEY, FinanceRepository, AppData, defaultRepo, FinanceContext
+
+### Community 18 - "types.ts"
+Cohesion: 0.23
+Nodes (8): builtInId(), createDefaultCategories(), EXPENSE_DEFAULTS, FALLBACK_NAME, INCOME_DEFAULTS, Category, Settings, Transfer
+
 ## Knowledge Gaps
-- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `App.tsx` to `dates.ts`, `StartPage.tsx`, `package.json`, `recurring.ts`, `gesture.ts`, `types.ts`?**
-  _High betweenness centrality (0.097) - this node is a cross-community bridge._
-- **Should `App.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.1354679802955665 - nodes in this community are weakly interconnected._
-- **Why does `saveBalance()` connect `recurring.ts` to `App.tsx`, `smoke.mjs`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
+- **Why does `react` connect `StartPage.tsx` to `CategoryManager.tsx`, `package.json`, `recurring.ts`, `gesture.ts`, `Regeln`, `FinanceContext.tsx`?**
+  _High betweenness centrality (0.098) - this node is a cross-community bridge._
 - **Should `actions.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.09084556254367575 - nodes in this community are weakly interconnected._
-- **Why does `balance()` connect `smoke.mjs` to `recurring.ts`?**
-  _High betweenness centrality (0.070) - this node is a cross-community bridge._
+  _Cohesion score 0.12560975609756098 - nodes in this community are weakly interconnected._
+- **Why does `saveBalance()` connect `StartPage.tsx` to `smoke.mjs`?**
+  _High betweenness centrality (0.072) - this node is a cross-community bridge._
 - **Should `dates.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.1331923890063425 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11740890688259109 - nodes in this community are weakly interconnected._
+- **Why does `balance()` connect `smoke.mjs` to `StartPage.tsx`?**
+  _High betweenness centrality (0.070) - this node is a cross-community bridge._
 - **Should `StartPage.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.07672634271099744 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07417582417582418 - nodes in this community are weakly interconnected._
+- **Should `package.json` be split into smaller, more focused modules?**
+  _Cohesion score 0.06970128022759602 - nodes in this community are weakly interconnected._
