@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
-import { gestureIntent, releaseVelocity } from '../domain/gesture'
+import { followOffset, gestureIntent, releaseVelocity } from '../domain/gesture'
 import type { Axis, Sample } from '../domain/gesture'
 
 export type DragEnd = { delta: number; velocity: number; cancelled: boolean }
@@ -12,15 +12,20 @@ export type DragOptions = {
   /** Checked once the direction is clear; false gives the drag up (e.g. wrong way). */
   accept?: (delta: number) => boolean
   onStart?: () => void
-  /** At most once per animation frame, with the finger offset along the axis since pointer down. */
+  /**
+   * At most once per animation frame, with the offset to paint along the axis: the finger travel since pointer down, minus the
+   * dead zone before the direction was clear, which fades out over the first pixels (no jump when the content starts to follow).
+   */
   onMove: (delta: number) => void
-  /** `velocity` is px/ms along the axis; `cancelled` for pointercancel / lost capture. */
+  /** `delta` is the raw finger travel, `velocity` px/ms along the axis; `cancelled` for pointercancel / lost capture. */
   onEnd: (end: DragEnd) => void
 }
 
 /**
  * Pointer-event drag recogniser. Nothing happens until the movement is clearly along `axis`, so taps and
  * vertical scrolling stay untouched; only then the pointer is captured. Callbacks always see the latest options.
+ * Only `pointerdown` is listened to permanently (hundreds of list rows each use this hook); the move/up/cancel listeners
+ * exist just for the length of one touch. Nothing in here reads layout.
  */
 export function useDragGesture(ref: RefObject<HTMLElement | null>, options: DragOptions) {
   const latest = useRef(options)
@@ -37,6 +42,7 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
     let x0 = 0
     let y0 = 0
     let delta = 0
+    let startDelta = 0
     let frame = 0
     let samples: Sample[] = []
 
@@ -48,7 +54,9 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
       x0 = e.clientX
       y0 = e.clientY
       delta = 0
+      startDelta = 0
       samples = [{ t: e.timeStamp, v: 0 }]
+      listen(true)
     }
     const move = (e: PointerEvent) => {
       if (state === 'idle' || e.pointerId !== id) return
@@ -60,9 +68,11 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
         if (intent === 'pending') return
         if (intent === 'reject' || latest.current.accept?.(main) === false) {
           state = 'idle'
+          listen(false)
           return
         }
         state = 'drag'
+        startDelta = main
         try {
           el.setPointerCapture(id)
         } catch {
@@ -71,12 +81,16 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
         latest.current.onStart?.()
       }
       delta = main
-      samples.push({ t: e.timeStamp, v: main })
-      if (samples.length > 12) samples.shift()
+      // every coalesced touch sample counts for the velocity (a frame may carry several), the painted offset only needs the latest
+      const events = e.getCoalescedEvents?.() ?? []
+      for (const c of events.length > 0 ? events : [e]) {
+        samples.push({ t: c.timeStamp, v: horizontal() ? c.clientX - x0 : c.clientY - y0 })
+      }
+      if (samples.length > 24) samples.splice(0, samples.length - 24)
       if (!frame) {
         frame = requestAnimationFrame(() => {
           frame = 0
-          if (state === 'drag') latest.current.onMove(delta)
+          if (state === 'drag') latest.current.onMove(followOffset(delta, startDelta))
         })
       }
     }
@@ -84,6 +98,7 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
       if (state === 'idle' || e.pointerId !== id) return
       const wasDrag = state === 'drag'
       state = 'idle'
+      listen(false)
       cancelAnimationFrame(frame)
       frame = 0
       if (!wasDrag) return
@@ -99,18 +114,20 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
     // capturing on `el` makes a touch pointer lose its implicit capture on the original target: that event is no cancel
     const lost = (e: PointerEvent) => e.target === el && end(e, true)
 
-    el.addEventListener('pointerdown', down)
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
-    el.addEventListener('pointercancel', cancel)
-    el.addEventListener('lostpointercapture', lost)
+    /** Adds or removes the listeners that only matter while a touch is being tracked. */
+    const listen = (on: boolean) => {
+      const toggle = on ? el.addEventListener.bind(el) : el.removeEventListener.bind(el)
+      toggle('pointermove', move as EventListener, { passive: true })
+      toggle('pointerup', up as EventListener)
+      toggle('pointercancel', cancel as EventListener)
+      toggle('lostpointercapture', lost as EventListener)
+    }
+
+    el.addEventListener('pointerdown', down, { passive: true })
     return () => {
       cancelAnimationFrame(frame)
+      listen(false)
       el.removeEventListener('pointerdown', down)
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-      el.removeEventListener('pointercancel', cancel)
-      el.removeEventListener('lostpointercapture', lost)
     }
   }, [ref])
 }

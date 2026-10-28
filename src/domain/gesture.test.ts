@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
   animationMs,
+  followOffset,
   gestureIntent,
   isEdgeStart,
   monthStep,
   parallaxPercent,
+  pressCancelled,
+  releaseCurve,
+  releaseDuration,
   releaseVelocity,
   rowSwipeOutcome,
   rubberBand,
   swipeDecision,
   BACK_FRACTION,
+  FOLLOW_RAMP_PX,
   MONTH_FRACTION,
   ROW_ACTION_PX,
+  RELEASE_MAX_MS,
+  RELEASE_MIN_MS,
   ROW_DELETE_FRACTION,
   SHEET_FRACTION,
 } from './gesture'
@@ -146,5 +153,71 @@ describe('row swipe outcome', () => {
   it('a flick to the right closes an open row', () => {
     expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX, velocity: 0.8, width })).toBe('close')
     expect(rowSwipeOutcome({ offset: -ROW_ACTION_PX + 15, velocity: 0.2, width })).toBe('open')
+  })
+})
+
+describe('followOffset', () => {
+  it('starts at 0 when the direction becomes clear (no jump of the dead zone)', () => {
+    expect(followOffset(9, 9)).toBe(0)
+    expect(followOffset(-10, -10)).toBe(0)
+  })
+  it('catches up with the finger over the ramp and then follows 1:1', () => {
+    expect(followOffset(9 + FOLLOW_RAMP_PX, 9)).toBe(9 + FOLLOW_RAMP_PX)
+    expect(followOffset(200, 9)).toBe(200)
+    expect(followOffset(-200, -9)).toBe(-200)
+    const mid = followOffset(9 + FOLLOW_RAMP_PX / 2, 9)
+    expect(mid).toBeGreaterThan(FOLLOW_RAMP_PX / 2)
+    expect(mid).toBeLessThan(9 + FOLLOW_RAMP_PX / 2)
+  })
+  it('never lags behind the finger by more than the dead zone', () => {
+    for (let d = 9; d < 60; d += 3) expect(d - followOffset(d, 9)).toBeLessThanOrEqual(9)
+  })
+})
+
+describe('releaseDuration', () => {
+  it('uses a short quick fade with reduced motion', () => {
+    expect(releaseDuration(300, 2, true)).toBe(120)
+    expect(releaseDuration(0, 0, true)).toBe(120)
+  })
+  it('stays within 150-350 ms', () => {
+    for (const d of [0, 10, 100, 300, 800]) {
+      for (const v of [-1, 0, 0.2, 0.5, 1, 3, 10]) {
+        const ms = releaseDuration(d, v, false)
+        expect(ms).toBeGreaterThanOrEqual(RELEASE_MIN_MS)
+        expect(ms).toBeLessThanOrEqual(RELEASE_MAX_MS)
+      }
+    }
+  })
+  it('is shorter for a faster finger over the same distance', () => {
+    expect(releaseDuration(300, 4, false)).toBeLessThan(releaseDuration(300, 1.5, false))
+    expect(releaseDuration(300, 10, false)).toBe(RELEASE_MIN_MS)
+  })
+  it('matches the finger speed with the iOS curve (4 x distance / duration) when not clamped', () => {
+    const ms = releaseDuration(300, 5, false) // 4 * 300 / 5 = 240
+    expect(ms).toBe(240)
+  })
+  it('grows with the distance for a resting finger and ignores a finger moving away', () => {
+    expect(releaseDuration(300, 0, false)).toBeGreaterThan(releaseDuration(30, 0, false))
+    expect(releaseDuration(100, -2, false)).toBe(releaseDuration(100, 0, false))
+  })
+})
+
+describe('releaseCurve', () => {
+  it('is the iOS curve for a resting finger or when the duration fits the speed', () => {
+    expect(releaseCurve(100, 0, 250)).toBe('cubic-bezier(0.2, 0.8, 0.2, 1)')
+    expect(releaseCurve(300, 5, 240)).toBe('cubic-bezier(0.2, 0.8, 0.2, 1)')
+  })
+  it('starts gentler for a slow finger on a long way and stays inside sane bounds', () => {
+    expect(releaseCurve(300, 0.4, 350)).toBe('cubic-bezier(0.2, 0.2, 0.2, 1)')
+    expect(releaseCurve(10, 9, 150)).toBe('cubic-bezier(0.2, 1, 0.2, 1)')
+  })
+})
+
+describe('pressCancelled', () => {
+  it('keeps the pressed state for a still finger and drops it from the drag threshold on', () => {
+    expect(pressCancelled(0, 0)).toBe(false)
+    expect(pressCancelled(3, 4)).toBe(false)
+    expect(pressCancelled(8, 0)).toBe(true)
+    expect(pressCancelled(-5, 7)).toBe(true)
   })
 })

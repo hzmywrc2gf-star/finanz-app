@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { Category } from '../domain/types'
 import { addMonths, monthLabel, monthStart, todayISO } from '../domain/dates'
 import { monthBudgets } from '../domain/budget'
@@ -30,7 +30,7 @@ function Progress({ percent, status, label }: { percent: number; status: BudgetS
   )
 }
 
-export function BudgetPage() {
+export const BudgetPage = memo(function BudgetPage() {
   const { data } = useFinance()
   const [month, setMonth] = useState(() => monthStart(todayISO()))
   const [editing, setEditing] = useState<Category | null>(null)
@@ -127,4 +127,4 @@ export function BudgetPage() {
       )}
     </>
   )
-}
+})

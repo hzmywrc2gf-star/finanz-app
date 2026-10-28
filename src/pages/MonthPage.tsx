@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { Transaction } from '../domain/types'
 import { addMonths, monthLabel, monthShort, monthStart, todayISO } from '../domain/dates'
 import { monthSummary, monthTrend, niceAxisMax } from '../domain/month'
@@ -111,7 +111,7 @@ function TrendChart({ points, selected }: { points: MonthPoint[]; selected: stri
   )
 }
 
-export function MonthPage({
+export const MonthPage = memo(function MonthPage({
   onAdd,
   onEdit,
 }: {
@@ -281,4 +281,4 @@ export function MonthPage({
       <Fab onClick={() => onAdd(month === currentMonth ? todayISO() : month)} />
     </>
   )
-}
+})

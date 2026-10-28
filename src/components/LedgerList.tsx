@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import type { Category, Transaction, Transfer } from '../domain/types'
 import { formatShortDay, monthLabel } from '../domain/dates'
 import { TRANSFER_LABELS, groupByMonth } from '../domain/ledger'
@@ -8,10 +9,24 @@ import { useFinance } from '../state/FinanceContext'
 import { SwipeRow } from './SwipeRow'
 import { TransactionRow } from './TransactionList'
 
-function TransferRow({ transfer: t, onSelect }: { transfer: Transfer; onSelect: (t: Transfer) => void }) {
-  const { deleteTransfer } = useFinance()
+/** Row and month header heights (px), only used to estimate the height of months that are not rendered yet. */
+const ROW_PX = 56
+const MONTH_HEAD_PX = 28
+/** From this many entries on, months outside the screen are skipped by the renderer (short lists render completely, which keeps text search simple). */
+const LONG_LIST = 60
+
+/** Memoized like `TransactionRow`: stable `transfer` and handlers keep it out of unrelated re-renders. */
+const TransferRow = memo(function TransferRow({
+  transfer: t,
+  onSelect,
+  onDelete,
+}: {
+  transfer: Transfer
+  onSelect: (t: Transfer) => void
+  onDelete: (id: string) => void
+}) {
   return (
-    <SwipeRow label={TRANSFER_LABELS[t.direction]} onDelete={() => deleteTransfer(t.id)}>
+    <SwipeRow label={TRANSFER_LABELS[t.direction]} onDelete={() => onDelete(t.id)}>
       <button className="row" onClick={() => onSelect(t)}>
         <span className="transfer-icon">
           <SwapIcon />
@@ -27,10 +42,10 @@ function TransferRow({ transfer: t, onSelect }: { transfer: Transfer; onSelect: 
       </button>
     </SwipeRow>
   )
-}
+})
 
 /** Bookings and transfers grouped by month ("Oktober 2026 · 8 Einträge"), newest first. */
-export function LedgerList({
+export const LedgerList = memo(function LedgerList({
   entries,
   categories,
   hideCashBadge,
@@ -43,11 +58,19 @@ export function LedgerList({
   onSelectTransaction: (t: Transaction) => void
   onSelectTransfer: (t: Transfer) => void
 }) {
-  const names = new Map(categories.map((c) => [c.id, c.name]))
+  const { deleteTransaction, deleteTransfer } = useFinance() // stable: the actions do not change with the data
+  const names = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
+  const groups = useMemo(() => groupByMonth(entries), [entries])
+  const long = entries.length > LONG_LIST
   return (
     <>
-      {groupByMonth(entries).map((g) => (
-        <section key={g.month}>
+      {groups.map((g) => (
+        // in a long list, off-screen months are not styled, laid out or painted (content-visibility); the estimated height keeps the scroll bar steady
+        <section
+          key={g.month}
+          className={long ? 'ledger-month ledger-skip' : 'ledger-month'}
+          style={long ? { containIntrinsicSize: `auto ${MONTH_HEAD_PX + g.entries.length * ROW_PX}px` } : undefined}
+        >
           <div className="month-head">
             <h2>{monthLabel(g.month)}</h2>
             <span>
@@ -63,9 +86,10 @@ export function LedgerList({
                   categoryName={names.get(e.transaction.categoryId) ?? 'Unbekannt'}
                   hideBadge={hideCashBadge}
                   onSelect={onSelectTransaction}
+                  onDelete={deleteTransaction}
                 />
               ) : (
-                <TransferRow key={e.transfer.id} transfer={e.transfer} onSelect={onSelectTransfer} />
+                <TransferRow key={e.transfer.id} transfer={e.transfer} onSelect={onSelectTransfer} onDelete={deleteTransfer} />
               ),
             )}
           </ul>
@@ -73,4 +97,4 @@ export function LedgerList({
       ))}
     </>
   )
-}
+})

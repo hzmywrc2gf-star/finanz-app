@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { todayISO } from '../domain/dates'
 import { formatCents } from '../domain/money'
 import { monthlyEquivalent } from '../domain/recurring'
@@ -6,7 +7,7 @@ import { RecurringManager } from '../components/RecurringManager'
 import { SubPageHeader } from '../components/SubPageHeader'
 
 /** Recurring rules ("Verträge"): monthly fixed costs on top, then the list with add/edit/delete. */
-export function ContractsPage({ onBack }: { onBack: () => void }) {
+export const ContractsPage = memo(function ContractsPage({ onBack }: { onBack: () => void }) {
   const { data } = useFinance()
   const { activeCount, monthlyCents } = monthlyEquivalent(data.recurring, todayISO())
 
@@ -26,4 +27,4 @@ export function ContractsPage({ onBack }: { onBack: () => void }) {
       <div className="footnote">Vierteljährliche und jährliche Beträge sind auf den Monat umgerechnet. Einnahmen zählen nicht mit.</div>
     </>
   )
-}
+})

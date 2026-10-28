@@ -83,8 +83,12 @@ function AppContent() {
     window.scrollTo(0, 0)
   }, [tab, nav.view])
 
-  const edit = (transaction: Transaction) => setForm({ transaction })
-  const back = () => goBack('animate')
+  // stable, so the memoized pages and their rows are skipped when only the sheet opens or closes
+  const edit = useCallback((transaction: Transaction) => setForm({ transaction }), [])
+  const back = useCallback(() => goBack('animate'), [goBack])
+  const addNew = useCallback(() => setForm({}), [])
+  const addOn = useCallback((defaultDate: string) => setForm({ defaultDate }), [])
+  const openBudgets = useCallback(() => changeTab('budgets'), [changeTab])
 
   return (
     <>
@@ -96,12 +100,12 @@ function AppContent() {
             onBack={goBack}
             hub={
               <main className="app">
-                <StartPage onAdd={() => setForm({})} onOpenBudgets={() => changeTab('budgets')} onNavigate={openSub} />
+                <StartPage onAdd={addNew} onOpenBudgets={openBudgets} onNavigate={openSub} />
               </main>
             }
             renderSub={(view) => (
               <main className="app">
-                {view === 'bookings' && <BookingsPage onBack={back} onAdd={() => setForm({})} onEdit={edit} />}
+                {view === 'bookings' && <BookingsPage onBack={back} onAdd={addNew} onEdit={edit} />}
                 {view === 'cash' && <CashPage onBack={back} onAdd={setForm} onEdit={edit} />}
                 {view === 'contracts' && <ContractsPage onBack={back} />}
               </main>
@@ -110,7 +114,7 @@ function AppContent() {
         )}
         {tab === 'month' && (
           <main className="app">
-            <MonthPage onAdd={(defaultDate) => setForm({ defaultDate })} onEdit={edit} />
+            <MonthPage onAdd={addOn} onEdit={edit} />
           </main>
         )}
         {tab === 'budgets' && (

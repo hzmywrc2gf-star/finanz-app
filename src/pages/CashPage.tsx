@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import type { Transaction, Transfer, TransferDirection } from '../domain/types'
 import { accountBalance } from '../domain/calc'
 import { ledgerEntries } from '../domain/ledger'
@@ -11,7 +11,7 @@ import type { AddPreset } from '../components/TransactionForm'
 
 type TransferSheet = { transfer?: Transfer; direction?: TransferDirection } | null
 
-export function CashPage({
+export const CashPage = memo(function CashPage({
   onBack,
   onAdd,
   onEdit,
@@ -24,6 +24,7 @@ export function CashPage({
   const [sheet, setSheet] = useState<TransferSheet>(null)
   const cash = accountBalance(data, 'bargeld')
   const entries = useMemo(() => ledgerEntries(data, { account: 'bargeld' }), [data])
+  const selectTransfer = useCallback((transfer: Transfer) => setSheet({ transfer }), [])
 
   return (
     <>
@@ -54,7 +55,7 @@ export function CashPage({
           categories={data.categories}
           hideCashBadge
           onSelectTransaction={onEdit}
-          onSelectTransfer={(transfer) => setSheet({ transfer })}
+          onSelectTransfer={selectTransfer}
         />
       )}
       <div className="footnote">Abhebungen buchen vom Konto ins Bargeld und zählen nicht als Ausgabe.</div>
@@ -69,4 +70,4 @@ export function CashPage({
       )}
     </>
   )
-}
+})

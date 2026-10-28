@@ -127,11 +127,9 @@ export function FinanceProvider({
     }
   }, [commit])
 
-  const api = useMemo<FinanceApi | null>(() => {
-    if (!data) return null
-    return {
-      data,
-      saveError,
+  // The actions only depend on `apply`, so their identity survives data changes: memoized list rows can take them as props.
+  const actions = useMemo<Omit<FinanceApi, 'data' | 'saveError'>>(
+    () => ({
       addTransaction: (i) => apply((d) => A.addTransaction(d, i)),
       updateTransaction: (id, i) => apply((d) => A.updateTransaction(d, id, i)),
       deleteTransaction: (id) => {
@@ -165,8 +163,10 @@ export function FinanceProvider({
         apply(() => bookDue(nd, todayISO()))
         setUndo(null)
       },
-    }
-  }, [data, saveError, apply])
+    }),
+    [apply],
+  )
+  const api = useMemo<FinanceApi | null>(() => (data ? { data, saveError, ...actions } : null), [data, saveError, actions])
 
   const undoDelete = () => {
     if (!undo) return

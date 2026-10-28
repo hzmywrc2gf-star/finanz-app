@@ -3,10 +3,9 @@ import type { ReactNode } from 'react'
 import { ROW_ACTION_PX, animationMs, isEdgeStart, rowSwipeOutcome } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
 import { haptic } from '../lib/haptics'
-import { EASE_IOS, afterTransition, isFormField, modalOpen, reducedMotion } from '../lib/motion'
+import { afterTransition, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
 import { TrashIcon } from './Icons'
 
-const SETTLE_MS = 250
 const SLIDE_OUT_MS = 110
 const COLLAPSE_MS = 90
 
@@ -25,22 +24,30 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
   /** closed / open at rest, busy while animating (no new drag, no taps). */
   const state = useRef<'closed' | 'open' | 'busy'>('closed')
   const unlisten = useRef<(() => void) | null>(null)
+  /** Where the content stands (px, 0 = closed), the start of the animation after a release. */
+  const offset = useRef(0)
 
   const paint = (x: number) => {
+    offset.current = x
     if (contentRef.current) contentRef.current.style.transform = x === 0 ? '' : `translate3d(${x}px, 0, 0)`
   }
   const setPhase = (phase: 'closed' | 'open' | 'drag') => liRef.current?.setAttribute('data-swipe', phase)
 
-  /** Moves the content to `x` with the spring curve (instantly with reduced motion). */
-  const moveTo = async (x: number) => {
+  /**
+   * Moves the content to `x` with the spring curve, starting at the finger speed `velocity` (px/ms, negative = leftwards;
+   * 0 = from rest). Instantly with reduced motion. will-change stays until the move is over.
+   */
+  const moveTo = async (x: number, velocity = 0) => {
     const el = contentRef.current
     if (!el) return
-    const ms = animationMs(SETTLE_MS, reducedMotion())
+    const { ms, curve } = releaseMotion(Math.abs(x - offset.current), Math.sign(x - offset.current) * velocity)
+    el.style.willChange = 'transform'
     void el.offsetWidth // commit the current position before transitioning
-    el.style.transition = reducedMotion() ? 'none' : `transform ${ms}ms ${EASE_IOS}`
+    el.style.transition = reducedMotion() ? 'none' : `transform ${ms}ms ${curve}`
     paint(x)
     if (!reducedMotion()) await afterTransition(el, ms)
     el.style.transition = ''
+    el.style.willChange = ''
   }
 
   const forget = () => {
@@ -49,20 +56,20 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
     if (openRow?.el === liRef.current) openRow = null
   }
 
-  const close = async () => {
+  const close = async (velocity = 0) => {
     if (state.current !== 'open') return
     state.current = 'busy'
     forget()
-    await moveTo(0)
+    await moveTo(0, velocity)
     state.current = 'closed'
     setPhase('closed')
   }
 
-  const open = async () => {
+  const open = async (velocity = 0) => {
     const li = liRef.current
     if (!li) return
     if (openRow && openRow.el !== li) void openRow.close()
-    openRow = { el: li, close }
+    openRow = { el: li, close: () => close() }
     unlisten.current?.()
     state.current = 'busy'
     setPhase('open')
@@ -77,7 +84,7 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
       document.removeEventListener('pointerdown', onDown, true)
       window.removeEventListener('scroll', onScroll)
     }
-    await moveTo(-ROW_ACTION_PX)
+    await moveTo(-ROW_ACTION_PX, velocity)
     state.current = 'open'
   }
 
@@ -138,16 +145,15 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
       const wasOpen = state.current === 'open'
       const offset = Math.min(0, Math.max(-width.current, (wasOpen ? -ROW_ACTION_PX : 0) + delta))
       const outcome = cancelled ? (wasOpen ? 'open' : 'close') : rowSwipeOutcome({ offset, velocity, width: width.current })
-      el.style.willChange = ''
       if (outcome === 'delete') {
         void remove()
       } else if (outcome === 'open') {
-        void open()
+        void open(velocity)
       } else if (wasOpen) {
-        void close()
+        void close(velocity)
       } else {
         state.current = 'busy'
-        void moveTo(0).then(() => {
+        void moveTo(0, velocity).then(() => {
           state.current = 'closed'
           setPhase('closed')
         })

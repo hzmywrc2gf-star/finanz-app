@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { BACK_FRACTION, animationMs, isEdgeStart, parallaxPercent, swipeDecision } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
-import { EASE_IOS, afterTransition, isFormField, modalOpen, reducedMotion } from '../lib/motion'
+import { EASE_IOS, afterTransition, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
 import type { StartView } from '../pages/StartPage'
 
 /** How a view change reaches the screen: `animate` = push/pop, `instant` = no motion, `done` = a swipe already finished it. */
@@ -13,7 +13,6 @@ type SubView = Exclude<StartView, 'hub'>
 type Phase = 'idle' | 'push' | 'pop' | 'drag'
 
 const PUSH_MS = 300
-const SETTLE_MS = 250
 
 /**
  * The start tab as an iOS navigation stack: the hub plus one sub-page on top. At rest only one of them is
@@ -96,13 +95,13 @@ export function StartStack({
     hubRef.current?.style.removeProperty('--hub-scroll')
   }
   /** Animates from the current state to `progress` and resolves false if something newer took over. */
-  const settle = async (progress: number, ms: number, fade: boolean) => {
+  const settle = async (progress: number, ms: number, fade: boolean, easing = EASE_IOS) => {
     const token = ++run.current
     const subEl = subRef.current
     if (!subEl) return false
     for (const el of [subEl, hubRef.current, dimRef.current]) if (el) el.style.willChange = fade ? 'opacity' : 'transform'
     void subEl.offsetWidth // commit the start position before transitioning
-    const curve = `${ms}ms ${EASE_IOS}`
+    const curve = `${ms}ms ${easing}`
     subEl.style.transition = `transform ${curve}, opacity ${ms}ms linear`
     if (hubRef.current) hubRef.current.style.transition = `transform ${curve}`
     if (dimRef.current) dimRef.current.style.transition = `opacity ${curve}`
@@ -143,16 +142,21 @@ export function StartStack({
       width.current = stackRef.current?.clientWidth || 1
       run.current++
       flushSync(() => setPhase('drag')) // the hub has to exist before the first frame of the drag
-      for (const el of [subRef.current, hubRef.current, dimRef.current]) if (el) el.style.transition = 'none'
+      // the layers only exist while moving (will-change is removed with the rest in clearStyles)
+      for (const el of [subRef.current, hubRef.current, dimRef.current]) {
+        if (!el) continue
+        el.style.transition = 'none'
+        el.style.willChange = 'transform'
+      }
       paint(0, false)
     },
     onMove: (dx) => paint(Math.min(Math.max(dx, 0), width.current) / width.current, false),
     onEnd: ({ delta, velocity, cancelled }) => {
       const dx = Math.min(Math.max(delta, 0), width.current)
       const commit = !cancelled && swipeDecision({ distance: dx, velocity, size: width.current, fraction: BACK_FRACTION })
-      const reduced = reducedMotion()
-      const ms = animationMs(SETTLE_MS, reduced)
-      void settle(commit ? 1 : 0, ms, false).then((current) => {
+      // the rest of the way at the finger speed (velocity towards the target: forwards when leaving, backwards when springing back)
+      const { ms, curve } = releaseMotion(commit ? width.current - dx : dx, commit ? velocity : -velocity)
+      void settle(commit ? 1 : 0, ms, false, curve).then((current) => {
         if (!current) return
         if (commit) onBack('done')
         else setPhase('idle')

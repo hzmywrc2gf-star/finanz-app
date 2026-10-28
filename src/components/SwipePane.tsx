@@ -11,9 +11,8 @@ import {
   swipeDecision,
 } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
-import { EASE_IOS, afterTransition, inSwipeRow, isFormField, modalOpen, reducedMotion } from '../lib/motion'
+import { EASE_IOS, afterTransition, inSwipeRow, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
 
-const OUT_MS = 160
 const IN_MS = 240
 
 /**
@@ -25,6 +24,8 @@ export function SwipePane({ onStep, children }: { onStep: (step: 1 | -1) => void
   const ref = useRef<HTMLDivElement>(null)
   const width = useRef(1)
   const busy = useRef(false)
+  /** Where the content was last painted (px), the start of the animation after a release. */
+  const painted = useRef(0)
 
   const reset = (el: HTMLElement) => {
     el.style.transition = ''
@@ -44,11 +45,13 @@ export function SwipePane({ onStep, children }: { onStep: (step: 1 | -1) => void
       width.current = el.offsetWidth || 1
       el.style.transition = 'none'
       el.style.willChange = 'transform'
+      painted.current = 0
       el.setAttribute('data-dragging', '')
     },
     onMove: (dx) => {
       const limit = width.current * MONTH_MAX_FRACTION
-      if (ref.current) ref.current.style.transform = `translate3d(${Math.sign(dx) * rubberBand(Math.abs(dx), limit)}px, 0, 0)`
+      painted.current = Math.sign(dx) * rubberBand(Math.abs(dx), limit)
+      if (ref.current) ref.current.style.transform = `translate3d(${painted.current}px, 0, 0)`
     },
     onEnd: async ({ delta, velocity, cancelled }) => {
       const el = ref.current
@@ -57,9 +60,10 @@ export function SwipePane({ onStep, children }: { onStep: (step: 1 | -1) => void
       const commit = !cancelled && swipeDecision({ distance: Math.abs(delta), velocity: velocity * sign, size: width.current, fraction: MONTH_FRACTION })
       const reduced = reducedMotion()
       if (!commit) {
-        const ms = animationMs(IN_MS, reduced)
+        // springs back at the finger speed (the pull is rubber-banded, so the finger is faster than the content: a safe overestimate)
+        const { ms, curve } = releaseMotion(Math.abs(painted.current), -velocity * sign)
         void el.offsetWidth
-        el.style.transition = `transform ${ms}ms ${EASE_IOS}`
+        el.style.transition = `transform ${ms}ms ${curve}`
         el.style.transform = ''
         await afterTransition(el, ms)
         reset(el)
@@ -67,10 +71,11 @@ export function SwipePane({ onStep, children }: { onStep: (step: 1 | -1) => void
       }
       busy.current = true
       // out: the old month leaves in the swipe direction ...
-      const outMs = animationMs(OUT_MS, reduced)
+      const outTo = sign * width.current * 0.5
+      const { ms: outMs, curve: outCurve } = releaseMotion(Math.abs(outTo - painted.current), velocity * sign)
       void el.offsetWidth
-      el.style.transition = `transform ${outMs}ms ease-in, opacity ${outMs}ms ease-in`
-      el.style.transform = reduced ? '' : `translate3d(${sign * width.current * 0.5}px, 0, 0)`
+      el.style.transition = `transform ${outMs}ms ${outCurve}, opacity ${outMs}ms ease-out`
+      el.style.transform = reduced ? '' : `translate3d(${outTo}px, 0, 0)`
       el.style.opacity = '0'
       await afterTransition(el, outMs)
       // ... the new one enters from the opposite side
@@ -85,6 +90,7 @@ export function SwipePane({ onStep, children }: { onStep: (step: 1 | -1) => void
       await afterTransition(el, inMs)
       reset(el)
       busy.current = false
+      painted.current = 0
     },
   })
 

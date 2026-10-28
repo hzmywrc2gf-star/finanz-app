@@ -1,7 +1,17 @@
 /** Shared helpers for the CSS-transition based animations (no animation library). */
+import { releaseCurve, releaseDuration } from '../domain/gesture'
 
 /** iOS-like ease-out used for pushes, pops and spring-backs. */
 export const EASE_IOS = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+
+/**
+ * Duration and timing function for the animation after a release: the iOS curve, started at the finger speed
+ * (`distance` left to travel in px, `velocity` towards the target in px/ms; see `releaseDuration`).
+ */
+export function releaseMotion(distance: number, velocity: number): { ms: number; curve: string } {
+  const ms = releaseDuration(distance, velocity, reducedMotion())
+  return { ms, curve: releaseCurve(distance, velocity, ms) }
+}
 
 export const reducedMotion = (): boolean =>
   typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
