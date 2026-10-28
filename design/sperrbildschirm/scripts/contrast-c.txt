@@ -1,0 +1,10 @@
+== hell: #1463D2 → #00419F
+5.61:1  Titel/Link/Button-Beschriftung weiß auf hellster Verlaufsstelle (g1)  OK
+9.31:1  Titel weiß auf dunkelster Stelle (g2)  OK
+4.85:1  „Gesperrt“ weiß 90 % auf g1  OK
+7.22:1  Button-Text auf Weiß (Pille)  OK
+== dunkel: #0A4FB0 → #021A40
+7.61:1  Titel/Link/Button-Beschriftung weiß auf hellster Verlaufsstelle (g1)  OK
+17.15:1  Titel weiß auf dunkelster Stelle (g2)  OK
+6.47:1  „Gesperrt“ weiß 90 % auf g1  OK
+7.61:1  Button-Text auf Weiß (Pille)  OK

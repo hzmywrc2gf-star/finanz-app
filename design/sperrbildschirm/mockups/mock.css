@@ -1,0 +1,57 @@
+/* Nur Mockup-Zubehör: Geräterahmen-Maße, Statusleiste, Richtungen A/B/C. Alles andere kommt aus app.css (gebauter App-CSS-Stand). */
+:root { --sat: 47px; --sab: 34px; }
+*, *::before, *::after { animation: none !important; transition: none !important; }
+html, body { height: 100%; overflow: hidden; }
+.phone { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: var(--bg); color: var(--text); }
+.sb { position: absolute; top: 0; left: 0; right: 0; height: var(--sat); z-index: 300; display: flex; justify-content: space-between; align-items: center;
+  padding: calc(var(--sat) * 0.3) 28px 0 34px; font-size: 16px; font-weight: 600; letter-spacing: -0.2px; pointer-events: none; }
+.sb-r { display: flex; gap: 6px; align-items: center; }
+.home { position: absolute; left: 50%; bottom: 8px; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--text); z-index: 300; }
+body.no-home .home { display: none; }
+.glyph { display: block; flex: none; }
+.app { padding-top: calc(var(--sat) + 12px); }
+.tabbar { padding-bottom: var(--sab); }
+.tabbar-inner { height: var(--tabbar-h); }
+.sheet { padding-bottom: calc(var(--sab) + 20px); }
+.stack-cell { display: grid; }
+.stack-cell > * { grid-area: 1 / 1; }
+
+/* A */
+.a-top { position: absolute; left: 0; right: 0; top: calc(var(--sat) + 9%); display: grid; justify-items: center; }
+.a-top img { width: 72px; height: 72px; border-radius: 16px; display: block; }
+.a-title { font-size: 28px; font-weight: 600; letter-spacing: 0.3px; margin: 18px 0 0; text-align: center; line-height: 34px; }
+.a-sub { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 15px; color: var(--text-2); }
+.a-bottom { position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 14px); padding: 0 16px; }
+.pill-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 54px; border-radius: 27px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 600; }
+.text-btn { display: block; margin: 6px auto 0; min-height: 44px; padding: 0 16px; font-size: 17px; color: var(--accent); }
+.dim { position: absolute; inset: 0; background: var(--backdrop); z-index: 150; }
+.hud { position: absolute; z-index: 160; left: 50%; top: 50%; width: 150px; margin: -75px 0 0 -75px; height: 150px; border-radius: 30px;
+  background: rgba(120, 120, 128, 0.32); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+  display: grid; place-items: center; color: var(--text); }
+.hud-cap { position: absolute; z-index: 160; left: 0; right: 0; top: calc(50% + 90px); text-align: center; font-size: 12px; color: #fff; opacity: .85; }
+.hud-cap span { background: rgba(0,0,0,.45); padding: 4px 10px; border-radius: 10px; }
+
+/* B */
+.b-lockrow .menu-icon { background: var(--text-2); opacity: .35; }
+.b-lockrow .row-title { color: var(--text-2); }
+.b-foot { position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 14px); text-align: center; font-size: 13px; color: var(--text-2); display: flex; justify-content: center; gap: 6px; align-items: center; }
+.b-dots { color: var(--text-2); opacity: .55; }
+.b-sub { display: flex; align-items: center; gap: 6px; }
+.b-link { display: block; margin: 4px auto 0; font-size: 17px; }
+
+/* C */
+.c, .c-over { --g1: #1463D2; --g2: #00419F; --on: #fff; --on-muted: rgba(255,255,255,.9); --btn-text: #0050C0; }
+.c { background: linear-gradient(170deg, var(--g1), var(--g2)); color: var(--on); }
+@media (prefers-color-scheme: dark) { .c, .c-over { --g1: #0A4FB0; --g2: #021A40; --btn-text: #0A4FB0; } }
+.c .a-sub { color: var(--on-muted); }
+.c .pill-btn { background: #fff; color: var(--btn-text); }
+.c .text-btn { color: #fff; font-weight: 500; }
+.c .sb, .c .home { color: #fff; }
+.c .home { background: #fff; }
+.c-glyph { width: 84px; height: 84px; color: #fff; }
+.c .a-title { margin-top: 14px; }
+.c-layer { position: absolute; inset: 0; background: linear-gradient(170deg, var(--g1), var(--g2)); z-index: 180; }
+.c-layer .a-title, .c-layer .sb { color: #fff; }
+
+.b-bottom { position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 14px); padding: 0 16px; }
+.c .sheet, .c .dialog { color: var(--text); }
