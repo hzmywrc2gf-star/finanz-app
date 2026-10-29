@@ -81,12 +81,14 @@ function sheetXml(sheet: WriteSheet): string {
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' +
     `<dimension ref="${dim}"/>` +
     `<sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>` +
     '<sheetFormatPr defaultRowHeight="15"/>' +
     cols +
     `<sheetData>${rows}</sheetData>` +
     filter +
+    '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>' +
     '</worksheet>'
   )
 }
