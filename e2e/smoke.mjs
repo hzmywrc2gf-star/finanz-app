@@ -52,6 +52,12 @@ async function openStartPage(name) {
 const openBookings = () => openStartPage('Alle Buchungen')
 const openCash = () => openStartPage('Bargeld')
 const openContracts = () => openStartPage('Verträge')
+// Einstellungen: Tab → Übersicht (jeder Tab-Wechsel setzt zurück) → Zeile antippen → Unterseite mit Zurück-Knopf „Einstellungen“
+async function openSettings(p, name) {
+  await tabOn(p, 'Einstellungen').click()
+  await p.locator('button.menu-row').filter({ hasText: new RegExp(`^${name}`) }).click(); await settled(p)
+  await p.getByRole('button', { name: 'Zurück', exact: true }).waitFor()
+}
 // Datensicherung: „Exportieren“ öffnet das Passwort-Sheet; unverschlüsselt geht es über „Ohne Passwort exportieren“ + Bestätigung
 async function plainExport(p = page) {
   await p.getByRole('button', { name: 'Exportieren', exact: true }).click()
@@ -169,7 +175,7 @@ if ((await balance()) !== '0,00 €') throw new Error('Startwert falsch: ' + (aw
 ok('Start leer, Kontostand 0,00 €')
 
 // Startguthaben
-await tab('Einstellungen').click()
+await openSettings(page, 'Startguthaben')
 await page.fill('#start-balance', '1.000,00')
 await page.getByRole('button', { name: 'Speichern' }).click()
 await expectText('Startguthaben gespeichert.')
@@ -247,7 +253,7 @@ await expectText('Oktober 2026')
 ok('„Aktueller Monat“-Button und Pfeil vor (November 2026, leer) funktionieren')
 
 // Kategorien
-await tab('Einstellungen').click()
+await openSettings(page, 'Kategorien')
 await page.getByLabel('Neue Ausgaben-Kategorie').fill('Haustier')
 await page.getByLabel('Neue Ausgaben-Kategorie').press('Enter')
 await expectText('Haustier')
@@ -263,7 +269,7 @@ if (await page.getByRole('button', { name: 'Sonstiges löschen' }).count()) thro
 ok('Kategorie hinzugefügt, Duplikat abgelehnt, umbenannt; Sonstiges geschützt')
 await tab('Start').click()
 await addTx({ amount: '30', category: 'Tiere', note: 'Futter' })
-await tab('Einstellungen').click()
+await openSettings(page, 'Kategorien')
 await page.getByRole('button', { name: 'Tiere löschen' }).click()
 await page.getByRole('alertdialog').getByRole('button', { name: /Löschen/ }).click()
 await tab('Monat').click()
@@ -280,7 +286,7 @@ if ((await balance()) !== '2.600,00 €') throw new Error('Nach Reload: ' + (awa
 ok('Daten nach Neuladen erhalten (Kontostand 2.600,00 €)')
 
 // Export / Import
-await tab('Einstellungen').click()
+await openSettings(page, 'Datensicherung')
 const dl = await plainExport()
 const file = `${SHOTS}/../backup-test.json`
 await dl.saveAs(file)
@@ -293,7 +299,7 @@ ok(`Export ${dl.suggestedFilename()}: Version 6, 5 Buchungen (alle auf dem Konto
 // Daten ändern, dann Backup wieder einspielen
 await tab('Start').click()
 await addTx({ amount: '999', category: 'Sonstiges' })
-await tab('Einstellungen').click()
+await openSettings(page, 'Datensicherung')
 fs.writeFileSync(`${SHOTS}/../kaputt.json`, '{"version":1,"foo":1}')
 await page.locator('input[type=file]').setInputFiles(`${SHOTS}/../kaputt.json`)
 await page.getByRole('alert').waitFor({ timeout: 3000 }); console.log('   Meldung: ' + await page.getByRole('alert').innerText())
@@ -309,7 +315,7 @@ ok('Ungültiges Backup abgelehnt; Import stellt Stand wieder her (2.600,00 €)'
 {
   const rawStore = async () => JSON.stringify(await readStored(page))
   const pwSheet = () => page.getByRole('dialog', { name: 'Backup exportieren' })
-  await tab('Einstellungen').click()
+  await openSettings(page, 'Datensicherung')
   const before = await rawStore()
   const plain = JSON.parse(fs.readFileSync(file, 'utf8'))
   await page.getByRole('button', { name: 'Exportieren', exact: true }).click()
@@ -371,7 +377,7 @@ ok('Ungültiges Backup abgelehnt; Import stellt Stand wieder her (2.600,00 €)'
   // richtiges Passwort → „Alle Daten ersetzen?“ → Daten exakt wie vorher
   await tab('Start').click()
   await addTx({ amount: '777', category: 'Sonstiges', note: 'Nach dem Export' })
-  await tab('Einstellungen').click()
+  await openSettings(page, 'Datensicherung')
   if ((await rawStore()) === before) throw new Error('Testbuchung fehlt')
   await page.locator('input[type=file]').setInputFiles(encFile)
   await openSheet.waitFor()
@@ -1096,7 +1102,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Zurück („‹ Start“, aria-label „Zurück“) führt zur Übersicht und scrollt nach oben; Tab-Wechsel (Monat → Start) und Tippen auf „Start“ setzen die Unterseite zurück')
 
   // --- Bargeld: Startbestand 20,00 € ---
-  await tab('Einstellungen').click()
+  await openSettings(page, 'Startguthaben')
   await page.fill('#start-cash', '20,00')
   await page.getByRole('button', { name: 'Speichern' }).click()
   await expectText('Startguthaben gespeichert.')
@@ -1252,7 +1258,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Konto einer Buchung ändern: Bäcker 45,50 € Bargeld → Konto (Konto −418,60 €, Bargeld 170,00 €) und zurück')
 
   // --- Backup mit Umbuchung und Konto ---
-  await tab('Einstellungen').click()
+  await openSettings(page, 'Datensicherung')
   const dl2 = await plainExport()
   const file2 = `${SHOTS}/../backup-test.json`
   await dl2.saveAs(file2)
@@ -1267,7 +1273,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await page.getByRole('button', { name: 'Abhebung', exact: true }).click()
   await page.fill('#tr-amount', '10'); await page.getByRole('button', { name: 'Sichern' }).click()
   await dlg().waitFor({ state: 'detached' })
-  await tab('Einstellungen').click()
+  await openSettings(page, 'Datensicherung')
   fs.writeFileSync(`${SHOTS}/../kaputt.json`, JSON.stringify({ ...j2, transfers: [{ ...j2.transfers[0], direction: 'sideways' }] }))
   await page.locator('input[type=file]').setInputFiles(`${SHOTS}/../kaputt.json`)
   await page.getByRole('alert').waitFor({ timeout: 3000 })
@@ -1279,6 +1285,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await page.getByRole('alertdialog').waitFor()
   await page.getByRole('alertdialog').getByRole('button').last().click()
   await expectText('Import erfolgreich: 12 Buchungen')
+  await openSettings(page, 'Startguthaben')
   must(await page.inputValue('#start-cash'), '20,00', 'Startbestand Bargeld nach Import')
   await mustHub('−373,10 €', '124,50 €', '−248,60 €', 'Nach Import')
   const st2 = await stored()
@@ -1946,8 +1953,81 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await reload(pa)
     await waitH1(pa, 'Finanzklar'); await settled(pa)
     must(await historyState(pa), null, 'Android: Eintrag nach Neuladen verworfen')
+    // Einstellungen: Unterseite = History-Eintrag {sub}, System-Zurück/Vorwärts, Tab-Wechsel räumt auf
+    await tabA('Einstellungen').click()
+    await pa.locator('button.menu-row').filter({ hasText: /^Sicherheit/ }).click(); await settled(pa)
+    await waitH1(pa, 'Sicherheit')
+    must(await historyState(pa), 'security', 'Android: Einstellungen-Unterseite ist ein History-Eintrag')
+    await pa.goBack()
+    await waitH1(pa, 'Einstellungen'); await settled(pa)
+    must(await historyState(pa), null, 'Android: History nach System-Zurück aus den Einstellungen')
+    await pa.goForward()
+    await waitH1(pa, 'Sicherheit'); await settled(pa)
+    await tabA('Monat').click()
+    await waitH1(pa, 'Monat')
+    for (let i = 0; i < 20 && (await historyState(pa)) !== null; i++) await sleep(50)
+    must(await historyState(pa), null, 'Android: Tab-Wechsel räumt den Einstellungen-Eintrag')
+    await tabA('Einstellungen').click()
+    await pa.locator('button.menu-row').filter({ hasText: /^Kategorien/ }).click(); await settled(pa)
+    await swipe(pa, { x0: 6, y0: 300, x1: 260, y1: 305 })
+    await waitH1(pa, 'Einstellungen'); await settled(pa)
+    must(await historyState(pa), null, 'Android: History nach Kanten-Wischen in den Einstellungen')
     await ctxA.close()
-    ok('Android-UA (Pixel 7): Unterseite = History-Eintrag (+1), Kanten-Wischen und Zurück-Knopf räumen ihn weg, page.goBack/goForward wechseln zwischen Übersicht und Unterseite, Tab-Wechsel räumt den Eintrag weg (kein doppeltes Zurück), übrig gebliebener Eintrag nach Neuladen wird verworfen')
+    ok('Android-UA (Pixel 7): Unterseite = History-Eintrag (+1), Kanten-Wischen und Zurück-Knopf räumen ihn weg, page.goBack/goForward wechseln zwischen Übersicht und Unterseite, Tab-Wechsel räumt den Eintrag weg (kein doppeltes Zurück), übrig gebliebener Eintrag nach Neuladen wird verworfen; Einstellungen-Unterseiten gleich (Eintrag {sub}, System-Zurück/Vorwärts, Tab-Wechsel und Kanten-Wischen räumen auf)')
+  }
+
+  // Einstellungen: Übersicht mit 5 Zeilen, jede schiebt ihre Unterseite herein (gleiche Mechanik wie Start)
+  {
+    const rowsText = async () => (await page.locator('button.menu-row').allInnerTexts()).map((t) => nbsp(t).replace(/\s*\n\s*/g, ' | '))
+    const openRow = async (name) => { await page.locator('button.menu-row').filter({ hasText: new RegExp(`^${name}`) }).click(); await settled(); await waitH1(page, name) }
+    const backLabel = async () => nbsp(await page.locator('.back-btn').innerText()).trim()
+    await tab('Einstellungen').click(); await settled()
+    await waitH1(page, 'Einstellungen')
+    const rows = await rowsText()
+    must(rows.length, 5, 'Einstellungen: 5 Zeilen')
+    must(rows.map((r) => r.split(' | ')[0]).join(','), 'Profil,Startguthaben,Kategorien,Sicherheit,Datensicherung', 'Einstellungen: Reihenfolge')
+    if (!/^Profil \| (.+ · )?(Automatisch|Hell|Dunkel)$/.test(rows[0])) throw new Error('Wert Profil: ' + rows[0])
+    if (!/^Startguthaben \| −?[\d.]+,\d\d €$/.test(rows[1])) throw new Error('Wert Startguthaben: ' + rows[1])
+    if (!/^Kategorien \| \d+ Kategorien$/.test(rows[2])) throw new Error('Wert Kategorien: ' + rows[2])
+    if (!/^Sicherheit \| Passwort · 1 Min\.$/.test(rows[3])) throw new Error('Wert Sicherheit: ' + rows[3])
+    for (const b of await page.locator('button.menu-row').all()) if ((await b.boundingBox()).height < 44) throw new Error('Zeile < 44 px')
+    for (const name of ['Profil', 'Startguthaben', 'Kategorien', 'Sicherheit', 'Datensicherung']) {
+      await openRow(name)
+      must(await backLabel(), 'Einstellungen', `Zurück-Knopf auf „${name}“ trägt „Einstellungen“`)
+      must(await historyState(page), null, `iOS: „${name}“ ist kein History-Eintrag`)
+      await page.getByRole('button', { name: 'Zurück', exact: true }).click()
+      await page.waitForFunction(() => document.querySelector('.stack')?.dataset.phase === 'pop')
+      await waitH1(page, 'Einstellungen'); await settled()
+    }
+    // Kanten-Wischen zurück
+    await openRow('Sicherheit')
+    await swipe(page, { x0: 6, y0: 300, x1: 260, y1: 305 })
+    await waitH1(page, 'Einstellungen'); await settled()
+    if (await page.locator('.stack-sub').count()) throw new Error('Einstellungen-Unterseite nach dem Wischen noch im DOM')
+    // Tab-Wechsel (auch Tippen auf „Einstellungen“) setzt auf die Übersicht zurück
+    await openRow('Profil')
+    await tab('Einstellungen').click(); await settled()
+    await waitH1(page, 'Einstellungen')
+    if (await page.locator('.stack-sub').count()) throw new Error('Tippen auf „Einstellungen“ setzt nicht zurück')
+    await openRow('Datensicherung')
+    await tab('Monat').click(); await tab('Einstellungen').click()
+    await waitH1(page, 'Einstellungen')
+    // Kategorien: Ausgaben | Einnahmen, Hinzufügen bei Einnahmen
+    await openRow('Kategorien')
+    const kinds = page.getByRole('group', { name: 'Art der Kategorien' })
+    must(await kinds.getByRole('button', { name: 'Ausgaben' }).getAttribute('aria-pressed'), 'true', 'Kategorien: Standard Ausgaben')
+    await page.getByLabel('Neue Ausgaben-Kategorie').waitFor()
+    must(await page.getByLabel('Neue Einnahmen-Kategorie').count(), 0, 'Kategorien: Ausgaben-Ansicht ohne Einnahmen-Feld')
+    await kinds.getByRole('button', { name: 'Einnahmen' }).click()
+    await page.getByLabel('Neue Einnahmen-Kategorie').waitFor()
+    must(await page.getByLabel('Neue Ausgaben-Kategorie').count(), 0, 'Kategorien: Einnahmen-Ansicht ohne Ausgaben-Feld')
+    await page.getByRole('button', { name: 'Gehalt', exact: false }).first().waitFor()
+    await page.getByLabel('Neue Einnahmen-Kategorie').fill('Nebenjob'); await page.getByLabel('Neue Einnahmen-Kategorie').press('Enter')
+    await page.getByText('Nebenjob', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled()
+    if (!/^Kategorien \| \d+ Kategorien$/.test((await rowsText())[2])) throw new Error('Kategorien-Zähler')
+    await tab('Start').click(); await settled()
+    ok('Einstellungen: Übersicht mit 5 Zeilen und Werten (Profil, Startguthaben, Kategorien, Sicherheit „Passwort · 1 Min.“), jede Zeile schiebt ihre Unterseite herein (Zurück-Knopf „Einstellungen“, Pop per Knopf, Kanten-Wischen), Tab-Wechsel und Tippen auf „Einstellungen“ setzen zurück, Kategorien Ausgaben/Einnahmen getrennt (Hinzufügen bei Einnahmen), iOS-UA ohne History-Einträge')
   }
 
   // 2) Sheet nach unten wischen
@@ -2092,7 +2172,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
   const css = (p, sel, prop) => p.locator(sel).first().evaluate((el, pr) => getComputedStyle(el)[pr], prop)
   const metas = (p) => p.evaluate(() => [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => m.content))
-  const pick = async (p, name) => { await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click(); await p.getByRole('group', { name: 'Darstellung' }).getByRole('button', { name, exact: true }).click() }
+  const pick = async (p, name) => { await openSettings(p, 'Profil'); await p.getByRole('group', { name: 'Darstellung' }).getByRole('button', { name, exact: true }).click() }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   const mustEq = (a, b, what) => { if (a !== b) throw new Error(`${what}: ${a} ≠ ${b}`) }
 
@@ -2107,7 +2187,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     })
     await p.goto(URL); await ensureOpen(p)
     mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell: Hintergrund')
-    await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
+    await openSettings(p, 'Profil')
     await sleep(300) // Tab-Einblenden abwarten
     await p.screenshot({ path: `${SHOTS}/36-einstellungen-darstellung.png` })
     mustEq(await p.getByRole('group', { name: 'Darstellung' }).getByRole('button', { name: 'Automatisch' }).getAttribute('aria-pressed'), 'true', 'Standard Automatisch')
@@ -2140,7 +2220,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     mustEq(await css(p, '.trend-bar:nth-child(1)', 'backgroundColor'), 'rgb(52, 211, 153)', 'Dunkel: Einnahmen-Balken')
     mustEq(await css(p, '.trend-bar:nth-child(2)', 'backgroundColor'), 'rgb(248, 113, 113)', 'Dunkel: Ausgaben-Balken')
     ok('Darstellung: Monat-Diagramm nutzt unter erzwungenem Dunkel #34D399 / #F87171')
-    await p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name: 'Einstellungen', exact: true }).click()
+    await openSettings(p, 'Datensicherung')
     const dl = await plainExport(p)
     const backup = fs.readFileSync(await dl.path(), 'utf8')
     if (/theme|dark|Darstellung/i.test(backup)) throw new Error('Darstellung steckt im Backup')
@@ -2240,7 +2320,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
   async function seed(p) {
     await p.goto(URL); await ensureOpen(p)
-    await nav(p, 'Einstellungen').click()
+    await openSettings(p, 'Startguthaben')
     await p.fill('#start-balance', '1000')
     await p.getByRole('button', { name: 'Speichern' }).click()
     await nav(p, 'Start').click()
@@ -2487,7 +2567,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Löschen im Bearbeiten-Sheet (mit Bestätigung) zeigt ebenfalls den Toast, „Rückgängig“ stellt die Buchung her')
 
   // Zeile hat die Dunkel-Variante
-  await nav(p, 'Einstellungen').click()
+  await openSettings(p, 'Profil')
   await p.getByRole('button', { name: 'Dunkel', exact: true }).click()
   await openBookings(p)
   await swipeRow(p, 'Kino', 60)
@@ -2720,15 +2800,16 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Einrichtung fertig („Finanzklar ist geschützt“ → „Fertig“ öffnet die App): kein „finanz-app:v1“, Tresor (finanzklar-vault v1, PBKDF2 600000 für Passwort und Schlüssel, Auto-Sperre 1) enthält weder Passwort noch Schlüssel')
 
   // Persönlich: Name, Startguthaben, Testbuchung – jetzt im Tresor
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Startguthaben')
   await A.fill('#start-balance', '1000')
   await A.getByRole('button', { name: 'Speichern' }).click()
+  await openSettings(A, 'Profil')
   await A.fill('#display-name', '  Felix  ')
   await A.press('#display-name', 'Enter')
   await storedWhen(A, (d) => d.settings.displayName === 'Felix', PW1) // getrimmt
   await A.fill('#display-name', 'x'.repeat(40) + 'yy')
   must(await A.inputValue('#display-name'), 'x'.repeat(40), 'Name auf 40 Zeichen begrenzt')
-  await A.fill('#display-name', 'Felix'); await A.locator('#start-balance').focus() // Blur speichert
+  await A.fill('#display-name', 'Felix'); await A.locator('#display-name').blur() // Blur speichert
   await storedWhen(A, (d) => d.settings.displayName === 'Felix', PW1)
   await nav(A, 'Start').click()
   await addTxP(A, { amount: '123,45', category: 'Gesundheit', note: 'Zahnarzt Geheim' })
@@ -2746,14 +2827,14 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Speichern in der geschützten App: Buchungen (875,55 €) landen verschlüsselt im Tresor (weder Notiz, Betrag, Name noch Kategorie im Klartext) mit frischem IV, kein Klartext-Key, Entsperr-Kopf unverändert')
 
   // Einstellungen: Abschnitt „Sicherheit“, Ausschalten/Einrichten gibt es nicht mehr
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await row(A, 'Passwort ändern').waitFor()
   await A.getByText('Sicherheit', { exact: true }).evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 16))
   await sleep(300)
   await A.screenshot({ path: `${SHOTS}/49-einstellungen-sicherheit.png` })
   const tSet = (await text(A)).toLowerCase() // Abschnittstitel stehen in Großbuchstaben
   for (const gone of ['App-Sperre ausschalten', 'App-Sperre einrichten']) if (tSet.includes(gone.toLowerCase())) throw new Error('Gibt es nicht mehr: ' + gone)
-  for (const here of ['Sicherheit', 'Automatisch sperren', 'Face ID', 'Passwort ändern', 'Neuen Wiederherstellungsschlüssel erzeugen', 'Jetzt sperren']) if (!tSet.includes(here.toLowerCase())) throw new Error('Fehlt in den Einstellungen: ' + here)
+  for (const here of ['Sicherheit', 'Automatisch sperren', 'Passwort ändern', 'Neuen Wiederherstellungsschlüssel erzeugen', 'Jetzt sperren']) if (!tSet.includes(here.toLowerCase())) throw new Error('Fehlt in den Einstellungen: ' + here)
   must(await A.getByRole('button', { name: /ausschalten|einrichten/i }).count(), 0, 'kein Knopf zum Ausschalten/Einrichten')
   ok('Einstellungen: Abschnitt „Sicherheit“ mit Automatisch sperren (Sofort / 1 Min. / 5 Min. / 15 Min.), Face ID, Passwort ändern, Schlüssel erzeugen, Jetzt sperren; weder „App-Sperre ausschalten“ noch „App-Sperre einrichten“')
 
@@ -2819,14 +2900,14 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await unlockPw(A, PW1); await waitOpen(A)
 
   // Einstellung „Sofort“
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await A.getByRole('group', { name: 'Automatisch sperren' }).getByRole('button', { name: 'Sofort', exact: true }).click()
   must(JSON.parse(await ls(A, KEY_VAULT)).autoLockMinutes, 0, 'Auto-Sperre Sofort gespeichert')
   await hide(A, true)
   await hide(A, false)
   await waitLocked(A)
   await unlockPw(A, PW1); await waitOpen(A)
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await A.getByRole('group', { name: 'Automatisch sperren' }).getByRole('button', { name: '1 Min.', exact: true }).click()
   must(JSON.parse(await ls(A, KEY_VAULT)).autoLockMinutes, 1, 'Auto-Sperre wieder 1')
   ok('Auto-Sperre „Sofort“: kurzes Verstecken sperrt sofort; Auswahl wird im Tresor gespeichert')
@@ -2851,7 +2932,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await bal(A), '875,55 €', 'Kontostand nach Schlüssel-Entsperren')
   must(await A.evaluate(() => window.__greet), 0, 'keine Begrüßung bei Schlüssel')
   ok('Wiederherstellungsschlüssel (klein, ohne Bindestriche): falscher Schlüssel abgelehnt, richtiger führt zwingend zu „Neues Passwort festlegen“, danach Daten da (875,55 €)')
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await row(A, 'Jetzt sperren').click(); await waitLocked(A)
   await unlockPw(A, PW1)
   await A.getByRole('alert').filter({ hasText: 'Passwort falsch.' }).waitFor({ timeout: 10000 })
@@ -2859,7 +2940,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Nach dem Zurücksetzen gilt nur noch das neue Passwort')
 
   // Ratenbegrenzung
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await row(A, 'Jetzt sperren').click(); await waitLocked(A)
   for (let i = 1; i <= 5; i++) {
     await A.fill('#lock-secret', 'falsch' + i)
@@ -2885,7 +2966,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Ratenbegrenzung: nach 5 Fehlversuchen „Bitte warte noch 30 Sekunden“ (Eingabe gesperrt), danach 60 s, Erfolg setzt den Zähler zurück')
 
   // Passwort ändern
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await row(A, 'Passwort ändern').click()
   const chg = A.getByRole('dialog', { name: 'Passwort ändern' })
   await chg.waitFor(); await sleep(500)
@@ -2902,7 +2983,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await unlockPw(A, PW3); await waitOpen(A)
   must(await bal(A), '875,55 €', 'Daten nach Passwortwechsel')
   // der alte Wiederherstellungsschlüssel gilt weiterhin
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await row(A, 'Jetzt sperren').click(); await waitLocked(A)
   await A.getByRole('button', { name: 'Wiederherstellungsschlüssel verwenden' }).click()
   await A.fill('#lock-secret', recoveryKey)
@@ -2914,7 +2995,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Passwort ändern: falsches aktuelles Passwort abgelehnt; danach geht nur das neue, Daten unverändert, Wiederherstellungsschlüssel gilt weiter')
 
   // neuer Wiederherstellungsschlüssel
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await row(A, 'Neuen Wiederherstellungsschlüssel erzeugen').click()
   const confirmKey = A.getByRole('alertdialog', { name: 'Neuen Schlüssel erzeugen?' })
   await confirmKey.waitFor()
@@ -2945,7 +3026,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Neuen Wiederherstellungsschlüssel erzeugen: Rückfrage, neuer Schlüssel nur mit Bestätigung abschließbar, der alte wird abgelehnt, der neue funktioniert')
 
   // Backups bei aktiver Sperre
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Datensicherung')
   await A.getByRole('button', { name: 'Exportieren', exact: true }).click()
   const bk = A.getByRole('dialog', { name: 'Backup exportieren' })
   await bk.waitFor(); await sleep(500)
@@ -2958,7 +3039,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await bk.waitFor({ state: 'detached' })
   await nav(A, 'Start').click()
   await addTxP(A, { amount: '500', category: 'Sonstiges', note: 'Nur im Speicher' })
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Datensicherung')
   await A.locator('input[type=file]').setInputFiles(fileA)
   const opn = A.getByRole('dialog', { name: 'Backup entschlüsseln' })
   await opn.waitFor(); await sleep(400)
@@ -2971,7 +3052,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const afterImport = await ls(A, KEY_VAULT)
   for (const needle of ['Zahnarzt', 'Nach Sperre', 'Nur im Speicher', 'amountCents']) if (afterImport.includes(needle)) throw new Error('Klartext im Tresor nach Import: ' + needle)
   must(await bal(A), '875,55 €', 'Kontostand nach Import')
-  await nav(A, 'Einstellungen').click()
+  await openSettings(A, 'Sicherheit')
   await row(A, 'Jetzt sperren').click(); await waitLocked(A)
   await unlockPw(A, PW3); await waitOpen(A)
   must(await bal(A), '875,55 €', 'Kontostand nach Import und Sperren')
@@ -2995,8 +3076,9 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await doneStep(B, 15000)
   await B.getByRole('button', { name: 'Fertig' }).click()
   await B.locator(APPNAV).waitFor()
-  await nav(B, 'Einstellungen').click()
+  await openSettings(B, 'Startguthaben')
   await B.fill('#start-balance', '2000'); await B.getByRole('button', { name: 'Speichern' }).click()
+  await openSettings(B, 'Profil')
   await B.fill('#display-name', 'Felix'); await B.press('#display-name', 'Enter')
   await nav(B, 'Start').click()
   await addTxP(B, { amount: '10', category: 'Sonstiges', note: 'Face ID Test' })
@@ -3009,7 +3091,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(credentials[0].isResidentCredential, true, 'residentKey')
   must(credentials[0].rpId, 'localhost', 'rp.id = Host')
   ok('Face ID bei der Einrichtung (Schritt 3, virtueller Authenticator mit PRF): Passkey (resident, rp.id localhost) angelegt, Tresor hat Passkey-Eintrag (HKDF-Info finanzklar-vault-v1, PRF-Salt 32 Byte)')
-  await nav(B, 'Einstellungen').click()
+  await openSettings(B, 'Sicherheit')
   must((await row(B, 'Face ID').innerText()).includes('Eingerichtet'), true, 'Einstellungen: Face ID eingerichtet')
 
   // Jetzt sperren → Face-ID-Knopf (kein Auto-Start nach manuellem Sperren) → Begrüßung
@@ -3086,9 +3168,10 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await B.locator('.greeting').count(), 0, 'keine Begrüßung beim Tabwechsel')
 
   // ohne Namen: nur „Moin“
-  await nav(B, 'Einstellungen').click()
+  await openSettings(B, 'Profil')
   await B.fill('#display-name', ''); await B.press('#display-name', 'Enter')
   await sleep(200)
+  await openSettings(B, 'Sicherheit')
   await row(B, 'Jetzt sperren').click(); await waitLocked(B)
   await B.getByRole('button', { name: 'Mit Face ID entsperren' }).click()
   await B.locator('.greeting').waitFor({ timeout: 15000 })
@@ -3098,7 +3181,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 
   // Antippen beendet die Begrüßung früh (kurzes Ausblenden), danach ist die App sofort bedienbar
   await waitOpen(B)
-  await nav(B, 'Einstellungen').click()
+  await openSettings(B, 'Sicherheit')
   await row(B, 'Jetzt sperren').click(); await waitLocked(B)
   await B.getByRole('button', { name: 'Mit Face ID entsperren' }).click()
   await B.locator('.greeting').waitFor({ timeout: 15000 })
@@ -3114,7 +3197,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 
   // Bewegung reduzieren: kurze Überblendung
   await B.emulateMedia({ reducedMotion: 'reduce' })
-  await nav(B, 'Einstellungen').click()
+  await openSettings(B, 'Sicherheit')
   await row(B, 'Jetzt sperren').click(); await waitLocked(B)
   await B.getByRole('button', { name: 'Mit Face ID entsperren' }).click()
   await B.locator('.greeting').waitFor({ timeout: 15000 })
@@ -3141,7 +3224,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Neuladen mit Face ID: der Sperrbildschirm löst Face ID einmal selbst aus')
 
   // Passwort funktioniert weiter, Face ID entfernen
-  await nav(B, 'Einstellungen').click()
+  await openSettings(B, 'Sicherheit')
   await row(B, 'Face ID').click()
   await B.getByRole('alertdialog', { name: 'Face ID entfernen?' }).getByRole('button', { name: 'Entfernen' }).click()
   await expectTextOn(B, 'Face ID wurde entfernt.')
@@ -3150,7 +3233,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await B.getByRole('button', { name: 'Mit Face ID entsperren' }).count(), 0, 'Face-ID-Knopf nach Entfernen weg')
   await unlockPw(B, PW1); await waitOpen(B)
   // wieder hinzufügen über die Einstellungen
-  await nav(B, 'Einstellungen').click()
+  await openSettings(B, 'Sicherheit')
   await row(B, 'Face ID').click()
   await expectTextOn(B, 'Face ID wurde hinzugefügt.')
   if (!JSON.parse(await ls(B, KEY_VAULT)).unlock.passkey) throw new Error('Passkey nicht eingetragen')

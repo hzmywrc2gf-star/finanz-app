@@ -98,7 +98,7 @@
     --tabbar-bg: rgba(30, 41, 59, 0.86);
     --backdrop: rgba(0, 0, 0, 0.6);
     --seg-bg: rgba(148, 163, 184, 0.2);
-    --seg-active: #334155;
+    --seg-active: #52617a;
     --btn-bg: #f1f5f9;
     --btn-text: #0f172a;
     --tab-active: #f1f5f9;
@@ -155,7 +155,7 @@
   --tabbar-bg: rgba(30, 41, 59, 0.86);
   --backdrop: rgba(0, 0, 0, 0.6);
   --seg-bg: rgba(148, 163, 184, 0.2);
-  --seg-active: #334155;
+  --seg-active: #52617a;
   --btn-bg: #f1f5f9;
   --btn-text: #0f172a;
   --tab-active: #f1f5f9;
@@ -2155,3 +2155,16 @@ html[data-privacy] #privacy-cover {
   border-top: 0.5px solid var(--sep);
 }
 .lock-link { font-size: 15px; }
+
+/* Einstellungen-Übersicht: die Bezeichnung bleibt ganz, der Wert rechts kürzt sich zuerst */
+.settings-list .row-main {
+  flex: none;
+  white-space: nowrap;
+}
+.settings-list .row-value {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  font-size: 15px;
+  text-align: right;
+}

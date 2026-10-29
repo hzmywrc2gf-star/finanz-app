@@ -4,11 +4,9 @@ import { flushSync } from 'react-dom'
 import { BACK_FRACTION, animationMs, isEdgeStart, parallaxPercent, swipeDecision } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
 import { EASE_IOS, EASE_NAV, afterTransition, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
-import type { StartView } from '../pages/StartPage'
 
 /** How a view change reaches the screen: `animate` = push/pop, `instant` = no motion, `done` = a swipe already finished it. */
 export type StackAnim = 'animate' | 'instant' | 'done'
-type SubView = Exclude<StartView, 'hub'>
 /** idle = at rest; push/pop = button transition; drag = finger on the edge swipe (and the settle after release). */
 type Phase = 'idle' | 'push' | 'pop' | 'drag'
 
@@ -16,26 +14,26 @@ type Phase = 'idle' | 'push' | 'pop' | 'drag'
 const PUSH_MS = 450
 
 /**
- * The start tab as an iOS navigation stack: the hub plus one sub-page on top. At rest only one of them is
+ * A tab as an iOS navigation stack (Start and Einstellungen share it): the hub plus one sub-page on top. At rest only one of them is
  * rendered; while pushing, popping or dragging, both are, and everything moves through refs and CSS
  * transforms (no React update per frame). Edge swipe: drag the sub-page away from the left edge.
  */
-export function StartStack({
+export function NavStack<V extends string>({
   view,
   anim,
   hub,
   renderSub,
   onBack,
 }: {
-  view: StartView
+  view: V | 'hub'
   anim: StackAnim
   hub: ReactNode
-  renderSub: (view: SubView) => ReactNode
+  renderSub: (view: V) => ReactNode
   /** Called when an edge swipe has finished; the owner updates the history and sets `view` to the hub. */
   onBack: (anim: StackAnim) => void
 }) {
   // the sub-page stays mounted while it slides out
-  const [sub, setSub] = useState<SubView | null>(view === 'hub' ? null : view)
+  const [sub, setSub] = useState<V | null>(view === 'hub' ? null : view)
   const [phase, setPhase] = useState<Phase>('idle')
   const [prevView, setPrevView] = useState(view)
   if (view !== prevView) {

@@ -5,6 +5,12 @@ export type ThemePref = 'system' | 'light' | 'dark'
 /** Eigener localStorage-Key; der Inline-Skript in index.html liest denselben Key. */
 export const THEME_KEY = 'finanz-app:theme'
 
+/** The choices of the appearance switch (settings > Profil) and their labels. */
+export const THEME_OPTIONS: { value: ThemePref; label: string }[] = [
+  { value: 'system', label: 'Automatisch' },
+  { value: 'light', label: 'Hell' },
+  { value: 'dark', label: 'Dunkel' },
+]
 const PREFS: readonly ThemePref[] = ['system', 'light', 'dark']
 const CHROME_COLOR = { light: '#F4F6F8', dark: '#0F172A' } as const
 

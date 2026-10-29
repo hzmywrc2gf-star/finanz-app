@@ -66,3 +66,8 @@ export const LockIcon = ({ size = 20 }: { size?: number }) =>
   wrap(<><rect x="5" y="11" width="14" height="9.5" rx="2.2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>, size)
 /** Decorative ↻ for contract rows (RepeatIcon carries a label for lists of bookings). */
 export const RefreshIcon = () => wrap(<><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></>, 20)
+export const PersonIcon = () => wrap(<><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.6-3.6 3.4-5.6 7-5.6s6.4 2 7 5.6" /></>, 18)
+export const WalletIcon = () => wrap(<><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" /><path d="M4 7.5V17a2 2 0 0 0 2 2h12.5a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1H6.5A2.5 2.5 0 0 1 4 7.5z" /><path d="M16 13.5h.01" strokeWidth={2.4} /></>, 18)
+export const TagIcon = () => wrap(<><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.7 6.7a1.4 1.4 0 0 1-2 0z" /><path d="M8 8h.01" strokeWidth={2.4} /></>, 18)
+export const ShieldIcon = () => wrap(<><path d="M12 3.5 5 6v5.5c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6z" /><path d="m9 12 2.2 2.2L15.2 10" /></>, 18)
+export const ArchiveIcon = () => wrap(<><rect x="3.5" y="4.5" width="17" height="4" rx="1" /><path d="M5 8.5V18a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 18V8.5" /><path d="M10 12.5h4" /></>, 18)
