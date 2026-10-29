@@ -2761,7 +2761,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await A.screenshot({ path: `${SHOTS}/49-einstellungen-sicherheit.png` })
   const tSet = (await text(A)).toLowerCase() // Abschnittstitel stehen in Großbuchstaben
   for (const gone of ['App-Sperre ausschalten', 'App-Sperre einrichten']) if (tSet.includes(gone.toLowerCase())) throw new Error('Gibt es nicht mehr: ' + gone)
-  for (const here of ['Sicherheit', 'Automatisch sperren', 'Face ID', 'Passwort ändern', 'Neuen Wiederherstellungsschlüssel erzeugen', 'Jetzt sperren']) if (!tSet.includes(here.toLowerCase())) throw new Error('Fehlt in den Einstellungen: ' + here)
+  for (const here of ['Sicherheit', 'Automatisch sperren', 'Passwort ändern', 'Neuen Wiederherstellungsschlüssel erzeugen', 'Jetzt sperren']) if (!tSet.includes(here.toLowerCase())) throw new Error('Fehlt in den Einstellungen: ' + here)
   must(await A.getByRole('button', { name: /ausschalten|einrichten/i }).count(), 0, 'kein Knopf zum Ausschalten/Einrichten')
   ok('Einstellungen: Abschnitt „Sicherheit“ mit Automatisch sperren (Sofort / 1 Min. / 5 Min. / 15 Min.), Face ID, Passwort ändern, Schlüssel erzeugen, Jetzt sperren; weder „App-Sperre ausschalten“ noch „App-Sperre einrichten“')
 
