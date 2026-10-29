@@ -2276,9 +2276,10 @@ html[data-privacy] #privacy-cover {
 .suggest-done .pico {
   background: var(--chip-solid);
 }
-.suggest-close {
+/* .btn.secondary resets margin-top to 0, so these need the same specificity */
+.btn.suggest-close {
   margin-top: 18px;
 }
-.detect-btn {
-  margin-top: 14px;
+.btn.detect-btn {
+  margin-top: 20px;
 }
