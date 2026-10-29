@@ -55,7 +55,7 @@ export function ImportSheet({ source, onClose, onImported }: { source: ImportSou
   const parsed = useMemo(() => parseImportRows(rows, headerRow, mapping), [rows, headerRow, mapping])
   const duplicates = useMemo(() => findDuplicates(parsed.rows, data.transactions), [parsed.rows, data.transactions])
 
-  const picked = parsed.rows.filter((r, i) => overrides.get(r.line) ?? !duplicates[i])
+  const picked = useMemo(() => parsed.rows.filter((r, i) => overrides.get(r.line) ?? !duplicates[i]), [parsed.rows, duplicates, overrides])
   const newCategories = useMemo(() => newCategoryNames(data.categories, picked), [data.categories, picked])
   const skippedDuplicates = parsed.rows.filter((r, i) => duplicates[i] && !(overrides.get(r.line) ?? false)).length
   const deselected = parsed.rows.length - picked.length - skippedDuplicates

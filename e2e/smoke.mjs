@@ -1984,14 +1984,14 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await tab('Einstellungen').click(); await settled()
     await waitH1(page, 'Einstellungen')
     const rows = await rowsText()
-    must(rows.length, 5, 'Einstellungen: 5 Zeilen')
-    must(rows.map((r) => r.split(' | ')[0]).join(','), 'Profil,Startguthaben,Kategorien,Sicherheit,Datensicherung', 'Einstellungen: Reihenfolge')
+    must(rows.length, 6, 'Einstellungen: 6 Zeilen')
+    must(rows.map((r) => r.split(' | ')[0]).join(','), 'Profil,Startguthaben,Kategorien,Excel & CSV,Sicherheit,Datensicherung', 'Einstellungen: Reihenfolge')
     if (!/^Profil \| (.+ · )?(Automatisch|Hell|Dunkel)$/.test(rows[0])) throw new Error('Wert Profil: ' + rows[0])
     if (!/^Startguthaben \| −?[\d.]+,\d\d €$/.test(rows[1])) throw new Error('Wert Startguthaben: ' + rows[1])
     if (!/^Kategorien \| \d+ Kategorien$/.test(rows[2])) throw new Error('Wert Kategorien: ' + rows[2])
-    if (!/^Sicherheit \| Passwort · 1 Min\.$/.test(rows[3])) throw new Error('Wert Sicherheit: ' + rows[3])
+    if (!/^Sicherheit \| Passwort · 1 Min\.$/.test(rows[4])) throw new Error('Wert Sicherheit: ' + rows[4])
     for (const b of await page.locator('button.menu-row').all()) if ((await b.boundingBox()).height < 44) throw new Error('Zeile < 44 px')
-    for (const name of ['Profil', 'Startguthaben', 'Kategorien', 'Sicherheit', 'Datensicherung']) {
+    for (const name of ['Profil', 'Startguthaben', 'Kategorien', 'Excel & CSV', 'Sicherheit', 'Datensicherung']) {
       await openRow(name)
       must(await backLabel(), 'Einstellungen', `Zurück-Knopf auf „${name}“ trägt „Einstellungen“`)
       must(await historyState(page), null, `iOS: „${name}“ ist kein History-Eintrag`)
@@ -2027,7 +2027,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await page.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled()
     if (!/^Kategorien \| \d+ Kategorien$/.test((await rowsText())[2])) throw new Error('Kategorien-Zähler')
     await tab('Start').click(); await settled()
-    ok('Einstellungen: Übersicht mit 5 Zeilen und Werten (Profil, Startguthaben, Kategorien, Sicherheit „Passwort · 1 Min.“), jede Zeile schiebt ihre Unterseite herein (Zurück-Knopf „Einstellungen“, Pop per Knopf, Kanten-Wischen), Tab-Wechsel und Tippen auf „Einstellungen“ setzen zurück, Kategorien Ausgaben/Einnahmen getrennt (Hinzufügen bei Einnahmen), iOS-UA ohne History-Einträge')
+    ok('Einstellungen: Übersicht mit 6 Zeilen und Werten (Profil, Startguthaben, Kategorien, Sicherheit „Passwort · 1 Min.“), jede Zeile schiebt ihre Unterseite herein (Zurück-Knopf „Einstellungen“, Pop per Knopf, Kanten-Wischen), Tab-Wechsel und Tippen auf „Einstellungen“ setzen zurück, Kategorien Ausgaben/Einnahmen getrennt (Hinzufügen bei Einnahmen), iOS-UA ohne History-Einträge')
   }
 
   // 2) Sheet nach unten wischen
@@ -2696,6 +2696,275 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must(await p.locator('.month-head').first().evaluate((el) => Math.round(el.getBoundingClientRect().top + scrollY)), head0, 'Überschrift nach dem Durchscrollen an gleicher Stelle')
   await c.close()
   ok(`Lange Liste (96 Zeilen, ${months} Monatsgruppen mit content-visibility): alles im DOM, letzte Zeile tippbar, Zeile in der Mitte wischbar, Layout nach dem Durchscrollen unverändert`)
+}
+
+// ---------- Excel & CSV: Export (.xlsx) und Import (.csv/.xlsx) mit Vorschau, Rückgängig (frischer Kontext, 27.10.2026) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: erwartet ${JSON.stringify(expected)}, war ${JSON.stringify(actual)}`) }
+  const { inflateRawSync } = await import('node:zlib')
+  const fix = (name) => decodeURIComponent(new globalThis.URL(`./fixtures/${name}`, import.meta.url).pathname)
+  // minimaler ZIP-Leser (Zentralverzeichnis; STORE oder Deflate)
+  const unzip = (buf) => {
+    let e = buf.length - 22
+    while (e >= 0 && buf.readUInt32LE(e) !== 0x06054b50) e--
+    if (e < 0) throw new Error('kein ZIP')
+    const out = {}
+    let pos = buf.readUInt32LE(e + 16)
+    for (let i = 0; i < buf.readUInt16LE(e + 10); i++) {
+      const method = buf.readUInt16LE(pos + 10), csize = buf.readUInt32LE(pos + 20), nlen = buf.readUInt16LE(pos + 28)
+      const xlen = buf.readUInt16LE(pos + 30), clen = buf.readUInt16LE(pos + 32), off = buf.readUInt32LE(pos + 42)
+      const name = buf.toString('utf8', pos + 46, pos + 46 + nlen)
+      const start = off + 30 + buf.readUInt16LE(off + 26) + buf.readUInt16LE(off + 28)
+      const raw = buf.subarray(start, start + csize)
+      out[name] = (method === 8 ? inflateRawSync(raw) : raw).toString('utf8')
+      pos += 46 + nlen + xlen + clen
+    }
+    return out
+  }
+  const mk = async () => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', acceptDownloads: true })
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+    await withVault(p)
+    await p.addInitScript(() => { window.__vibes = []; Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true }) })
+    return { c, p }
+  }
+  const nav = (p, name) => p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
+  const idle = (p) => p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
+  const text = async (p) => nbsp(await p.locator('body').innerText())
+  const textHas = async (p, t) => { for (let i = 0; i < 40; i++) { if ((await text(p)).includes(t)) return; await sleep(100) } throw new Error(`Text nicht gefunden: "${t}"`) }
+  async function addTx(p, { kind = 'Ausgabe', amount, category, date, note }) {
+    await p.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await p.getByRole('button', { name: kind, exact: true }).click()
+    await p.fill('#tx-amount', amount)
+    if (date) await p.fill('#tx-date', date)
+    await p.selectOption('#tx-cat', { label: category })
+    if (note) await p.fill('#tx-note', note)
+    await p.getByRole('button', { name: 'Sichern' }).click()
+    await p.getByRole('dialog').waitFor({ state: 'detached' })
+  }
+  const sub = async (p) => { await nav(p, 'Start').click(); await idle(p); await p.getByTestId('balance').waitFor(); return nbsp(await p.getByTestId('balance-sub').innerText()).replace(/\s+/g, ' ') }
+  const balance = async (p) => { await nav(p, 'Start').click(); await idle(p); await p.getByTestId('balance').waitFor(); return nbsp(await p.getByTestId('balance').innerText()) }
+  const vibes = (p) => p.evaluate(() => window.__vibes.length)
+  const sheet = (p) => p.getByRole('dialog', { name: 'Import prüfen' })
+  const picked = async (p) => sheet(p).locator('input.import-check:checked').count()
+  async function exportXlsx(p, { range } = {}) {
+    if (range) await p.getByRole('group', { name: 'Zeitraum' }).getByRole('button', { name: range, exact: true }).click()
+    await p.getByRole('button', { name: 'Als Excel-Datei exportieren' }).click()
+    const dlg = p.getByRole('alertdialog')
+    await dlg.waitFor()
+    const [d] = await Promise.all([p.waitForEvent('download'), dlg.getByRole('button', { name: 'Unverschlüsselt exportieren' }).click()])
+    const path = await d.path()
+    return { name: d.suggestedFilename(), parts: unzip(fs.readFileSync(path)), path }
+  }
+
+  const { c, p } = await mk()
+  await p.goto(URL); await ensureOpen(p)
+  await openSettings(p, 'Startguthaben')
+  await p.fill('#start-balance', '1000')
+  await p.getByRole('button', { name: 'Speichern' }).click()
+  await nav(p, 'Start').click()
+  await addTx(p, { kind: 'Einnahme', amount: '2.500,00', category: 'Gehalt', date: '2026-10-05', note: 'Oktober' })
+  await addTx(p, { amount: '45,50', category: 'Lebensmittel', date: '2026-10-01', note: 'Einkauf' })
+  must(await balance(p), '3.454,50 €', 'Excel: Ausgangsstand')
+  await storedWhen(p, (d) => d.transactions.length === 2)
+
+  // ===== Einstieg: Zeile in der Übersicht, Seite mit zwei Gruppen =====
+  await nav(p, 'Einstellungen').click(); await idle(p)
+  const rowNames = (await p.locator('button.menu-row').allInnerTexts()).map((t) => nbsp(t).split('\n')[0].trim())
+  must(rowNames.join(','), 'Profil,Startguthaben,Kategorien,Excel & CSV,Sicherheit,Datensicherung', 'Excel: Zeile zwischen Kategorien und Sicherheit')
+  await openSettings(p, 'Excel & CSV')
+  await p.getByRole('heading', { name: 'Excel & CSV' }).waitFor()
+  await textHas(p, 'EXPORTIEREN'); await textHas(p, 'IMPORTIEREN')
+  must(await p.getByRole('group', { name: 'Zeitraum' }).getByRole('button', { name: 'Alles', exact: true }).getAttribute('aria-pressed'), 'true', 'Excel: Standard „Alles“')
+  must(await p.locator('#ex-from').count(), 0, 'Excel: ohne Zeitraum keine Datumsfelder')
+  await textHas(p, '2 Buchungen und Umbuchungen in diesem Zeitraum')
+
+  // ===== Zeitraum: Validierung =====
+  await p.getByRole('group', { name: 'Zeitraum' }).getByRole('button', { name: 'Zeitraum', exact: true }).click()
+  await p.fill('#ex-from', '2026-10-20'); await p.fill('#ex-to', '2026-10-10')
+  await p.getByRole('alert').filter({ hasText: 'Das Von-Datum darf nicht nach dem Bis-Datum liegen.' }).waitFor()
+  must(await p.getByRole('button', { name: 'Als Excel-Datei exportieren' }).isDisabled(), true, 'Excel: ungültiger Zeitraum sperrt den Export')
+  await p.fill('#ex-from', '2026-10-02'); await p.fill('#ex-to', '2026-10-31')
+  must(await p.getByRole('alert').count(), 0, 'Excel: gültiger Zeitraum ohne Fehler')
+  await textHas(p, '1 Buchung oder Umbuchung in diesem Zeitraum')
+
+  // ===== Export: Warnung, Abbrechen, Datei =====
+  await p.getByRole('button', { name: 'Als Excel-Datei exportieren' }).click()
+  const warn = p.getByRole('alertdialog')
+  await warn.waitFor()
+  await textHas(p, 'nicht verschlüsselt und für jeden lesbar')
+  await warn.getByRole('button', { name: 'Abbrechen' }).click()
+  await warn.waitFor({ state: 'detached' })
+  must(await p.getByText('Export erstellt').count(), 0, 'Excel: Abbrechen exportiert nichts')
+  const v0 = await vibes(p)
+  const range = await exportXlsx(p) // Zeitraum 02.–31.10.: nur die Gehaltsbuchung
+  must(range.name, 'finanzklar-export-2026-10-27.xlsx', 'Excel: Dateiname')
+  await textHas(p, 'Export erstellt (1 Zeile): finanzklar-export-2026-10-27.xlsx')
+  must(await vibes(p), v0 + 1, 'Excel: Haptik beim Export')
+  if (!range.parts['xl/worksheets/sheet1.xml'].includes('<t>Gehalt</t>') || range.parts['xl/worksheets/sheet1.xml'].includes('Lebensmittel')) throw new Error('Excel: Zeitraum-Export enthält falsche Zeilen')
+
+  await p.getByRole('group', { name: 'Zeitraum' }).getByRole('button', { name: 'Dieses Jahr', exact: true }).click()
+  must(await p.locator('#ex-from').count(), 0, 'Excel: „Dieses Jahr“ ohne Datumsfelder')
+  await p.getByRole('group', { name: 'Zeitraum' }).getByRole('button', { name: 'Alles', exact: true }).click()
+  const all = await exportXlsx(p)
+  if (process.env.XLSX_OUT) fs.copyFileSync(all.path, process.env.XLSX_OUT)
+  const names = Object.keys(all.parts).sort()
+  must(names.join(','), '[Content_Types].xml,_rels/.rels,xl/_rels/workbook.xml.rels,xl/styles.xml,xl/workbook.xml,xl/worksheets/sheet1.xml,xl/worksheets/sheet2.xml', 'Excel: Dateien im Paket')
+  must([...all.parts['xl/workbook.xml'].matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]).join(','), 'Buchungen,Monate', 'Excel: Tabellen')
+  const s1 = all.parts['xl/worksheets/sheet1.xml'], s2 = all.parts['xl/worksheets/sheet2.xml']
+  // 01.10.2026 = 46296, 05.10.2026 = 46300; Ausgabe negativ, Einnahme positiv, Beträge als echte Zahlen
+  for (const needle of ['<c r="A2" s="2"><v>46296</v></c>', '<t>Ausgabe</t>', '<t>Lebensmittel</t>', '<t>Einkauf</t>', '<c r="F2" s="3"><v>-45.50</v></c>',
+    '<c r="A3" s="2"><v>46300</v></c>', '<t>Einnahme</t>', '<t>Gehalt</t>', '<c r="F3" s="3"><v>2500.00</v></c>', 'state="frozen"', '<autoFilter ref="A1:F3"/>']) {
+    if (!s1.includes(needle)) throw new Error('Excel: Buchungen enthält nicht ' + needle)
+  }
+  // Monate: Oktober 2026 | 2500,00 | 45,50 | 2454,50, Gesamt, Summen je Kategorie
+  for (const needle of ['<t>Oktober 2026</t>', '<v>2500.00</v>', '<v>45.50</v>', '<v>2454.50</v>', '<t>Gesamt</t>', '<t>Summen je Kategorie</t>']) {
+    if (!s2.includes(needle)) throw new Error('Excel: Monate enthält nicht ' + needle)
+  }
+  if (!all.parts['xl/styles.xml'].includes('dd\\.mm\\.yyyy') || !all.parts['xl/styles.xml'].includes('#,##0.00\\ &quot;€&quot;')) throw new Error('Excel: Zahlenformate fehlen')
+  ok('Excel & CSV: Zeile zwischen Kategorien und Sicherheit, Seite mit „Exportieren“/„Importieren“; Zeitraum mit Von/Bis (Fehler „Das Von-Datum darf nicht nach dem Bis-Datum liegen.“ sperrt den Export), Warnung „nicht verschlüsselt“ (Abbrechen exportiert nichts), Datei finanzklar-export-2026-10-27.xlsx mit „Buchungen“ (Datum als Excel-Zahl 46296/46300, Ausgabe −45,50, Einnahme +2.500,00, Filter, fixierte Kopfzeile) und „Monate“ (Oktober 2026: 2.500,00 / 45,50 / 2.454,50, Gesamt, Summen je Kategorie), Zeitraum-Export nur mit der Gehaltsbuchung, Haptik')
+
+  // ===== Import CSV (Semikolon, Windows-1252, Umlaute, Vorspann) =====
+  const KEY_MAP = 'finanz-app:import-mapping'
+  must(await p.evaluate((k) => localStorage.getItem(k), KEY_MAP), null, 'Import: vorher keine gemerkte Zuordnung')
+  await p.setInputFiles('input[type=file]', fix('tabelle-cp1252.csv'))
+  await sheet(p).waitFor()
+  await sheet(p).locator('input.import-check').first().waitFor()
+  // Zuordnung automatisch: Kopfzeile unter dem Vorspann erkannt
+  for (const [id, col] of [['date', 'A'], ['amount', 'B'], ['category', 'C'], ['note', 'D']]) {
+    const label = await sheet(p).locator(`#imp-${id} option:checked`).innerText()
+    if (!label.startsWith(col + ' ·')) throw new Error(`Import: Spalte für ${id} ist „${label}“`)
+  }
+  must(await sheet(p).locator('#imp-type option:checked').innerText(), '— nicht verwenden —', 'Import: Art nicht zugeordnet')
+  const sum = async () => nbsp(await sheet(p).locator('.import-summary').innerText()).replace(/\s+/g, ' ')
+  must(await sum(), '3 Buchungen werden eingelesen · 1 übersprungen (schon vorhanden) · 2 Fehler · 1 neue Kategorie: Reisen', 'Import: Zusammenfassung CSV')
+  await textHas(p, 'Käse beim Bäcker'); await textHas(p, 'Übernachtung Köln'); await textHas(p, 'Überweisung Nebenjob') // Windows-1252 korrekt gelesen
+  await textHas(p, 'schon vorhanden?')
+  await textHas(p, 'Datum „31.02.2026“ nicht lesbar.'); await textHas(p, 'Betrag „abc“ nicht lesbar.')
+  must(await picked(p), 3, 'Import: 3 Zeilen angehakt (Duplikat nicht)')
+  must(await sheet(p).locator('input.import-check').count(), 4, 'Import: 4 lesbare Zeilen in der Liste')
+  const dupRow = sheet(p).locator('label.import-row').filter({ hasText: 'schon vorhanden?' })
+  must(await dupRow.locator('input').isChecked(), false, 'Import: Duplikat abgewählt')
+  // Zuordnung ändern: ohne Kategorie-Spalte landet alles in „Sonstiges“, keine neue Kategorie
+  await sheet(p).locator('#imp-category').selectOption('')
+  must(await sum(), '3 Buchungen werden eingelesen · 1 übersprungen (schon vorhanden) · 2 Fehler', 'Import: Zusammenfassung ohne Kategorie-Spalte')
+  await sheet(p).locator('#imp-category').selectOption({ index: 3 }) // Spalte C
+  must(await sum(), '3 Buchungen werden eingelesen · 1 übersprungen (schon vorhanden) · 2 Fehler · 1 neue Kategorie: Reisen', 'Import: Zusammenfassung wieder mit Kategorie')
+  // Zeile abwählen und wieder anhaken
+  const reisen = sheet(p).locator('label.import-row').filter({ hasText: 'Übernachtung Köln' })
+  await reisen.locator('input').uncheck()
+  must(await sum(), '2 Buchungen werden eingelesen · 1 übersprungen (schon vorhanden) · 1 abgewählt · 2 Fehler', 'Import: abgewählte Zeile')
+  await reisen.locator('input').check()
+  await sheet(p).locator('.sheet-head').getByRole('button', { name: 'Abbrechen' }).click()
+  await sheet(p).waitFor({ state: 'detached' })
+  must(await balance(p), '3.454,50 €', 'Import: Abbrechen ändert nichts')
+  await openSettings(p, 'Excel & CSV')
+  const v1 = await vibes(p)
+  await p.setInputFiles('input[type=file]', fix('tabelle-cp1252.csv'))
+  await sheet(p).locator('input.import-check').first().waitFor()
+  await sheet(p).getByRole('button', { name: 'Einlesen (3)' }).click()
+  await sheet(p).waitFor({ state: 'detached' })
+  must(await vibes(p), v1 + 1, 'Import: Haptik beim Einlesen')
+  const toast = p.locator('.toast').filter({ hasText: '3 Buchungen importiert' })
+  await toast.waitFor()
+  await textHas(p, '3 Buchungen importiert.')
+  must(await balance(p), '4.207,64 €', 'Import: Kontostand 3.454,50 − 1.234,56 + 2.000,00 − 12,30')
+  let st = await storedWhen(p, (d) => d.transactions.length === 5)
+  must(st.categories.some((x) => x.name === 'Reisen' && x.kind === 'expense' && !x.builtIn), true, 'Import: neue Kategorie „Reisen“ gespeichert')
+  const noteOf = (n) => st.transactions.find((t) => t.note === n)
+  must(noteOf('Übernachtung Köln').amountCents, 123456, 'Import: Betrag in ganzen Cent')
+  must(noteOf('Kaffee').categoryId, 'expense-sonstiges', 'Import: leere Kategorie → Sonstiges')
+  must(noteOf('Überweisung Nebenjob').kind + noteOf('Überweisung Nebenjob').categoryId, 'incomeincome-nebeneinkünfte', 'Import: Einnahme in vorhandener Kategorie (Groß-/Kleinschreibung egal)')
+  must(noteOf('Kaffee').recurringId, undefined, 'Import: ohne recurringId')
+  // Zuordnung wurde gemerkt (nur Kopfnamen, keine Beträge)
+  const mapRaw = await p.evaluate((k) => localStorage.getItem(k), KEY_MAP)
+  must(JSON.stringify(JSON.parse(mapRaw)), '{"datum|betrag|kategorie|notiz":{"date":0,"amount":1,"category":2,"note":3}}', 'Import: gemerkte Zuordnung')
+  // Rückgängig: alles weg, auch die neue Kategorie
+  const v2 = await vibes(p)
+  await toast.getByRole('button', { name: 'Rückgängig' }).click()
+  await toast.waitFor({ state: 'detached' })
+  must(await vibes(p), v2 + 1, 'Import: Haptik beim Rückgängig')
+  must(await balance(p), '3.454,50 €', 'Import: Rückgängig stellt den Kontostand her')
+  st = await storedWhen(p, (d) => d.transactions.length === 2)
+  must(st.categories.some((x) => x.name === 'Reisen'), false, 'Import: Rückgängig entfernt die neue Kategorie')
+  ok('Import CSV (Semikolon, Windows-1252, Vorspann-Zeile): Kopfzeile erkannt, Umlaute korrekt, Vorschau „3 Buchungen werden eingelesen · 1 übersprungen (schon vorhanden) · 2 Fehler · 1 neue Kategorie: Reisen“, Fehlergründe je Zeile, Duplikat abgewählt, Zuordnung ändern/Zeile abwählen aktualisiert die Zusammenfassung, Abbrechen ändert nichts; Einlesen: Kontostand 4.207,64 €, Kategorie „Reisen“ angelegt, leer → Sonstiges, Zuordnung gemerkt (nur Kopfnamen), Toast „3 Buchungen importiert“ + Haptik; Rückgängig stellt 3.454,50 € her und entfernt die neue Kategorie')
+
+  // ===== Import .xlsx (openpyxl, Deflate, zwei Tabellen, Art/Konto-Spalten) =====
+  await openSettings(p, 'Excel & CSV')
+  await p.setInputFiles('input[type=file]', fix('haushalt-openpyxl.xlsx'))
+  await sheet(p).locator('input.import-check').first().waitFor()
+  must(await sheet(p).locator('#imp-sheet option').allInnerTexts().then((t) => t.join(',')), 'Haushalt,Anderes', 'xlsx: Tabellenauswahl')
+  for (const [id, col] of [['date', 'A'], ['amount', 'B'], ['category', 'C'], ['note', 'D'], ['type', 'E'], ['account', 'F']]) {
+    const label = await sheet(p).locator(`#imp-${id} option:checked`).innerText()
+    if (!label.startsWith(col + ' ·')) throw new Error(`xlsx: Spalte für ${id} ist „${label}“`)
+  }
+  must(await sum(), '4 Buchungen werden eingelesen · 1 übersprungen (schon vorhanden) · 2 Fehler · 1 neue Kategorie: Yoga', 'xlsx: Zusammenfassung')
+  await textHas(p, 'Kurs „Rücken“ & Co'); await textHas(p, 'Verkauf <Fahrrad>')
+  await textHas(p, 'Betrag ist 0.'); await textHas(p, 'Datum „kein Datum“ nicht lesbar.')
+  must(await sheet(p).locator('label.import-row').filter({ hasText: 'Bar' }).count(), 1, 'xlsx: eine Bar-Buchung')
+  // Konto-Spalte abwählen: dann ist die Yoga-Buchung keine Bar-Buchung mehr
+  await sheet(p).locator('#imp-account').selectOption('')
+  must(await sheet(p).locator('label.import-row').filter({ hasText: 'Bar' }).count(), 0, 'xlsx: ohne Konto-Spalte keine Bar-Buchung')
+  await sheet(p).locator('#imp-account').selectOption({ label: 'F · Konto' })
+  must(await sheet(p).locator('label.import-row').filter({ hasText: 'Bar' }).count(), 1, 'xlsx: Konto-Spalte wieder da')
+  // Art-Spalte abwählen und so merken lassen (der Ausgang bleibt gleich: 80 ist positiv → Einnahme)
+  await sheet(p).locator('#imp-type').selectOption('')
+  await sheet(p).getByRole('button', { name: 'Einlesen (4)' }).click()
+  await sheet(p).waitFor({ state: 'detached' })
+  await p.locator('.toast').filter({ hasText: '4 Buchungen importiert' }).waitFor()
+  must(await sub(p), 'Bargeld −12,30 € Gesamt 4.787,64 €', 'xlsx: Bargeld und Gesamt')
+  must(await balance(p), '4.799,94 €', 'xlsx: Kontostand 3.454,50 + 2.500 + 80 − 1.234,56')
+  st = await storedWhen(p, (d) => d.transactions.length === 6)
+  const yoga = st.transactions.find((t) => t.note === 'Kurs „Rücken“ & Co')
+  must(yoga.account + yoga.amountCents + yoga.date, 'bargeld12302026-10-05', 'xlsx: Bar-Buchung (Datum aus Excel-Zahl)')
+  must(st.transactions.find((t) => t.note === 'Text-Datum und Text-Betrag').amountCents, 123456, 'xlsx: Text-Betrag „-1.234,56 €“')
+  // „Alle Buchungen“ zeigt die neuen Zeilen
+  await p.getByRole('button', { name: /^Alle Buchungen/ }).click(); await idle(p)
+  await textHas(p, 'Text-Datum und Text-Betrag'); await textHas(p, 'Verkauf <Fahrrad>'); await textHas(p, 'Yoga')
+  // Datei nochmal: alles schon vorhanden → nichts angehakt, Einlesen gesperrt; gemerkte Zuordnung (Art leer) greift
+  await openSettings(p, 'Excel & CSV')
+  await p.setInputFiles('input[type=file]', fix('haushalt-openpyxl.xlsx'))
+  await sheet(p).locator('input.import-check').first().waitFor()
+  must(await sheet(p).locator('#imp-type option:checked').innerText(), '— nicht verwenden —', 'xlsx: gemerkte Zuordnung (Art) greift')
+  must(await picked(p), 0, 'xlsx: alles schon vorhanden, nichts angehakt')
+  must(await sheet(p).getByRole('button', { name: 'Einlesen', exact: true }).isDisabled(), true, 'xlsx: Einlesen gesperrt ohne Auswahl')
+  must(await sheet(p).locator('input.import-check').count(), 5, 'xlsx: 5 lesbare Zeilen')
+  await sheet(p).locator('input.import-check').first().check()
+  must(await sheet(p).getByRole('button', { name: 'Einlesen (1)' }).isDisabled(), false, 'xlsx: Duplikat lässt sich bewusst wieder anhaken')
+  await sheet(p).locator('.sheet-head').getByRole('button', { name: 'Abbrechen' }).click()
+  await sheet(p).waitFor({ state: 'detached' })
+  // zweite Tabelle der Datei wählen: andere Zuordnung, nichts lesbar
+  await p.setInputFiles('input[type=file]', fix('haushalt-openpyxl.xlsx'))
+  await sheet(p).locator('input.import-check').first().waitFor()
+  await sheet(p).locator('#imp-sheet').selectOption({ label: 'Anderes' })
+  await sheet(p).getByRole('alert').filter({ hasText: 'Bitte wähle Spalten für Datum und Betrag.' }).waitFor()
+  must(await sheet(p).getByRole('button', { name: 'Einlesen', exact: true }).isDisabled(), true, 'xlsx: ohne Datum/Betrag kein Einlesen')
+  await sheet(p).locator('.sheet-head').getByRole('button', { name: 'Abbrechen' }).click()
+  await sheet(p).waitFor({ state: 'detached' })
+  // Rückgängig des xlsx-Imports (Toast des vorherigen Imports ist längst weg → neu importieren und sofort zurück)
+  ok('Import .xlsx (openpyxl, komprimiert, zwei Tabellen): Spalten inkl. Art/Konto erkannt, Zusammenfassung „4 Buchungen werden eingelesen · 1 übersprungen (schon vorhanden) · 2 Fehler · 1 neue Kategorie: Yoga“, Bar-Buchung folgt der Konto-Spalte, Einlesen: Konto 4.799,94 €, „Bargeld −12,30 € Gesamt 4.787,64 €“, Datum aus Excel-Zahl und Text-Betrag „-1.234,56 €“ korrekt, Zeilen in „Alle Buchungen“; erneutes Öffnen: gemerkte Zuordnung, alles als Duplikat abgewählt, Einlesen gesperrt, Duplikat bewusst anhakbar; zweite Tabelle ohne Datum/Betrag sperrt Einlesen')
+
+  // Rückgängig nach dem xlsx-Import (frischer Import, sofort zurück)
+  await nav(p, 'Einstellungen').click(); await idle(p)
+  await openSettings(p, 'Kategorien')
+  await p.getByLabel('Neue Ausgaben-Kategorie').fill('Reserve'); await p.getByLabel('Neue Ausgaben-Kategorie').press('Enter')
+  await openSettings(p, 'Excel & CSV')
+  await p.setInputFiles('input[type=file]', fix('tabelle-cp1252.csv'))
+  await sheet(p).locator('input.import-check').first().waitFor()
+  await sheet(p).getByRole('button', { name: 'Einlesen (3)' }).click()
+  const t2 = p.locator('.toast').filter({ hasText: '3 Buchungen importiert' })
+  await t2.waitFor()
+  await t2.getByRole('button', { name: 'Rückgängig' }).click()
+  st = await storedWhen(p, (d) => d.transactions.length === 6)
+  must(st.categories.some((x) => x.name === 'Reisen'), false, 'Rückgängig: Reisen weg')
+  must(st.categories.some((x) => x.name === 'Yoga'), true, 'Rückgängig: Yoga aus dem früheren Import bleibt')
+  must(st.categories.some((x) => x.name === 'Reserve'), true, 'Rückgängig: selbst angelegte Kategorie bleibt')
+  ok('Rückgängig eines weiteren Imports entfernt nur dessen Buchungen und Kategorie („Reisen“); Yoga aus dem früheren Import und selbst angelegte Kategorien bleiben')
+  await c.close()
 }
 
 // ---------- App-Sperre: Tresor (AES-GCM, Datenschlüssel), Passwort, Wiederherstellungsschlüssel, Auto-Sperre, Face ID ----------
