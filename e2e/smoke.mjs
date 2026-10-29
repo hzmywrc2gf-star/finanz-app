@@ -1987,7 +1987,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     must(rows.length, 5, 'Einstellungen: 5 Zeilen')
     must(rows.map((r) => r.split(' | ')[0]).join(','), 'Profil,Startguthaben,Kategorien,Sicherheit,Datensicherung', 'Einstellungen: Reihenfolge')
     if (!/^Profil \| (.+ · )?(Automatisch|Hell|Dunkel)$/.test(rows[0])) throw new Error('Wert Profil: ' + rows[0])
-    if (!/^Startguthaben \| Konto −?[\d.]+,\d\d €$/.test(rows[1])) throw new Error('Wert Startguthaben: ' + rows[1])
+    if (!/^Startguthaben \| −?[\d.]+,\d\d €$/.test(rows[1])) throw new Error('Wert Startguthaben: ' + rows[1])
     if (!/^Kategorien \| \d+ Kategorien$/.test(rows[2])) throw new Error('Wert Kategorien: ' + rows[2])
     if (!/^Sicherheit \| Passwort · 1 Min\.$/.test(rows[3])) throw new Error('Wert Sicherheit: ' + rows[3])
     for (const b of await page.locator('button.menu-row').all()) if ((await b.boundingBox()).height < 44) throw new Error('Zeile < 44 px')

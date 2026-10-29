@@ -45,7 +45,7 @@ export const SettingsPage = memo(function SettingsPage({ onNavigate }: { onNavig
       <SaveError message={saveError} />
       <ul className="list card settings-list">
         <Row icon={<PersonIcon />} tone="blue" label="Profil" value={name ? `${name} · ${themeLabel}` : themeLabel} onClick={() => onNavigate('profile')} />
-        <Row icon={<WalletIcon />} tone="green" label="Startguthaben" value={`Konto ${formatCents(data.settings.startBalanceCents)}`} onClick={() => onNavigate('balance')} />
+        <Row icon={<WalletIcon />} tone="green" label="Startguthaben" value={formatCents(data.settings.startBalanceCents)} onClick={() => onNavigate('balance')} />
         <Row icon={<TagIcon />} tone="orange" label="Kategorien" value={`${data.categories.length} Kategorien`} onClick={() => onNavigate('categories')} />
         <Row icon={<ShieldIcon />} tone="blue" label="Sicherheit" value={security} onClick={() => onNavigate('security')} />
         <Row icon={<ArchiveIcon />} tone="green" label="Datensicherung" value="" onClick={() => onNavigate('backup')} />

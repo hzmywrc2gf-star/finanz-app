@@ -2155,3 +2155,16 @@ html[data-privacy] #privacy-cover {
   border-top: 0.5px solid var(--sep);
 }
 .lock-link { font-size: 15px; }
+
+/* Einstellungen-Übersicht: die Bezeichnung bleibt ganz, der Wert rechts kürzt sich zuerst */
+.settings-list .row-main {
+  flex: none;
+  white-space: nowrap;
+}
+.settings-list .row-value {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  font-size: 15px;
+  text-align: right;
+}
