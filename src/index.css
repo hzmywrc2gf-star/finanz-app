@@ -2234,8 +2234,15 @@ html[data-privacy] #privacy-cover {
 .suggest-card .prow {
   align-items: flex-start;
 }
-.suggest-card .pamt {
-  padding-top: 1px;
+.suggest-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.suggest-top .t {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .suggest-auto {
   margin-top: 8px;

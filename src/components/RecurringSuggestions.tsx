@@ -64,7 +64,7 @@ export function RecurringSuggestions({ importedIds, onClose }: { importedIds?: s
           <p className="suggest-intro">
             {open > 0
               ? `${plural(open, 'wiederkehrende Buchung', 'wiederkehrende Buchungen')} gefunden. Als Vertrag werden sie künftig automatisch gebucht oder zur Bestätigung angezeigt.`
-              : 'Alles angelegt.'}
+              : 'Keine weiteren Vorschläge.'}
           </p>
         )}
         {cards.map((key) => {
@@ -93,7 +93,10 @@ export function RecurringSuggestions({ importedIds, onClose }: { importedIds?: s
                   <RefreshIcon />
                 </span>
                 <span className="pmain">
-                  <div className="t">{title}</div>
+                  <div className="suggest-top">
+                    <div className="t">{title}</div>
+                    <span className={`pamt num ${s.kind === 'income' ? 'income-text' : 'expense-text'}`}>{formatSigned(s.amountCents, s.kind)}</span>
+                  </div>
                   <div className="s">
                     {category && category !== title ? `${category} · ` : ''}
                     {recurrenceLabel(s)}
@@ -102,7 +105,6 @@ export function RecurringSuggestions({ importedIds, onClose }: { importedIds?: s
                     zuletzt {formatDayMonth(s.lastDate)} · {s.count}-mal gefunden
                   </div>
                 </span>
-                <span className={`pamt num ${s.kind === 'income' ? 'income-text' : 'expense-text'}`}>{formatSigned(s.amountCents, s.kind)}</span>
               </div>
               <div className="field switch-row suggest-auto">
                 <label htmlFor={id}>Automatisch buchen</label>

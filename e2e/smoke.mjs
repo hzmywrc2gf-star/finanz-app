@@ -2967,6 +2967,142 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await c.close()
 }
 
+// ---------- Verträge erkennen: Vorschläge nach dem Import und über die Verträge-Seite (frischer Kontext, 28.10.2026) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${what}: erwartet ${JSON.stringify(expected)}, war ${JSON.stringify(actual)}`) }
+  const fix = (name) => decodeURIComponent(new globalThis.URL(`./fixtures/${name}`, import.meta.url).pathname)
+  const KEY_DISMISS = 'finanz-app:recurring-dismissed'
+  const mk = async () => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-10-28T10:00:00+01:00') })
+    await withVault(p)
+    await keepAlive(p)
+    await p.addInitScript(() => { window.__vibes = []; Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true }) })
+    return { c, p }
+  }
+  const nav = (p, name) => p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
+  const idle = (p) => p.waitForFunction(() => !document.querySelector('.stack[data-phase]:not([data-phase="idle"])'))
+  const text = async (p) => nbsp(await p.locator('body').innerText())
+  const textHas = async (p, t) => { for (let i = 0; i < 40; i++) { if ((await text(p)).includes(t)) return; await sleep(100) } throw new Error(`Text nicht gefunden: "${t}"`) }
+  const balance = async (p) => { await nav(p, 'Start').click(); await idle(p); await p.getByTestId('balance').waitFor(); return nbsp(await p.getByTestId('balance').innerText()) }
+  const dlg = (p) => p.getByRole('dialog', { name: 'Verträge erkennen' })
+  const openContracts = async (p) => { await nav(p, 'Start').click(); await idle(p); await p.getByRole('button', { name: /^Verträge/ }).click(); await idle(p); await p.getByRole('button', { name: 'Zurück', exact: true }).waitFor() }
+  const detectBtn = (p) => p.getByRole('button', { name: 'Verträge aus Buchungen erkennen' })
+
+  const { c, p } = await mk()
+  await p.goto(URL); await ensureOpen(p)
+  const before = await balance(p)
+  await openSettings(p, 'Excel & CSV')
+  await p.setInputFiles('input[type=file]', fix('vertraege-muster.csv'))
+  const imp = p.getByRole('dialog', { name: 'Import prüfen' })
+  await imp.locator('input.import-check').first().waitFor()
+  await imp.getByRole('button', { name: 'Einlesen (24)' }).click()
+
+  // ===== Vorschläge öffnen sich nach dem Import: genau Gehalt und Netflix =====
+  await dlg(p).waitFor()
+  must(await dlg(p).locator('section.suggest-card').count(), 2, 'Vorschläge: zwei Karten')
+  const names = (await dlg(p).locator('section.suggest-card .pmain .t').allInnerTexts()).map((t) => t.trim())
+  must(names, ['Gehalt Firma', 'Netflix'], 'Vorschläge: Gehalt zuerst (Einnahme), dann Netflix')
+  const gehalt = dlg(p).getByRole('region', { name: 'Gehalt Firma' })
+  const netflix = dlg(p).getByRole('region', { name: 'Netflix' })
+  const gt = nbsp(await gehalt.innerText()).replace(/\s+/g, ' ')
+  if (!gt.includes('monatlich am 1.') || !gt.includes('zuletzt 01.10. · 6-mal gefunden') || !gt.includes('+3.000,00 €')) throw new Error('Gehalt-Karte: ' + gt)
+  const nt = nbsp(await netflix.innerText()).replace(/\s+/g, ' ')
+  if (!nt.includes('monatlich am 15.') || !nt.includes('−12,99 €')) throw new Error('Netflix-Karte: ' + nt)
+  must(await gehalt.getByRole('switch', { name: 'Automatisch buchen' }).isChecked(), true, 'Vorschläge: Automatisch buchen standardmäßig an')
+  for (const [w, h] of [[375, 812], [390, 844]]) { // 44-px-Ziele
+    await p.setViewportSize({ width: w, height: h })
+    for (const b of await dlg(p).locator('button').all()) { const box = await b.boundingBox(); if (box && box.height < 43.5) throw new Error('Knopf zu klein: ' + (await b.innerText())) }
+  }
+  // der Rückgängig-Toast des Imports liegt über dem Sheet und ist erreichbar (nur Prüfung der Trefferfläche, nicht klicken)
+  const toast = p.locator('.toast').filter({ hasText: '24 Buchungen importiert' })
+  await toast.waitFor()
+  const hit = await toast.getByRole('button', { name: 'Rückgängig' }).evaluate((b) => { const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return b.contains(e) })
+  must(hit, true, 'Toast „Rückgängig“ ist über dem Sheet erreichbar')
+
+  // ===== Gehalt anlegen (automatisch): nichts für die Vergangenheit, Buchungen verknüpft =====
+  const v0 = await p.evaluate(() => window.__vibes.length)
+  await gehalt.getByRole('button', { name: 'Als Vertrag anlegen: Gehalt Firma' }).click()
+  await dlg(p).getByRole('status').filter({ hasText: 'Angelegt: Gehalt Firma · monatlich am 1.' }).waitFor()
+  must((await p.evaluate(() => window.__vibes.length)) > v0, true, 'Vorschläge: Haptik beim Anlegen')
+  must(await dlg(p).locator('section.suggest-card').count(), 1, 'Vorschläge: nur noch Netflix als Karte')
+  let st = await storedWhen(p, (d) => d.recurring.length === 1)
+  must(st.recurring[0].bookedThrough, '2026-10-28', 'Vertrag: bookedThrough rückt bis heute vor, nichts wird gebucht')
+  must([st.recurring[0].kind, st.recurring[0].interval, st.recurring[0].dayOfMonth, st.recurring[0].startDate, st.recurring[0].autoBook, st.recurring[0].amountCents], ['income', 'monthly', 1, '2026-05-01', true, 300000], 'Vertrag: Felder')
+  must(st.transactions.length, 24, 'Vertrag: keine zusätzlichen Buchungen')
+  must(st.transactions.filter((t) => t.recurringId === st.recurring[0].id).length, 6, 'Vertrag: 6 Gehaltsbuchungen verknüpft')
+  // Netflix: Automatisch buchen aus, Nie vorschlagen
+  await netflix.getByRole('switch', { name: 'Automatisch buchen' }).uncheck()
+  await dlg(p).getByRole('button', { name: 'Nicht jetzt: Netflix' }).click()
+  await dlg(p).getByText('Keine weiteren Vorschläge.').waitFor()
+  await dlg(p).getByRole('button', { name: 'Fertig' }).click()
+  await dlg(p).waitFor({ state: 'detached' })
+  const after = await balance(p)
+  await openContracts(p)
+  await textHas(p, 'Gehalt Firma'); await textHas(p, 'monatlich am 1.'); await textHas(p, 'nächste: 01.11.')
+  must(await p.getByTestId('fixed-costs').innerText().then(nbsp), '0,00 €', 'Verträge: Gehalt zählt nicht zu den Fixkosten')
+  await p.screenshot({ path: `${SHOTS}/vertraege-erkennen-seite.png` })
+
+  // ===== Verträge-Seite: erneut erkennen, „Nie vorschlagen“ bleibt auch nach Neuladen =====
+  await detectBtn(p).click()
+  await dlg(p).waitFor()
+  must(await dlg(p).locator('section.suggest-card').count(), 1, 'Erneut: nur Netflix (Gehalt hat einen Vertrag)')
+  await dlg(p).getByRole('button', { name: 'Nie vorschlagen: Netflix' }).click()
+  await dlg(p).getByText('Keine weiteren wiederkehrenden Buchungen gefunden.').waitFor()
+  await dlg(p).getByRole('button', { name: 'Fertig' }).click()
+  await dlg(p).waitFor({ state: 'detached' })
+  const dism = await p.evaluate((k) => localStorage.getItem(k), KEY_DISMISS)
+  must(JSON.parse(dism).length, 1, 'Nie vorschlagen: ein Schlüssel gemerkt')
+  if (/netflix|gehalt/i.test(dism)) throw new Error('Nie vorschlagen: Klartext im Speicher: ' + dism)
+  await reload(p)
+  await openContracts(p)
+  await detectBtn(p).click()
+  await p.getByText('Keine wiederkehrenden Buchungen gefunden.').waitFor()
+  must(await dlg(p).count(), 0, 'Nach Neuladen: Netflix bleibt verborgen, kein Sheet')
+
+  // ===== Der nächste Gehalt-Termin wird genau einmal gebucht =====
+  must(await balance(p), after, 'Kontostand unverändert durch das Anlegen')
+  await p.clock.setSystemTime(new Date('2026-11-02T09:00:00+01:00'))
+  await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  st = await storedWhen(p, (d) => d.transactions.length === 25)
+  const nov = st.transactions.filter((t) => t.date === '2026-11-01')
+  must(nov.length, 1, 'Nächster Termin: genau eine Buchung am 01.11.')
+  must([nov[0].amountCents, nov[0].kind, nov[0].recurringId], [300000, 'income', st.recurring[0].id], 'Nächster Termin: Betrag und Verknüpfung')
+  await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await sleep(300)
+  st = await readStored(p)
+  must(st.transactions.length, 25, 'Nächster Termin: nicht doppelt')
+  ok(`Verträge erkennen: nach dem CSV-Import (24 Zeilen: Gehalt 6× am 1., Netflix 6× am 15. mit Schreibvarianten, 8 unregelmäßige Einkäufe, beendetes Abo) öffnet sich das Sheet mit genau „Gehalt Firma“ (monatlich am 1., zuletzt 01.10. · 6-mal gefunden, +3.000,00 €) und „Netflix“; Knöpfe ≥ 44 px bei 375/390 px; Toast „Rückgängig“ über dem Sheet erreichbar; „Als Vertrag anlegen“ (automatisch): bookedThrough bis heute (28.10.), 6 Buchungen verknüpft, keine Zusatzbuchung, Kontostand ${after} unverändert (vorher ${before}), Haptik; Vertrag in der Liste (nächste: 01.11.); „Nie vorschlagen“ (nur Hash gemerkt) bleibt nach Neuladen, Meldung „Keine wiederkehrenden Buchungen gefunden.“; 02.11.: genau eine neue Gehaltsbuchung am 01.11., nicht doppelt`)
+  await c.close()
+
+  // ===== Ohne Muster: kurze Meldung; Rückgängig des Imports macht Vorschläge unanlegbar =====
+  const m2 = await mk()
+  const q = m2.p
+  await q.goto(URL); await ensureOpen(q)
+  await openContracts(q)
+  await detectBtn(q).click()
+  await q.getByText('Keine wiederkehrenden Buchungen gefunden.').waitFor()
+  await q.screenshot({ path: `${SHOTS}/vertraege-erkennen-leer.png` })
+  await nav(q, 'Einstellungen').click(); await idle(q)
+  await openSettings(q, 'Excel & CSV')
+  await q.setInputFiles('input[type=file]', fix('vertraege-muster.csv'))
+  const imp2 = q.getByRole('dialog', { name: 'Import prüfen' })
+  await imp2.locator('input.import-check').first().waitFor()
+  await imp2.getByRole('button', { name: 'Einlesen (24)' }).click()
+  await dlg(q).waitFor()
+  await q.locator('.toast').filter({ hasText: '24 Buchungen importiert' }).getByRole('button', { name: 'Rückgängig' }).click()
+  await dlg(q).getByText('Keine weiteren wiederkehrenden Buchungen gefunden.').waitFor()
+  must(await dlg(q).getByRole('button', { name: /Als Vertrag anlegen/ }).count(), 0, 'Nach Rückgängig: nichts mehr anlegbar')
+  await dlg(q).getByRole('button', { name: 'Fertig' }).click()
+  must((await readStored(q)).recurring.length, 0, 'Nach Rückgängig: kein Vertrag')
+  ok('Verträge erkennen: ohne Muster zeigt der Knopf „Keine wiederkehrenden Buchungen gefunden.“; macht man den Import im Toast rückgängig, während das Sheet offen ist, verschwinden die Vorschläge (nichts anlegbar, kein Vertrag)')
+  await m2.c.close()
+}
+
 // ---------- App-Sperre: Tresor (AES-GCM, Datenschlüssel), Passwort, Wiederherstellungsschlüssel, Auto-Sperre, Face ID ----------
 {
   const assert = (await import('node:assert/strict')).default
