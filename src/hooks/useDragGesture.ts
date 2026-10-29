@@ -17,6 +17,11 @@ export type DragOptions = {
    * dead zone before the direction was clear, which fades out over the first pixels (no jump when the content starts to follow).
    */
   onMove: (delta: number) => void
+  /**
+   * Optional, runs inside the pointermove event itself (not in the animation frame) with the same offset as `onMove`: for things
+   * that need a user event, like a haptic tick when a threshold is crossed. Keep it tiny; it runs for every move event.
+   */
+  onMoveEvent?: (delta: number) => void
   /** `delta` is the raw finger travel, `velocity` px/ms along the axis; `cancelled` for pointercancel / lost capture. */
   onEnd: (end: DragEnd) => void
 }
@@ -86,6 +91,7 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
         latest.current.onStart?.()
       }
       delta = main
+      latest.current.onMoveEvent?.(followOffset(delta, startDelta))
       // every coalesced touch sample counts for the velocity (a frame may carry several), the painted offset only needs the latest
       const events = e.getCoalescedEvents?.() ?? []
       for (const c of events.length > 0 ? events : [e]) {

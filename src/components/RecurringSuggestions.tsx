@@ -5,6 +5,7 @@ import { recurrenceLabel } from '../domain/recurring'
 import { detectRecurring } from '../domain/recurringDetect'
 import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { haptic } from '../lib/haptics'
+import { Switch } from './Switch'
 import { dismissKey, getDismissedKeys } from '../lib/recurringDismissed'
 import { useFinance } from '../state/FinanceContext'
 import { CheckIcon, RefreshIcon } from './Icons'
@@ -108,14 +109,7 @@ export function RecurringSuggestions({ importedIds, onClose }: { importedIds?: s
               </div>
               <div className="field switch-row suggest-auto">
                 <label htmlFor={id}>Automatisch buchen</label>
-                <input
-                  id={id}
-                  className="switch"
-                  type="checkbox"
-                  role="switch"
-                  checked={auto[key] ?? true}
-                  onChange={(e) => setAuto((m) => ({ ...m, [key]: e.target.checked }))}
-                />
+                <Switch id={id} checked={auto[key] ?? true} onChange={(on) => setAuto((m) => ({ ...m, [key]: on }))} />
               </div>
               {errors[key] && (
                 <div className="error suggest-error" role="alert">

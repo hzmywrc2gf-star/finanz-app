@@ -538,6 +538,7 @@ button.row:is(:active, [data-pressed]) {
 
 /* Segmented control */
 .segmented {
+  position: relative;
   display: flex;
   background: var(--seg-bg);
   border-radius: 9px;
@@ -545,6 +546,7 @@ button.row:is(:active, [data-pressed]) {
   gap: 2px;
 }
 .segmented button {
+  position: relative; /* above the gliding pill */
   flex: 1;
   min-height: 40px;
   border-radius: 7px;
@@ -552,9 +554,19 @@ button.row:is(:active, [data-pressed]) {
   font-weight: 500;
 }
 .segmented button[aria-pressed='true'] {
-  background: var(--seg-active);
   font-weight: 600;
+}
+/* the selection: placed and moved by SegmentedControl.tsx (transform only) */
+.seg-pill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: 7px;
+  background: var(--seg-active);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
 }
 
 /* Week nav */
@@ -726,6 +738,9 @@ button.row:is(:active, [data-pressed]) {
   background: var(--backdrop);
   animation: fade 0.25s ease;
 }
+.backdrop-dim[data-driven] {
+  animation: none; /* the sheet drives the opacity with its spring */
+}
 .backdrop.center {
   align-items: center;
   padding: 24px;
@@ -737,10 +752,12 @@ button.row:is(:active, [data-pressed]) {
   max-height: 92dvh;
   overflow-y: auto;
   border-radius: 16px 16px 0 0;
-  padding: 0 16px calc(env(safe-area-inset-bottom) + 20px);
+  padding: 0 16px;
   position: relative;
   overscroll-behavior: contain;
-  animation: slide 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  /* reaches below the screen edge, so the springy overshoot of the rise never shows a gap (Sheet.tsx: BELOW_EDGE_PX) */
+  margin-bottom: -40px;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 20px + 40px);
 }
 /* a sheet that needs no scrolling can be dragged from anywhere */
 .sheet[data-fits] {
@@ -840,11 +857,6 @@ button.row:is(:active, [data-pressed]) {
     opacity: 0;
   }
 }
-@keyframes slide {
-  from {
-    transform: translateY(100%);
-  }
-}
 @keyframes pop {
   from {
     transform: scale(0.9);
@@ -862,6 +874,9 @@ button.row:is(:active, [data-pressed]) {
   }
   .backdrop.closing .dialog {
     transform: none;
+  }
+  .field input.switch::after {
+    transition: none;
   }
   /* the pressed highlight goes away at once (no 0.2 s fade back) */
   button {
@@ -1510,7 +1525,7 @@ button.row:is(:active, [data-pressed]) {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-  transition: transform 0.2s ease;
+  transition: transform 0.28s cubic-bezier(0.3, 1.4, 0.5, 1); /* a hint of spring */
 }
 .field input.switch:checked {
   background: var(--switch-on);

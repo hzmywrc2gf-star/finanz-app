@@ -1,9 +1,11 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { BACK_FRACTION, animationMs, isEdgeStart, parallaxPercent, swipeDecision } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
-import { EASE_IOS, EASE_NAV, afterTransition, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
+import { SPRING_CALM } from '../domain/spring'
+import { haptic } from '../lib/haptics'
+import { EASE_IOS, EASE_NAV, afterTransition, animateSpring, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
 
 /** How a view change reaches the screen: `animate` = push/pop, `instant` = no motion, `done` = a swipe already finished it. */
 export type StackAnim = 'animate' | 'instant' | 'done'
@@ -58,6 +60,12 @@ export function NavStack<V extends string>({
   const hubScroll = useRef(0)
   const run = useRef(0)
   const width = useRef(1)
+  /** The finger is past the share of the width that lets go of the page (a tick told the user). */
+  const pastThreshold = useRef(false)
+  /** Where the sub-page was last painted during the drag (px), the start of the spring. */
+  const paintedDx = useRef(0)
+  const stopSpring = useRef<(() => void) | null>(null)
+  useEffect(() => () => stopSpring.current?.(), [])
 
   // where the hub was scrolled when a sub-page opens, so it can slide away from exactly there
   useLayoutEffect(() => {
@@ -109,6 +117,33 @@ export function NavStack<V extends string>({
     return token === run.current
   }
 
+  /**
+   * The rest of an edge swipe on the calm spring (no overshoot: clamped to the two end states), starting at the finger speed.
+   * `from`/`to` in px of the sub-page offset; resolves false if something newer took over.
+   */
+  const springSettle = (from: number, to: number, velocity: number) => {
+    const token = ++run.current
+    stopSpring.current?.()
+    return new Promise<boolean>((resolve) => {
+      const stop = animateSpring({
+        from,
+        to,
+        velocity,
+        params: SPRING_CALM,
+        restOffset: 1,
+        onUpdate: (x) => {
+          if (token !== run.current) {
+            stop()
+            return resolve(false)
+          }
+          paint(Math.min(Math.max(x, 0), width.current) / width.current, false)
+        },
+        onDone: () => resolve(token === run.current),
+      })
+      stopSpring.current = stop
+    })
+  }
+
   // push / pop started by the Zurück button or a row; the CSS keeps the sub-page above the hub while `data-phase` is not idle
   useLayoutEffect(() => {
     if (phase === 'idle') {
@@ -140,6 +175,9 @@ export function NavStack<V extends string>({
     onStart: () => {
       width.current = stackRef.current?.clientWidth || 1
       run.current++
+      stopSpring.current?.()
+      pastThreshold.current = false
+      paintedDx.current = 0
       flushSync(() => setPhase('drag')) // the hub has to exist before the first frame of the drag
       // the layers only exist while moving (will-change is removed with the rest in clearStyles)
       for (const el of [subRef.current, hubRef.current, dimRef.current]) {
@@ -149,17 +187,33 @@ export function NavStack<V extends string>({
       }
       paint(0, false)
     },
-    onMove: (dx) => paint(Math.min(Math.max(dx, 0), width.current) / width.current, false),
+    onMove: (dx) => {
+      paintedDx.current = Math.min(Math.max(dx, 0), width.current)
+      paint(paintedDx.current / width.current, false)
+    },
+    // one tick when the finger crosses the line where letting go would leave the page (and again when it goes back), none on release
+    onMoveEvent: (dx) => {
+      const past = Math.min(Math.max(dx, 0), width.current) / width.current > BACK_FRACTION
+      if (past !== pastThreshold.current) {
+        pastThreshold.current = past
+        haptic()
+      }
+    },
     onEnd: ({ delta, velocity, cancelled }) => {
       const dx = Math.min(Math.max(delta, 0), width.current)
       const commit = !cancelled && swipeDecision({ distance: dx, velocity, size: width.current, fraction: BACK_FRACTION })
-      // the rest of the way at the finger speed (velocity towards the target: forwards when leaving, backwards when springing back)
-      const { ms, curve } = releaseMotion(commit ? width.current - dx : dx, commit ? velocity : -velocity)
-      void settle(commit ? 1 : 0, ms, false, curve).then((current) => {
+      const done = (current: boolean) => {
         if (!current) return
         if (commit) onBack('done')
         else setPhase('idle')
-      })
+      }
+      if (reducedMotion()) {
+        // reduced motion: the rest as a quick fade/slide of at most 120 ms instead of the spring
+        const { ms, curve } = releaseMotion(commit ? width.current - dx : dx, commit ? velocity : -velocity)
+        void settle(commit ? 1 : 0, ms, false, curve).then(done)
+      } else {
+        void springSettle(paintedDx.current, commit ? width.current : 0, cancelled ? 0 : velocity).then(done)
+      }
     },
   })
 

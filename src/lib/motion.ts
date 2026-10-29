@@ -1,5 +1,7 @@
 /** Shared helpers for the CSS-transition based animations (no animation library). */
 import { releaseCurve, releaseDuration } from '../domain/gesture'
+import { isSettled, springStart, stepSpring } from '../domain/spring'
+import type { SpringParams } from '../domain/spring'
 
 /** iOS-like ease-out used for pushes, pops and spring-backs. */
 export const EASE_IOS = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
@@ -52,3 +54,43 @@ export const modalOpen = (): boolean => document.querySelector('[aria-modal="tru
 /** Rows with a swipe-to-delete action own their horizontal drags; page-level swipes (month change) stay out. */
 export const inSwipeRow = (target: EventTarget | null): boolean =>
   target instanceof Element && target.closest('[data-swipe-row]') !== null
+
+export type SpringRun = {
+  from: number
+  to: number
+  /** Finger speed along the same axis in px/ms (0 = from rest). */
+  velocity?: number
+  params: SpringParams
+  /** Closer than this (px) to the target counts as arrived (together with a low speed); default 0.3. */
+  restOffset?: number
+  /** Ends the run early (e.g. a closing sheet is off screen long before the tail of the spring is over). */
+  stopWhen?: (value: number) => boolean
+  onUpdate: (value: number) => void
+  /** Called once when the spring arrived or `stopWhen` fired, never after `cancel`. */
+  onDone?: () => void
+}
+
+/**
+ * rAF driver for `domain/spring.ts`: calls `onUpdate` with the position once per frame (callers write `style.transform` on a
+ * ref, no React state) until the spring is at rest, then `onUpdate(to)` and `onDone`. Returns `cancel` (stops where it is).
+ * The first frame assumes 1/60 s; long frames are clamped inside `stepSpring`. Reduced motion is the caller's job.
+ */
+export function animateSpring({ from, to, velocity = 0, params, restOffset, stopWhen, onUpdate, onDone }: SpringRun): () => void {
+  let state = springStart(from, to, velocity)
+  let last = 0
+  let id = 0
+  const frame = (now: number) => {
+    state = stepSpring(state, last ? (now - last) / 1000 : 1 / 60, params)
+    last = now
+    const value = to + state.offset
+    if (isSettled(state, restOffset) || stopWhen?.(value)) {
+      onUpdate(stopWhen?.(value) && !isSettled(state, restOffset) ? value : to)
+      onDone?.()
+      return
+    }
+    onUpdate(value)
+    id = requestAnimationFrame(frame)
+  }
+  id = requestAnimationFrame(frame)
+  return () => cancelAnimationFrame(id)
+}

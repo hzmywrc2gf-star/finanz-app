@@ -94,6 +94,13 @@ export function rubberBand(offset: number, limit: number): number {
   return (1 - 1 / ((offset * 0.55) / limit + 1)) * limit
 }
 
+/** How fast the rubber-banded content moves relative to the finger at `offset` (0..1; the derivative of `rubberBand`). */
+export function rubberBandSlope(offset: number, limit: number): number {
+  if (limit <= 0) return 0
+  const o = Math.max(0, offset)
+  return 0.55 / ((o * 0.55) / limit + 1) ** 2
+}
+
 /** Percent offset of the page underneath; `progress` 0 = sub-page fully open, 1 = fully gone. */
 export const parallaxPercent = (progress: number): number => PARALLAX_PERCENT * (Math.min(1, Math.max(0, progress)) - 1)
 

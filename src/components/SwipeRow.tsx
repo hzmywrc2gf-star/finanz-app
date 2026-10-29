@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { ROW_ACTION_PX, animationMs, isEdgeStart, rowSwipeOutcome } from '../domain/gesture'
+import { ROW_ACTION_PX, ROW_DELETE_FRACTION, animationMs, isEdgeStart, rowSwipeOutcome } from '../domain/gesture'
+import { SPRING_BOUNCY } from '../domain/spring'
 import { useDragGesture } from '../hooks/useDragGesture'
 import { haptic } from '../lib/haptics'
-import { afterTransition, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
+import { afterTransition, animateSpring, isFormField, modalOpen, reducedMotion } from '../lib/motion'
 import { TrashIcon } from './Icons'
 
 const SLIDE_OUT_MS = 110
@@ -26,6 +27,12 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
   const unlisten = useRef<(() => void) | null>(null)
   /** Where the content stands (px, 0 = closed), the start of the animation after a release. */
   const offset = useRef(0)
+  /** Where the content stood when the current drag started (it may still have been moving). */
+  const dragBase = useRef(0)
+  /** Stops the spring that currently moves the content. */
+  const stopSpring = useRef<(() => void) | null>(null)
+  /** Dragged past the "delete right away" line (a tick told the user); a release there must not tick a second time. */
+  const armed = useRef(false)
 
   const paint = (x: number) => {
     offset.current = x
@@ -34,21 +41,36 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
   const setPhase = (phase: 'closed' | 'open' | 'drag') => liRef.current?.setAttribute('data-swipe', phase)
 
   /**
-   * Moves the content to `x` with the spring curve, starting at the finger speed `velocity` (px/ms, negative = leftwards;
-   * 0 = from rest). Instantly with reduced motion. will-change stays until the move is over.
+   * Moves the content to `x` on the bouncy spring, starting at the finger speed `velocity` (px/ms, negative = leftwards;
+   * 0 = from rest). Closing never swings past the left edge of the row. Instantly with reduced motion. will-change stays until
+   * the move is over.
    */
-  const moveTo = async (x: number, velocity = 0) => {
-    const el = contentRef.current
-    if (!el) return
-    const { ms, curve } = releaseMotion(Math.abs(x - offset.current), Math.sign(x - offset.current) * velocity)
-    el.style.willChange = 'transform'
-    void el.offsetWidth // commit the current position before transitioning
-    el.style.transition = reducedMotion() ? 'none' : `transform ${ms}ms ${curve}`
-    paint(x)
-    if (!reducedMotion()) await afterTransition(el, ms)
-    el.style.transition = ''
-    el.style.willChange = ''
-  }
+  const moveTo = (x: number, velocity = 0) =>
+    new Promise<void>((resolve) => {
+      const el = contentRef.current
+      stopSpring.current?.()
+      stopSpring.current = null
+      if (!el) return resolve()
+      el.style.transition = ''
+      if (reducedMotion()) {
+        paint(x)
+        return resolve()
+      }
+      el.style.willChange = 'transform'
+      stopSpring.current = animateSpring({
+        from: offset.current,
+        to: x,
+        velocity,
+        params: SPRING_BOUNCY,
+        onUpdate: (v) => paint(x === 0 ? Math.min(0, v) : v),
+        onDone: () => {
+          stopSpring.current = null
+          el.style.willChange = ''
+          paint(x)
+          resolve()
+        },
+      })
+    })
 
   const forget = () => {
     unlisten.current?.()
@@ -93,7 +115,10 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
     const li = liRef.current
     const el = contentRef.current
     if (!li || !el) return
-    haptic() // still inside the touch/click handler
+    if (!armed.current) haptic() // still inside the touch/click handler (a drag past the line already ticked when it armed)
+    armed.current = false
+    stopSpring.current?.()
+    stopSpring.current = null
     state.current = 'busy'
     forget()
     if (reducedMotion()) {
@@ -117,11 +142,15 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
   useEffect(() => {
     const li = liRef.current
     return () => {
+      stopSpring.current?.()
       unlisten.current?.()
       unlisten.current = null
       if (openRow?.el === li) openRow = null
     }
   }, [])
+
+  /** Where the content stands for a finger travel of `dx` (never right of the closed place, never beyond the row). */
+  const rowOffset = (dx: number) => Math.min(0, Math.max(-width.current, dragBase.current + dx))
 
   useDragGesture(liRef, {
     axis: 'x',
@@ -134,17 +163,31 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
       if (!el) return
       width.current = liRef.current?.offsetWidth || 1
       if (openRow && openRow.el !== liRef.current) void openRow.close()
+      // a drag may catch the row while it still springs: it continues from where it is
+      stopSpring.current?.()
+      stopSpring.current = null
+      dragBase.current = offset.current
+      armed.current = false
       el.style.transition = 'none'
       el.style.willChange = 'transform'
       setPhase('drag')
     },
-    onMove: (dx) => paint(Math.min(0, Math.max(-width.current, (state.current === 'open' ? -ROW_ACTION_PX : 0) + dx))),
+    onMove: (dx) => paint(rowOffset(dx)),
+    // the tick has to happen inside the pointer event: past 60 % of the width releasing deletes (arming), back before it disarms
+    onMoveEvent: (dx) => {
+      const now = -rowOffset(dx) > width.current * ROW_DELETE_FRACTION
+      if (now !== armed.current) {
+        armed.current = now
+        haptic()
+      }
+    },
     onEnd: ({ delta, velocity, cancelled }) => {
       const el = contentRef.current
       if (!el) return
       const wasOpen = state.current === 'open'
-      const offset = Math.min(0, Math.max(-width.current, (wasOpen ? -ROW_ACTION_PX : 0) + delta))
+      const offset = rowOffset(delta)
       const outcome = cancelled ? (wasOpen ? 'open' : 'close') : rowSwipeOutcome({ offset, velocity, width: width.current })
+      if (outcome !== 'delete') armed.current = false
       if (outcome === 'delete') {
         void remove()
       } else if (outcome === 'open') {

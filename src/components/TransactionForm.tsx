@@ -10,6 +10,7 @@ import { downloadInvoiceReminder } from '../lib/invoiceCalendar'
 import { useFinance } from '../state/FinanceContext'
 import { Sheet } from './Sheet'
 import { SegmentedControl } from './SegmentedControl'
+import { Switch } from './Switch'
 import { ConfirmDialog } from './ConfirmDialog'
 
 /** Starting values for a new booking, chosen by the page that opens the form. */
@@ -147,14 +148,7 @@ export function TransactionForm({
           {canInvoice && (
             <div className="field switch-row">
               <label htmlFor="tx-invoice">Auf Rechnung</label>
-              <input
-                id="tx-invoice"
-                className="switch"
-                type="checkbox"
-                role="switch"
-                checked={onInvoice}
-                onChange={(e) => setOnInvoice(e.target.checked)}
-              />
+              <Switch id="tx-invoice" checked={onInvoice} onChange={setOnInvoice} />
             </div>
           )}
           <div className="field">

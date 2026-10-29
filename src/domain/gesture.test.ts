@@ -12,6 +12,7 @@ import {
   releaseVelocity,
   rowSwipeOutcome,
   rubberBand,
+  rubberBandSlope,
   swipeDecision,
   BACK_FRACTION,
   FOLLOW_RAMP_PX,
@@ -110,6 +111,17 @@ describe('rubberBand', () => {
   it('ignores negative offsets and empty limits', () => {
     expect(rubberBand(-10, 100)).toBe(0)
     expect(rubberBand(10, 0)).toBe(0)
+  })
+})
+
+describe('rubberBandSlope', () => {
+  it('is the derivative of rubberBand: 0.55 at the start, shrinking towards 0', () => {
+    expect(rubberBandSlope(0, 100)).toBeCloseTo(0.55)
+    expect(rubberBandSlope(100, 100)).toBeLessThan(rubberBandSlope(10, 100))
+    const h = 0.001
+    const numeric = (rubberBand(60 + h, 100) - rubberBand(60 - h, 100)) / (2 * h)
+    expect(rubberBandSlope(60, 100)).toBeCloseTo(numeric, 4)
+    expect(rubberBandSlope(10, 0)).toBe(0)
   })
 })
 

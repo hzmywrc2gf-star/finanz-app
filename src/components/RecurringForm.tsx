@@ -8,6 +8,7 @@ import type { RecurringInput } from '../state/actions'
 import { useFinance } from '../state/FinanceContext'
 import { Sheet } from './Sheet'
 import { SegmentedControl } from './SegmentedControl'
+import { Switch } from './Switch'
 import { ConfirmDialog } from './ConfirmDialog'
 import { TransactionForm } from './TransactionForm'
 
@@ -189,15 +190,12 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
         <div className="card wide-labels" style={{ marginTop: 16 }}>
           <div className="field switch-row">
             <label htmlFor="rc-end-on">Enddatum</label>
-            <input
+            <Switch
               id="rc-end-on"
-              className="switch"
-              type="checkbox"
-              role="switch"
               checked={hasEnd}
-              onChange={(e) => {
-                setHasEnd(e.target.checked)
-                if (e.target.checked && !end) setEnd(addYears(start || todayISO(), 1))
+              onChange={(on) => {
+                setHasEnd(on)
+                if (on && !end) setEnd(addYears(start || todayISO(), 1))
               }}
             />
           </div>
@@ -213,14 +211,7 @@ export function RecurringForm({ rule, onClose }: { rule?: RecurringRule; onClose
         <div className="card" style={{ marginTop: 16 }}>
           <div className="field switch-row">
             <label htmlFor="rc-auto">Automatisch buchen</label>
-            <input
-              id="rc-auto"
-              className="switch"
-              type="checkbox"
-              role="switch"
-              checked={autoBook}
-              onChange={(e) => setAutoBook(e.target.checked)}
-            />
+            <Switch id="rc-auto" checked={autoBook} onChange={setAutoBook} />
           </div>
         </div>
         <div className="footnote">
