@@ -9,7 +9,7 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : 'Unbekannter Fehler.'
 }
 
-function CategorySection({ kind, title }: { kind: Kind; title: string }) {
+function CategorySection({ kind }: { kind: Kind }) {
   const { data, addCategory, renameCategory, deleteCategory } = useFinance()
   const cats = data.categories.filter((c) => c.kind === kind)
   const [newName, setNewName] = useState('')
@@ -46,7 +46,6 @@ function CategorySection({ kind, title }: { kind: Kind; title: string }) {
 
   return (
     <>
-      <div className="section-title">{title}</div>
       <ul className="list card">
         {cats.map((c) => (
           <li key={c.id}>
@@ -134,11 +133,7 @@ function CategorySection({ kind, title }: { kind: Kind; title: string }) {
   )
 }
 
-export function CategoryManager() {
-  return (
-    <>
-      <CategorySection kind="expense" title="Kategorien · Ausgaben" />
-      <CategorySection kind="income" title="Kategorien · Einnahmen" />
-    </>
-  )
+/** The categories of one kind: rename, delete (with confirmation) and add. */
+export function CategoryManager({ kind }: { kind: Kind }) {
+  return <CategorySection key={kind} kind={kind} />
 }

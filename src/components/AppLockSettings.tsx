@@ -127,7 +127,7 @@ function NewRecoveryKeySheet({ recoveryKey, onClose }: { recoveryKey: string; on
   )
 }
 
-/** Settings section "Sicherheit": the app lock is always on (set up on first start), here it is only managed. */
+/** Content of the settings page "Sicherheit": the app lock is always on (set up on first start), here it is only managed. */
 export function AppLockSettings() {
   const lock = useLock()
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -169,7 +169,6 @@ export function AppLockSettings() {
 
   return (
     <>
-      <div className="section-title">Sicherheit</div>
       <div className="card" style={{ padding: 12 }}>
         <div className="row-sub" style={{ marginBottom: 8 }}>
           Automatisch sperren
