@@ -308,7 +308,7 @@ button.row:is(:active, [data-pressed]),
 .navbar-bg {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   -webkit-backdrop-filter: blur(18px) saturate(1.6);
   backdrop-filter: blur(18px) saturate(1.6);
   border-bottom: 0.5px solid var(--sep);
