@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AppData, Kind, Transaction, Transfer } from '../domain/types'
+import type { AppData, Kind } from '../domain/types'
 import type { FinanceRepository } from '../data/repository'
 import { LocalStorageRepository } from '../data/localStorageRepo'
 import { todayISO } from '../domain/dates'
@@ -40,13 +40,15 @@ export interface FinanceApi {
   /** "Jetzt buchen": handles the next unhandled occurrence now, even if it lies in the future. */
   bookNextNow(ruleId: string, input: ContractBookingInput): void
   replaceAll(data: AppData): void
+  /** File import: adds the bookings (new categories are created); "Rückgängig" in the toast removes the whole batch. Returns the count. */
+  importTransactions(bookings: A.ImportBooking[]): number
 }
 
 /** How often due recurring bookings are re-checked while the app stays open. */
 const REBOOK_INTERVAL_MS = 60 * 60 * 1000
 
-/** The most recent delete, kept for "Rückgängig" (only one step back). */
-type Undo = { id: number; item: { kind: 'transaction'; value: Transaction } | { kind: 'transfer'; value: Transfer } }
+/** The most recent undoable change (delete or import), kept for "Rückgängig" (only one step back). */
+type Undo = { id: number; message: string; revert: (d: AppData) => AppData }
 
 const FinanceContext = createContext<FinanceApi | null>(null)
 
@@ -135,7 +137,7 @@ export function FinanceProvider({
       deleteTransaction: (id) => {
         const value = ref.current?.transactions.find((t) => t.id === id)
         apply((d) => A.deleteTransaction(d, id))
-        if (value) setUndo({ id: ++undoSeq.current, item: { kind: 'transaction', value } })
+        if (value) setUndo({ id: ++undoSeq.current, message: 'Buchung gelöscht', revert: (d) => A.restoreTransaction(d, value) })
       },
       setStartBalance: (c) => apply((d) => A.setStartBalance(d, c)),
       setStartCash: (c) => apply((d) => A.setStartCash(d, c)),
@@ -145,7 +147,7 @@ export function FinanceProvider({
       deleteTransfer: (id) => {
         const value = ref.current?.transfers.find((t) => t.id === id)
         apply((d) => A.deleteTransfer(d, id))
-        if (value) setUndo({ id: ++undoSeq.current, item: { kind: 'transfer', value } })
+        if (value) setUndo({ id: ++undoSeq.current, message: 'Umbuchung gelöscht', revert: (d) => A.restoreTransfer(d, value) })
       },
       addCategory: (k, n) => apply((d) => A.addCategory(d, k, n)),
       renameCategory: (id, n) => apply((d) => A.renameCategory(d, id, n)),
@@ -163,6 +165,14 @@ export function FinanceProvider({
         apply(() => bookDue(nd, todayISO()))
         setUndo(null)
       },
+      importTransactions: (bookings) => {
+        let result: A.ImportResult | undefined
+        apply((d) => (result = A.importTransactions(d, bookings)).data)
+        const done = result as A.ImportResult
+        const n = done.transactionIds.length
+        setUndo({ id: ++undoSeq.current, message: n === 1 ? '1 Buchung importiert' : `${n} Buchungen importiert`, revert: (d) => A.undoImport(d, done) })
+        return n
+      },
     }),
     [apply],
   )
@@ -172,8 +182,7 @@ export function FinanceProvider({
     if (!undo) return
     haptic()
     try {
-      const { item } = undo
-      apply((d) => (item.kind === 'transaction' ? A.restoreTransaction(d, item.value) : A.restoreTransfer(d, item.value)))
+      apply(undo.revert)
     } catch {
       // already back (or data replaced): nothing to restore
     }
@@ -188,7 +197,7 @@ export function FinanceProvider({
       {undo && (
         <UndoToast
           id={undo.id}
-          message={undo.item.kind === 'transaction' ? 'Buchung gelöscht' : 'Umbuchung gelöscht'}
+          message={undo.message}
           onUndo={undoDelete}
           onExpire={expireUndo}
         />

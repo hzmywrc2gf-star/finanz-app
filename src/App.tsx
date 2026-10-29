@@ -20,6 +20,7 @@ import type { SettingsSub, SettingsView } from './pages/SettingsPage'
 import { ProfilePage } from './pages/settings/ProfilePage'
 import { BalancePage } from './pages/settings/BalancePage'
 import { CategoriesPage } from './pages/settings/CategoriesPage'
+import { ExcelPage } from './pages/settings/ExcelPage'
 import { SecurityPage } from './pages/settings/SecurityPage'
 import { BackupPage } from './pages/settings/BackupPage'
 
@@ -29,7 +30,7 @@ type SubView = StartView | SettingsView
 type Nav = { view: SubView; anim: StackAnim }
 
 const START_SUBS: readonly SubView[] = ['bookings', 'cash', 'contracts']
-const SETTINGS_SUBS: readonly SubView[] = ['profile', 'balance', 'categories', 'security', 'backup']
+const SETTINGS_SUBS: readonly SubView[] = ['profile', 'balance', 'categories', 'excel', 'security', 'backup']
 const tabOf = (view: SubView): TabId => (SETTINGS_SUBS.includes(view) ? 'settings' : 'start')
 
 /** The sub-page a history entry belongs to (entries pushed by `openSub` carry it in their state). */
@@ -154,6 +155,7 @@ function AppContent() {
                 {view === 'profile' && <ProfilePage onBack={back} />}
                 {view === 'balance' && <BalancePage onBack={back} />}
                 {view === 'categories' && <CategoriesPage onBack={back} />}
+                {view === 'excel' && <ExcelPage onBack={back} />}
                 {view === 'security' && <SecurityPage onBack={back} />}
                 {view === 'backup' && <BackupPage onBack={back} />}
               </main>
