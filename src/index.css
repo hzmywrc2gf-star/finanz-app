@@ -343,6 +343,9 @@ button.row:is(:active, [data-pressed]),
   opacity: max(0, calc((var(--bar) - 0.5) * 2));
   transform: translate3d(0, calc((1 - var(--bar)) * 6px), 0);
 }
+.navbar-title::before {
+  content: attr(data-title);
+}
 .navbar .back-btn {
   pointer-events: auto;
 }

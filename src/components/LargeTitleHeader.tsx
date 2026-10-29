@@ -69,9 +69,8 @@ export function LargeTitleHeader({
                 </button>
               )}
             </div>
-            <span className="navbar-title" aria-hidden="true">
-              {title}
-            </span>
+            {/* the text comes from CSS (::before), so it is no second copy of the title in the DOM text */}
+            <span className="navbar-title" data-title={title} aria-hidden="true" />
             <div className="navbar-side navbar-end">
               {action && (
                 <button className="round-btn navbar-action" onClick={action.onClick} aria-hidden="true" tabIndex={-1}>
