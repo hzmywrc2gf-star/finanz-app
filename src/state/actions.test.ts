@@ -492,7 +492,7 @@ describe('invoices (Kauf auf Rechnung)', () => {
     expect(addInvoice(base(), { ...inInput, note: '  ' }, 1, 'x').invoices[0]).not.toHaveProperty('note')
     expect(() => addInvoice(base(), { ...inInput, amountCents: 0 })).toThrow('Der Betrag muss größer als 0 sein.')
     expect(() => addInvoice(base(), { ...inInput, amountCents: 1.5 })).toThrow('Betrag')
-    expect(() => addInvoice(base(), { ...inInput, dueDate: '2026-10-19' })).toThrow('„Zahlen bis“ darf nicht vor dem Kaufdatum liegen.')
+    expect(() => addInvoice(base(), { ...inInput, dueDate: '2026-10-19' })).toThrow('‚Zahlen bis‘ darf nicht vor dem Kaufdatum liegen.')
     expect(() => addInvoice(base(), { ...inInput, purchaseDate: 'x' })).toThrow('Kaufdatum')
     expect(() => addInvoice(base(), { ...inInput, categoryId: 'income-gehalt' })).toThrow('Ausgaben-Kategorie')
     expect(() => addInvoice(base(), { ...inInput, categoryId: 'nope' })).toThrow('Kategorie existiert nicht')

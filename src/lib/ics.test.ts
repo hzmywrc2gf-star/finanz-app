@@ -5,7 +5,7 @@ const base = { uid: 'abc-123', date: '2026-10-28', summary: 'Rechnung prüfen: O
 
 describe('escapeIcsText', () => {
   it('escapes backslash, semicolon, comma and newlines', () => {
-    expect(escapeIcsText('a,b;c\\d\ne\r\nf')).toBe('a\\,b\;c\\\\d\\ne\\nf')
+    expect(escapeIcsText('a,b;c\\d\ne\r\nf')).toBe('a\\,b\\;c\\\\d\\ne\\nf')
   })
 })
 

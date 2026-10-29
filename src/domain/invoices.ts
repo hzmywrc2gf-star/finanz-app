@@ -1,5 +1,5 @@
-import type { AppData, Invoice } from './types'
-import { addDays } from './dates'
+import type { AppData, Category, Invoice } from './types'
+import { addDays, formatDayMonth } from './dates'
 
 /** Default pay-by period for a new invoice, in days after the purchase. */
 export const DEFAULT_DUE_DAYS = 14
@@ -49,4 +49,14 @@ export function snoozeDate(inv: Pick<Invoice, 'dueDate'>, today: string): string
   if (today >= inv.dueDate) return addDays(today, 1)
   const two = addDays(today, 2)
   return two < inv.dueDate ? two : inv.dueDate
+}
+
+/** Merchant, or the category name when there is none. */
+export function invoiceTitle(inv: Pick<Invoice, 'note' | 'categoryId'>, categories: Category[]): string {
+  return inv.note || categories.find((c) => c.id === inv.categoryId)?.name || 'Rechnung'
+}
+
+/** "zahlen bis 03.11." or, after that day, "überfällig seit 03.11.". */
+export function dueText(inv: Pick<Invoice, 'dueDate'>, today: string): string {
+  return isOverdue(inv, today) ? `überfällig seit ${formatDayMonth(inv.dueDate)}` : `zahlen bis ${formatDayMonth(inv.dueDate)}`
 }

@@ -7,6 +7,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  cancelLabel = 'Abbrechen',
   danger,
   secondaryLabel,
   onSecondary,
@@ -16,6 +17,8 @@ export function ConfirmDialog({
   title: string
   message?: string
   confirmLabel: string
+  /** Text of the cancel button, default „Abbrechen“. */
+  cancelLabel?: string
   danger?: boolean
   /** Optional middle choice; the dialog then stacks its buttons. */
   secondaryLabel?: string
@@ -52,7 +55,7 @@ export function ConfirmDialog({
           {message && <p>{message}</p>}
         </div>
         <div className={secondaryLabel ? 'actions stacked' : 'actions'}>
-          <button onClick={cancel}>Abbrechen</button>
+          <button onClick={cancel}>{cancelLabel}</button>
           {secondaryLabel && <button onClick={() => !closingNow.current && onSecondary?.()}>{secondaryLabel}</button>}
           <button className={danger ? 'danger' : undefined} onClick={() => !closingNow.current && onConfirm()} autoFocus>
             {confirmLabel}

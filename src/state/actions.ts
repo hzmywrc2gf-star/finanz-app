@@ -546,8 +546,8 @@ function validateInvoiceInput(data: AppData, input: InvoiceInput): void {
     throw new Error('Der Betrag muss größer als 0 sein.')
   }
   if (!isValidISODate(input.purchaseDate)) throw new Error('Ungültiges Kaufdatum.')
-  if (!isValidISODate(input.dueDate)) throw new Error('Ungültiges Datum bei „Zahlen bis“.')
-  if (input.dueDate < input.purchaseDate) throw new Error('„Zahlen bis“ darf nicht vor dem Kaufdatum liegen.')
+  if (!isValidISODate(input.dueDate)) throw new Error('Ungültiges Datum bei ‚Zahlen bis‘.')
+  if (input.dueDate < input.purchaseDate) throw new Error('‚Zahlen bis‘ darf nicht vor dem Kaufdatum liegen.')
   const cat = data.categories.find((c) => c.id === input.categoryId)
   if (!cat) throw new Error('Die Kategorie existiert nicht.')
   if (cat.kind !== 'expense') throw new Error('Rechnungen brauchen eine Ausgaben-Kategorie.')

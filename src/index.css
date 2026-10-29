@@ -2283,3 +2283,74 @@ html[data-privacy] #privacy-cover {
 .btn.detect-btn {
   margin-top: 20px;
 }
+
+/* Kauf auf Rechnung */
+.chip-btn {
+  position: relative;
+  font-family: inherit;
+}
+.chip-btn::after {
+  /* the chip is 32 px high, the touch target 44 px */
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+.chip-btn:is(:active, [data-pressed]) {
+  opacity: 0.7;
+}
+.chip-row + .chip-row {
+  margin-top: 8px;
+}
+.overdue-text {
+  color: var(--over-text);
+}
+.pmain .s.overdue-text {
+  color: var(--over-text);
+  font-weight: 600;
+}
+.pcard .pactions.inv-actions-2 {
+  margin-top: 8px;
+}
+.inv-lead {
+  margin: 0 4px 12px;
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.inv-sum {
+  margin-top: 4px;
+  padding: 14px 20px;
+}
+.inv-sum-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 34px;
+  font-size: 15px;
+  color: var(--text-2);
+}
+.inv-sum-row b {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+.inv-sum-row b.expense-text {
+  color: var(--expense-text-t);
+}
+.inv-list {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.inv-row {
+  width: 100%;
+  min-height: 56px;
+  text-align: left;
+  color: inherit;
+}
+.pactions.inv-detail-actions {
+  margin-top: 12px;
+}
+.btn.secondary.inv-calendar {
+  margin-top: 12px;
+}

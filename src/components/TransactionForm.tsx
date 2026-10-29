@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Account, Kind, Transaction } from '../domain/types'
+import type { Account, Invoice, Kind, Transaction } from '../domain/types'
 import type { TransactionInput } from '../state/actions'
-import { todayISO } from '../domain/dates'
+import { formatDayMonth, todayISO } from '../domain/dates'
+import { defaultDueDate, invoiceReminderDate, invoiceTitle } from '../domain/invoices'
 import { centsToInputString, parseEuroInput } from '../domain/money'
 import { haptic } from '../lib/haptics'
+import { downloadInvoiceReminder } from '../lib/invoiceCalendar'
 import { useFinance } from '../state/FinanceContext'
 import { Sheet } from './Sheet'
 import { SegmentedControl } from './SegmentedControl'
@@ -42,7 +44,7 @@ export function TransactionForm({
   booking?: ContractBooking
   onClose: () => void
 }) {
-  const { data, addTransaction, updateTransaction, deleteTransaction } = useFinance()
+  const { data, addTransaction, updateTransaction, deleteTransaction, addInvoice } = useFinance()
   const start = booking?.initial ?? transaction
   const [kind, setKind] = useState<Kind>(start?.kind ?? defaultKind ?? 'expense')
   const [account, setAccount] = useState<Account>(transaction?.account ?? defaultAccount ?? 'konto')
@@ -52,6 +54,13 @@ export function TransactionForm({
   const [note, setNote] = useState(start?.note ?? '')
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Kauf auf Rechnung: only for new expenses; "Zahlen bis" follows the purchase date until it is edited
+  const [onInvoice, setOnInvoice] = useState(false)
+  const [dueEdited, setDueEdited] = useState<string | null>(null)
+  const [offer, setOffer] = useState<Invoice | null>(null)
+  const canInvoice = !transaction && !booking && kind === 'expense'
+  const invoiceMode = canInvoice && onInvoice
+  const due = dueEdited ?? (date ? defaultDueDate(date) : '')
 
   const categories = data.categories.filter((c) => c.kind === kind)
   const effectiveCategory = categories.some((c) => c.id === categoryId)
@@ -75,6 +84,26 @@ export function TransactionForm({
     }
     if (!effectiveCategory) {
       setError('Bitte eine Kategorie wählen.')
+      return
+    }
+    if (invoiceMode) {
+      if (!due) {
+        setError('Bitte „Zahlen bis“ wählen.')
+        return
+      }
+      if (due < date) {
+        setError('‚Zahlen bis‘ darf nicht vor dem Kaufdatum liegen.')
+        return
+      }
+      try {
+        const inv = addInvoice({ amountCents: cents, note, categoryId: effectiveCategory, purchaseDate: date, dueDate: due })
+        haptic()
+        // a reminder in the past would be useless in the calendar; the start page asks right away anyway
+        if (invoiceReminderDate(inv) >= todayISO()) setOffer(inv)
+        else onClose()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.')
+      }
       return
     }
     const input = { kind, amountCents: cents, date, categoryId: effectiveCategory, account, note }
@@ -101,7 +130,7 @@ export function TransactionForm({
             { value: 'income', label: 'Einnahme' },
           ]}
         />
-        {!booking && (
+        {!booking && !invoiceMode && (
           <div style={{ marginTop: 12 }}>
             <SegmentedControl<Account>
               label="Konto oder Bargeld"
@@ -115,6 +144,19 @@ export function TransactionForm({
           </div>
         )}
         <div className="card" style={{ marginTop: 16 }}>
+          {canInvoice && (
+            <div className="field switch-row">
+              <label htmlFor="tx-invoice">Auf Rechnung</label>
+              <input
+                id="tx-invoice"
+                className="switch"
+                type="checkbox"
+                role="switch"
+                checked={onInvoice}
+                onChange={(e) => setOnInvoice(e.target.checked)}
+              />
+            </div>
+          )}
           <div className="field">
             <label htmlFor="tx-amount">Betrag</label>
             <input
@@ -129,9 +171,15 @@ export function TransactionForm({
             />
           </div>
           <div className="field">
-            <label htmlFor="tx-date">Datum</label>
+            <label htmlFor="tx-date">{invoiceMode ? 'Kaufdatum' : 'Datum'}</label>
             <input id="tx-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
+          {invoiceMode && (
+            <div className="field">
+              <label htmlFor="tx-due">Zahlen bis</label>
+              <input id="tx-due" type="date" value={due} onChange={(e) => setDueEdited(e.target.value)} />
+            </div>
+          )}
           <div className="field">
             <label htmlFor="tx-cat">Kategorie</label>
             <select id="tx-cat" value={effectiveCategory} onChange={(e) => setCategoryId(e.target.value)}>
@@ -143,7 +191,7 @@ export function TransactionForm({
             </select>
           </div>
           <div className="field">
-            <label htmlFor="tx-note">Notiz</label>
+            <label htmlFor="tx-note">{invoiceMode ? 'Händler' : 'Notiz'}</label>
             <input
               id="tx-note"
               placeholder="Optional"
@@ -153,13 +201,18 @@ export function TransactionForm({
             />
           </div>
         </div>
+        {invoiceMode && (
+          <div className="footnote">
+            Du wirst 3 Tage vor ‚Zahlen bis‘ gefragt, ob es beim Betrag geblieben ist. Der Kontostand ändert sich erst beim Bezahlen.
+          </div>
+        )}
         {error && (
           <div className="error" role="alert">
             {error}
           </div>
         )}
         <button className="btn" type="submit">
-          {booking?.submitLabel ?? 'Sichern'}
+          {booking?.submitLabel ?? (invoiceMode ? 'Rechnung sichern' : 'Sichern')}
         </button>
         {transaction && (
           <button className="btn danger" type="button" onClick={() => setConfirmDelete(true)}>
@@ -167,6 +220,19 @@ export function TransactionForm({
           </button>
         )}
       </form>
+      {offer && (
+        <ConfirmDialog
+          title="In den Kalender eintragen?"
+          message={`Erinnerung am ${formatDayMonth(invoiceReminderDate(offer))} (3 Tage vor ‚Zahlen bis‘).`}
+          confirmLabel="Eintragen"
+          cancelLabel="Nein"
+          onCancel={onClose}
+          onConfirm={() => {
+            downloadInvoiceReminder(offer, invoiceTitle(offer, data.categories))
+            onClose()
+          }}
+        />
+      )}
       {confirmDelete && transaction && (
         <ConfirmDialog
           title="Buchung löschen?"

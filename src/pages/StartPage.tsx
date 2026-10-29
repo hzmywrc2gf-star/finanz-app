@@ -4,6 +4,7 @@ import { todayISO, formatDayMonth, formatShortDay, monthLabel } from '../domain/
 import { formatCents, formatPercent, formatSigned } from '../domain/money'
 import { budgetAlerts } from '../domain/budget'
 import { builtInId } from '../domain/defaults'
+import { dueInvoices, dueText, invoiceTitle, isOverdue, openInvoicesTotal } from '../domain/invoices'
 import type { PendingConfirmation } from '../domain/recurring'
 import { monthlyEquivalent, pendingConfirmations, recurringTitle, upcoming } from '../domain/recurring'
 import { haptic } from '../lib/haptics'
@@ -13,7 +14,9 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { TransactionForm } from '../components/TransactionForm'
 import { BalanceChart } from '../components/BalanceChart'
 import { BudgetBar } from '../components/BudgetBar'
-import { CashIcon, ChevronRight, ContractIcon, ListIcon, LockIcon, PlusIcon, RefreshIcon } from '../components/Icons'
+import { InvoiceFlowDialogs, InvoiceListSheet } from '../components/InvoiceSheets'
+import type { InvoiceFlow } from '../components/InvoiceSheets'
+import { CashIcon, ChevronRight, ContractIcon, ListIcon, LockIcon, PlusIcon, ReceiptIcon, RefreshIcon } from '../components/Icons'
 
 export type StartView = 'hub' | 'bookings' | 'cash' | 'contracts'
 
@@ -29,10 +32,12 @@ export const StartPage = memo(function StartPage({
   onOpenBudgets: () => void
   onNavigate: (view: StartView) => void
 }) {
-  const { data, confirmOccurrence, skipOccurrence } = useFinance()
+  const { data, confirmOccurrence, skipOccurrence, snoozeInvoice } = useFinance()
   const { lockNow } = useLock()
   const [booking, setBooking] = useState<PendingConfirmation | null>(null)
   const [skipping, setSkipping] = useState<PendingConfirmation | null>(null)
+  const [invoiceList, setInvoiceList] = useState(false)
+  const [invoiceFlow, setInvoiceFlow] = useState<InvoiceFlow | null>(null)
   const today = todayISO()
   const balance = accountBalance(data, 'konto')
   const cash = accountBalance(data, 'bargeld')
@@ -40,6 +45,8 @@ export const StartPage = memo(function StartPage({
   const due = upcoming(data, today, 7, { excludeCategoryIds: HIDDEN_FROM_UPCOMING })
   const contracts = monthlyEquivalent(data.recurring, today)
   // per contract only the oldest open occurrence is shown (it has to be handled first), plus a count of the rest
+  const invoicesDue = dueInvoices(data, today)
+  const openTotal = openInvoicesTotal(data)
   const pending = pendingConfirmations(data, today)
   const toConfirm = pending
     .filter((p, i) => pending.findIndex((q) => q.rule.id === p.rule.id) === i)
@@ -69,6 +76,13 @@ export const StartPage = memo(function StartPage({
             Gesamt <b>{formatCents(totalBalance(data))}</b>
           </span>
         </div>
+        {data.invoices.length > 0 && (
+          <div className="chip-row">
+            <button className="chip chip-btn num" data-testid="open-invoices" onClick={() => setInvoiceList(true)}>
+              Offene Rechnungen <b>{formatCents(openTotal)}</b>
+            </button>
+          </div>
+        )}
         <BalanceChart data={data} today={today} />
       </section>
       {/* Inline instead of the floating Fab: the start page is short, a Fab would cover the last row. */}
@@ -106,6 +120,47 @@ export const StartPage = memo(function StartPage({
                   </button>
                   <button className="pbtn soft" aria-label={`Überspringen: ${title}`} onClick={() => setSkipping({ rule, date })}>
                     Überspringen
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </section>
+      )}
+
+      {invoicesDue.length > 0 && (
+        <section className="pcard tint-mist" aria-label="Offene Rechnungen">
+          <div className="pcard-head">
+            <h2>Offene Rechnungen</h2>
+          </div>
+          {invoicesDue.map((inv) => {
+            const title = invoiceTitle(inv, data.categories)
+            return (
+              <div key={inv.id} className="confirm-item">
+                <div className="prow">
+                  <span className="pico">
+                    <ReceiptIcon />
+                  </span>
+                  <span className="pmain">
+                    <div className="t">{title}</div>
+                    <div className={isOverdue(inv, today) ? 's overdue-text' : 's'}>{dueText(inv, today)}</div>
+                  </span>
+                  <span className="pamt num expense-text">{`\u2212${formatCents(inv.amountCents)}`}</span>
+                </div>
+                <div className="pactions">
+                  <button className="pbtn" aria-label={`Bezahlt: ${title}`} onClick={() => setInvoiceFlow({ type: 'pay', invoice: inv })}>
+                    Bezahlt
+                  </button>
+                  <button className="pbtn soft" aria-label={`Später: ${title}`} onClick={() => snoozeInvoice(inv.id)}>
+                    Später
+                  </button>
+                </div>
+                <div className="pactions inv-actions-2">
+                  <button className="pbtn soft" aria-label={`Betrag ändern: ${title}`} onClick={() => setInvoiceFlow({ type: 'amount', invoice: inv })}>
+                    Betrag ändern
+                  </button>
+                  <button className="pbtn soft" aria-label={`Zurückgeschickt: ${title}`} onClick={() => setInvoiceFlow({ type: 'return', invoice: inv })}>
+                    Zurückgeschickt
                   </button>
                 </div>
               </div>
@@ -215,6 +270,8 @@ export const StartPage = memo(function StartPage({
           onClose={() => setBooking(null)}
         />
       )}
+      {invoiceList && <InvoiceListSheet onClose={() => setInvoiceList(false)} />}
+      <InvoiceFlowDialogs flow={invoiceFlow} onClose={() => setInvoiceFlow(null)} />
       {skipping && (
         <ConfirmDialog
           title="Termin überspringen?"

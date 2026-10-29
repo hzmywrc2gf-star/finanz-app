@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AppData, Kind } from '../domain/types'
+import type { AppData, Invoice, Kind } from '../domain/types'
 import type { FinanceRepository } from '../data/repository'
 import { LocalStorageRepository } from '../data/localStorageRepo'
 import { todayISO } from '../domain/dates'
@@ -9,7 +9,7 @@ import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { haptic } from '../lib/haptics'
 import { UndoToast } from '../components/UndoToast'
 import * as A from './actions'
-import type { ContractBookingInput, RecurringInput, TransactionInput, TransferInput } from './actions'
+import type { ContractBookingInput, InvoiceInput, RecurringInput, TransactionInput, TransferInput } from './actions'
 
 export interface FinanceApi {
   data: AppData
@@ -40,6 +40,19 @@ export interface FinanceApi {
   skipOccurrence(ruleId: string, occurrenceDate: string): void
   /** "Jetzt buchen": handles the next unhandled occurrence now, even if it lies in the future. */
   bookNextNow(ruleId: string, input: ContractBookingInput): void
+  /** Kauf auf Rechnung: an open invoice, not a booking yet. */
+  addInvoice(input: InvoiceInput): Invoice
+  updateInvoice(id: string, input: InvoiceInput): void
+  /** Removes an invoice without booking anything; "Rückgängig" in the toast restores it. */
+  deleteInvoice(id: string): void
+  /** Books the payment as a Konto expense and removes the invoice; "Rückgängig" restores the invoice and removes the booking. */
+  payInvoice(id: string, opts: { paidDate: string; amountCents?: number }): void
+  /** Partial return: new amount, the invoice stays open. */
+  changeInvoiceAmount(id: string, amountCents: number): void
+  /** "Komplett zurückgeschickt": removes the invoice, books nothing; undoable. */
+  returnInvoice(id: string): void
+  /** "Später": hides the reminder for two days (at most to "Zahlen bis"). */
+  snoozeInvoice(id: string): void
   replaceAll(data: AppData): void
   /** File import: adds the bookings (new categories are created); "Rückgängig" in the toast removes the whole batch. Returns the new ids. */
   importTransactions(bookings: A.ImportBooking[]): string[]
@@ -163,6 +176,31 @@ export function FinanceProvider({
       confirmOccurrence: (id, date, i) => apply((d) => A.confirmOccurrence(d, id, date, i)),
       skipOccurrence: (id, date) => apply((d) => A.skipOccurrence(d, id, date)),
       bookNextNow: (id, i) => apply((d) => A.bookNextNow(d, id, i)),
+      addInvoice: (i) => {
+        const id = crypto.randomUUID()
+        apply((d) => A.addInvoice(d, i, Date.now(), id))
+        return (ref.current as AppData).invoices.find((inv) => inv.id === id) as Invoice
+      },
+      updateInvoice: (id, i) => apply((d) => A.updateInvoice(d, id, i)),
+      deleteInvoice: (id) => {
+        const value = ref.current?.invoices.find((i) => i.id === id)
+        apply((d) => A.deleteInvoice(d, id))
+        if (value) setUndo({ id: ++undoSeq.current, message: 'Rechnung entfernt', revert: (d) => A.restoreInvoice(d, value) })
+      },
+      payInvoice: (id, opts) => {
+        const value = ref.current?.invoices.find((i) => i.id === id)
+        let result: A.PayInvoiceResult | undefined
+        apply((d) => (result = A.payInvoice(d, id, opts)).data)
+        const txId = (result as A.PayInvoiceResult).transactionId
+        if (value) setUndo({ id: ++undoSeq.current, message: 'Rechnung bezahlt', revert: (d) => A.undoPayInvoice(d, value, txId) })
+      },
+      changeInvoiceAmount: (id, c) => apply((d) => A.changeInvoiceAmount(d, id, c)),
+      returnInvoice: (id) => {
+        const value = ref.current?.invoices.find((i) => i.id === id)
+        apply((d) => A.returnInvoice(d, id))
+        if (value) setUndo({ id: ++undoSeq.current, message: 'Rechnung entfernt', revert: (d) => A.restoreInvoice(d, value) })
+      },
+      snoozeInvoice: (id) => apply((d) => A.snoozeInvoice(d, id, todayISO())),
       // an older backup may already have occurrences due
       replaceAll: (nd) => {
         apply(() => bookDue(nd, todayISO()))

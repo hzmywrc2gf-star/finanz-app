@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultData } from './defaults'
 import type { AppData, Invoice } from './types'
-import { defaultDueDate, dueInvoices, invoiceReminderDate, isOverdue, openInvoicesTotal, snoozeDate, sortInvoices } from './invoices'
+import { defaultDueDate, dueText, invoiceTitle, dueInvoices, invoiceReminderDate, isOverdue, openInvoicesTotal, snoozeDate, sortInvoices } from './invoices'
 
 const inv = (over: Partial<Invoice> = {}): Invoice => ({
   id: 'i1',
@@ -75,5 +75,18 @@ describe('snoozeDate', () => {
   it('on or after the pay-by date: one day', () => {
     expect(snoozeDate({ dueDate: '2026-10-31' }, '2026-10-31')).toBe('2026-11-01')
     expect(snoozeDate({ dueDate: '2026-10-31' }, '2026-11-05')).toBe('2026-11-06')
+  })
+})
+
+describe('texts', () => {
+  it('shows the pay-by date, then "überfällig seit" the day after', () => {
+    expect(dueText({ dueDate: '2026-11-03' }, '2026-11-03')).toBe('zahlen bis 03.11.')
+    expect(dueText({ dueDate: '2026-11-03' }, '2026-11-04')).toBe('überfällig seit 03.11.')
+  })
+  it('titles by merchant, else category', () => {
+    const cats = createDefaultData().categories
+    expect(invoiceTitle(inv(), cats)).toBe('Otto')
+    expect(invoiceTitle(inv({ note: undefined }), cats)).toBe('Kleidung')
+    expect(invoiceTitle(inv({ note: undefined, categoryId: 'gone' }), cats)).toBe('Rechnung')
   })
 })
