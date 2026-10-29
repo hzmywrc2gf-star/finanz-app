@@ -5,8 +5,8 @@ import { useDragGesture } from '../hooks/useDragGesture'
 import { SPRING_BOUNCY, SPRING_CALM } from '../domain/spring'
 import { afterTransition, animateSpring, isInteractive, reducedMotion, releaseMotion } from '../lib/motion'
 
-/** How far the sheet reaches below the screen edge (CSS: margin-bottom of .sheet), so a springy overshoot never shows a gap. */
-const BELOW_EDGE_PX = 40
+/** Closing aims this far past the screen edge: the calm spring then crosses the edge at speed instead of crawling towards it. */
+const CLOSE_PAST_PX = 48
 
 /**
  * Bottom sheet. It rises on a springy spring (SPRING_BOUNCY) and lets go of a short drag the same way, with the finger speed;
@@ -72,11 +72,11 @@ export function Sheet({
         const closing = to === 'closed'
         stopSpring.current = animateSpring({
           from: offset.current,
-          to: closing ? height.current : 0,
+          to: closing ? height.current + CLOSE_PAST_PX : 0,
           velocity: closing ? Math.max(0, velocity) : velocity,
           params: closing ? SPRING_CALM : SPRING_BOUNCY,
           // a closing sheet is gone once it left the screen; the rest of the spring would be invisible
-          stopWhen: closing ? (y) => y >= height.current - BELOW_EDGE_PX : undefined,
+          stopWhen: closing ? (y) => y >= height.current : undefined,
           onUpdate: paint,
           onDone: resolve,
         })

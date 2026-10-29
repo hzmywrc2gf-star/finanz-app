@@ -7,6 +7,7 @@ import { ArchiveIcon, ChevronRight, PersonIcon, ShieldIcon, TableIcon, TagIcon, 
 import { SaveError } from '../components/SaveError'
 import { useThemePref } from '../hooks/useThemePref'
 import { THEME_OPTIONS } from '../lib/theme'
+import { LargeTitleHeader } from '../components/LargeTitleHeader'
 
 /** The sub-pages of the settings tab (`hub` is the overview). */
 export type SettingsView = 'hub' | 'profile' | 'balance' | 'categories' | 'excel' | 'security' | 'backup'
@@ -41,7 +42,7 @@ export const SettingsPage = memo(function SettingsPage({ onNavigate }: { onNavig
 
   return (
     <>
-      <h1 className="page-title">Einstellungen</h1>
+      <LargeTitleHeader title="Einstellungen" />
       <SaveError message={saveError} />
       <ul className="list card settings-list">
         <Row icon={<PersonIcon />} tone="blue" label="Profil" value={name ? `${name} · ${themeLabel}` : themeLabel} onClick={() => onNavigate('profile')} />

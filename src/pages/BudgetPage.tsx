@@ -8,6 +8,7 @@ import { BudgetBar } from '../components/BudgetBar'
 import { BudgetForm } from '../components/BudgetForm'
 import { ChevronLeft, ChevronRight } from '../components/Icons'
 import { SwipePane } from '../components/SwipePane'
+import { LargeTitleHeader } from '../components/LargeTitleHeader'
 
 /** "noch 87,60 €" / "23,10 € drüber" */
 const remainingText = (remainingCents: number) =>
@@ -27,7 +28,7 @@ export const BudgetPage = memo(function BudgetPage() {
 
   return (
     <>
-      <h1 className="page-title">Budgets</h1>
+      <LargeTitleHeader title="Budgets" />
       <SwipePane onStep={(step) => setMonth((m) => addMonths(m, step))}>
         <div className="month-switch">
           <button className="round-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Vorheriger Monat">

@@ -9,6 +9,7 @@ import { TransactionList } from '../components/TransactionList'
 import { Fab } from '../components/Fab'
 import { SwipePane } from '../components/SwipePane'
 import { ChevronLeft, ChevronRight } from '../components/Icons'
+import { LargeTitleHeader } from '../components/LargeTitleHeader'
 
 /** "Oktober 2026 · Einnahmen 2.500,00 € · Ausgaben 850,00 € · Saldo 1.650,00 €" */
 const pointText = (p: MonthPoint) =>
@@ -130,7 +131,7 @@ export const MonthPage = memo(function MonthPage({
 
   return (
     <>
-      <h1 className="page-title">Monat</h1>
+      <LargeTitleHeader title="Monat" />
       <SwipePane onStep={(step) => setMonth((m) => addMonths(m, step))}>
         <div className="week-nav">
           <button className="icon-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Vorheriger Monat">

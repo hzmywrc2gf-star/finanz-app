@@ -2186,13 +2186,13 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
       }).observe(document, { childList: true, subtree: true })
     })
     await p.goto(URL); await ensureOpen(p)
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell: Hintergrund')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell: Hintergrund')
     await openSettings(p, 'Profil')
     await sleep(300) // Tab-Einblenden abwarten
     await p.screenshot({ path: `${SHOTS}/36-einstellungen-darstellung.png` })
     mustEq(await p.getByRole('group', { name: 'Darstellung' }).getByRole('button', { name: 'Automatisch' }).getAttribute('aria-pressed'), 'true', 'Standard Automatisch')
     await pick(p, 'Dunkel')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'Dunkel erzwungen: Hintergrund')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(15, 23, 42)', 'Dunkel erzwungen: Hintergrund')
     mustEq(await css(p, '.card', 'backgroundColor'), 'rgb(30, 41, 59)', 'Dunkel erzwungen: Karte')
     mustEq(await p.evaluate(() => document.documentElement.dataset.theme), 'dark', 'data-theme')
     mustEq(await p.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark', 'color-scheme')
@@ -2206,7 +2206,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await reload(p)
     await p.locator('h1').first().waitFor()
     mustEq(await p.evaluate(() => window.__themeAtMount), 'dark', 'Thema vor dem ersten Rendern')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'Nach Neuladen: Hintergrund')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(15, 23, 42)', 'Nach Neuladen: Hintergrund')
     ok('Darstellung: Dunkel bei hellem System sofort wirksam (Hintergrund #0F172A, Karte #1E293B, Text hell, color-scheme dark, theme-color #0F172A), nach Neuladen weiter dunkel und data-theme schon vor dem ersten Rendern gesetzt')
 
     // Monat-Diagramm in den dunklen Farbvarianten, Datensicherung ohne Darstellung
@@ -2230,11 +2230,11 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await pick(p, 'Automatisch')
     mustEq(await p.evaluate(() => document.documentElement.hasAttribute('data-theme')), false, 'data-theme entfernt')
     mustEq(await p.evaluate(() => localStorage.getItem('finanz-app:theme')), null, 'Key entfernt')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Automatisch + System hell')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(244, 246, 248)', 'Automatisch + System hell')
     await p.emulateMedia({ colorScheme: 'dark' })
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'Automatisch + System dunkel')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(15, 23, 42)', 'Automatisch + System dunkel')
     await p.emulateMedia({ colorScheme: 'light' })
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Automatisch + wieder hell')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(244, 246, 248)', 'Automatisch + wieder hell')
     const ms = await p.evaluate(() => [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => [m.media, m.content]))
     mustEq(JSON.stringify(ms), JSON.stringify([['(prefers-color-scheme: light)', '#F4F6F8'], ['(prefers-color-scheme: dark)', '#0F172A']]), 'theme-color-Metas bei Automatisch')
     ok('Darstellung: Automatisch folgt dem System live (emulateMedia hell ↔ dunkel), data-theme entfernt, beide theme-color-Metas wiederhergestellt')
@@ -2245,9 +2245,9 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   {
     const { c, p } = await mk('dark')
     await p.goto(URL); await ensureOpen(p)
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(15, 23, 42)', 'System dunkel: Hintergrund')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(15, 23, 42)', 'System dunkel: Hintergrund')
     await pick(p, 'Hell')
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell erzwungen: Hintergrund')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell erzwungen: Hintergrund')
     mustEq(await css(p, '.card', 'backgroundColor'), 'rgb(255, 255, 255)', 'Hell erzwungen: Karte')
     mustEq(await p.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'light', 'color-scheme')
     const m = await metas(p)
@@ -2264,7 +2264,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.screenshot({ path: `${SHOTS}/38-hell-erzwungen.png` })
     await reload(p)
     await p.locator('h1').first().waitFor()
-    mustEq(await css(p, 'body', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell nach Neuladen')
+    mustEq(await css(p, 'html', 'backgroundColor'), 'rgb(244, 246, 248)', 'Hell nach Neuladen')
     ok('Darstellung: Hell bei dunklem System sofort wirksam und persistent (Hintergrund #F4F6F8, Karte weiß, Balken #059669, theme-color #F4F6F8)')
     await c.close()
   }
@@ -3990,6 +3990,193 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if (await chip7().count()) throw new Error('Rechnung: Chip nach v6-Import')
   ok('Backup: Export hat Version 7 mit beiden Rechnungen (inkl. Aufschub); ungültige Rechnung („Ein Betrag bei Rechnungen …“) wird abgelehnt; ein v6-Backup ohne Rechnungen lässt sich importieren (migriert zu Version 7, keine Rechnungen, Chip weg)')
   await ctx7.close()
+}
+
+// ---------- Erlebnis: Federn, Haptik, Scroll-Effekte ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const mkSeed = () => {
+    const names = ['Lebensmittel', 'Fixkosten', 'Mobilität', 'Freizeit', 'Kleidung', 'Gesundheit', 'Sonstiges']
+    const budgets = [40000, 90000, 15000, 8000, 20000, 10000]
+    const categories = [
+      ...names.map((name, i) => ({ id: `expense-${name.toLowerCase()}`, name, kind: 'expense', builtIn: name === 'Sonstiges', ...(i < 6 ? { monthlyBudgetCents: budgets[i] } : {}) })),
+      ...['Gehalt', 'Nebeneinkünfte', 'Sonstiges'].map((name) => ({ id: `income-${name.toLowerCase()}`, name, kind: 'income', builtIn: name === 'Sonstiges' })),
+    ]
+    const transactions = Array.from({ length: 40 }, (_, i) => ({
+      id: `t${i}`, kind: 'expense', amountCents: 1500 + i * 400, date: `2026-10-${String(1 + (i % 26)).padStart(2, '0')}`,
+      categoryId: `expense-${names[i % 6].toLowerCase()}`, note: `Posten ${i}`, account: 'konto', createdAt: 1700000000000 + i,
+    }))
+    return { version: 7, settings: { startBalanceCents: 100000, startCashCents: 0 }, categories, transactions, recurring: [], transfers: [], invoices: [] }
+  }
+  const mkE = async ({ reduced = false } = {}) => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', reducedMotion: reduced ? 'reduce' : 'no-preference' })
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-10-27T10:00:00+01:00') })
+    await p.addInitScript((d) => {
+      if (!localStorage.getItem('finanz-app:v1') && !localStorage.getItem('finanz-app:vault')) localStorage.setItem('finanz-app:v1', JSON.stringify(d))
+      window.__vibes = []
+      Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true })
+    }, mkSeed())
+    await keepAlive(p)
+    await p.goto(URL); await ensureOpen(p)
+    await p.evaluate(() => { window.__vibes.length = 0 })
+    return { c, p }
+  }
+  const touch = async (p, type, x, y) => {
+    const cdp = (p.__cdp ??= await p.context().newCDPSession(p))
+    await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+  }
+  const dragTo = async (p, x0, y0, x1, y1, { steps = 8, release = true } = {}) => {
+    await touch(p, 'touchStart', x0, y0)
+    for (let i = 1; i <= steps; i++) { await touch(p, 'touchMove', x0 + ((x1 - x0) * i) / steps, y0 + ((y1 - y0) * i) / steps); await sleep(30) }
+    if (release) await touch(p, 'touchEnd')
+  }
+  const vibes = (p) => p.evaluate(() => window.__vibes.length)
+  const tabE = (p, name) => p.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button', { name, exact: true })
+  const mustE = (a, b, what) => { if (a !== b) throw new Error(`${what}: erwartet "${b}", war "${a}"`) }
+
+  // 1) Sheet steigt auf der Feder auf (viele Zwischenbilder, kleines Nachschwingen) und liegt am Ende bei 0; Schalter und Segmente ticken
+  {
+    const { c, p } = await mkE()
+    await p.evaluate(() => {
+      window.__ty = []
+      new MutationObserver(() => { const s = document.querySelector('.sheet'); if (s) window.__ty.push(s.style.transform) }).observe(document.body, { subtree: true, attributes: true, childList: true })
+    })
+    await p.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await p.getByRole('dialog').waitFor()
+    await p.waitForFunction(() => { const s = document.querySelector('.sheet'); return s && s.style.transform === '' && window.__ty.length > 3 })
+    const ys = await p.evaluate(() => window.__ty.filter(Boolean).map((t) => Number(t.match(/,\s*(-?[\d.]+)px,/)?.[1])))
+    if (!(ys[0] > 100 && ys.length > 4)) throw new Error('Sheet-Feder: zu wenige Zwischenbilder ' + JSON.stringify(ys))
+    if (Math.min(...ys) < -12) throw new Error('Sheet-Feder: zu starkes Nachschwingen ' + Math.min(...ys))
+    mustE(await p.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('.sheet')).transform).m42), 0, 'Sheet liegt in Ruhe bei 0')
+    mustE(await vibes(p), 0, 'Öffnen des Sheets vibriert nicht')
+    // Segment: Wechsel tickt, derselbe Wert nicht; die Pille liegt unter dem gewählten Knopf
+    const dlg = p.getByRole('dialog')
+    await dlg.getByRole('button', { name: 'Einnahme', exact: true }).click()
+    mustE(await vibes(p), 1, 'Segmentwechsel tickt')
+    await dlg.getByRole('button', { name: 'Einnahme', exact: true }).click()
+    mustE(await vibes(p), 1, 'Gleicher Wert tickt nicht')
+    await dlg.getByRole('button', { name: 'Ausgabe', exact: true }).click()
+    mustE(await vibes(p), 2, 'Zurückwechseln tickt')
+    await p.waitForFunction(() => { const seg = document.querySelector('.sheet .segmented'); const pill = seg.querySelector('.seg-pill'); const b = seg.querySelector('button[aria-pressed="true"]'); return Math.abs(new DOMMatrix(getComputedStyle(pill).transform).m41 - b.offsetLeft) < 0.5 })
+    // Schalter
+    await dlg.getByRole('switch', { name: 'Auf Rechnung' }).click()
+    mustE(await vibes(p), 3, 'Schalter tickt')
+    await dlg.getByRole('switch', { name: 'Auf Rechnung' }).click()
+    mustE(await vibes(p), 4, 'Schalter tickt auch beim Ausschalten')
+    await dlg.getByRole('button', { name: 'Abbrechen' }).click()
+    await dlg.waitFor({ state: 'detached' })
+    mustE(await vibes(p), 4, 'Abbrechen vibriert nicht')
+    await c.close()
+    ok('Sheet steigt auf der Feder (viele Zwischenbilder, Nachschwingen < 12 px) und liegt in Ruhe bei 0; Haptik: Segmentwechsel und beide Schalterrichtungen ticken, gleicher Segmentwert und Abbrechen nicht')
+  }
+
+  // 2) Zeile: Feder öffnet auf −80 px; Schwelle „sofort löschen“ tickt beim Erreichen und beim Zurückgehen, das Löschen danach nicht noch einmal
+  {
+    const { c, p } = await mkE()
+    await p.getByRole('button', { name: /^Alle Buchungen/ }).click(); await settled(p)
+    const li = p.locator('.swipe-li').first()
+    const b = await li.boundingBox()
+    const y = b.y + b.height / 2
+    await dragTo(p, b.x + b.width - 30, y, b.x + b.width - 30 - 100, y)
+    await p.waitForFunction(() => document.querySelector('.swipe-li').dataset.swipe === 'open' && document.querySelector('.swipe-content').style.transform === 'translate3d(-80px, 0px, 0px)')
+    mustE(await vibes(p), 0, 'Öffnen der Zeile tickt nicht')
+    await p.mouse.click(10, 300) // schließt die Zeile wieder
+    await p.waitForFunction(() => document.querySelector('.swipe-li').dataset.swipe === 'closed')
+    // über 60 % der Breite ziehen (armt), zurück unter 60 % (löst), wieder darüber und loslassen (löscht, kein zweiter Tick)
+    const far = b.x + b.width - 20 - b.width * 0.7
+    const near = b.x + b.width - 20 - b.width * 0.3
+    await touch(p, 'touchStart', b.x + b.width - 20, y)
+    for (let i = 1; i <= 6; i++) { await touch(p, 'touchMove', b.x + b.width - 20 - ((b.x + b.width - 20 - far) * i) / 6, y); await sleep(30) }
+    mustE(await vibes(p), 1, 'Über der Löschschwelle tickt (Armen)')
+    for (let i = 1; i <= 4; i++) { await touch(p, 'touchMove', far + ((near - far) * i) / 4, y); await sleep(30) }
+    mustE(await vibes(p), 2, 'Unter die Löschschwelle zurück tickt (Lösen)')
+    for (let i = 1; i <= 4; i++) { await touch(p, 'touchMove', near - ((near - far) * i) / 4, y); await sleep(30) }
+    mustE(await vibes(p), 3, 'Wieder über der Schwelle tickt')
+    const before = await p.locator('.swipe-li').count()
+    await touch(p, 'touchEnd')
+    await p.waitForFunction((n) => document.querySelectorAll('.swipe-li').length === n - 1, before)
+    mustE(await vibes(p), 3, 'Löschen nach dem Armen tickt kein zweites Mal')
+    await c.close()
+    ok('Zeile: Feder öffnet exakt auf −80 px (kein Tick); über 60 % der Breite tickt beim Armen und beim Lösen, das Löschen nach dem Armen tickt nicht doppelt')
+  }
+
+  // 3) Kanten-Wischen tickt einmal beim Überschreiten der Zurück-Schwelle, nicht beim Loslassen; Monatswechsel per Wischen tickt
+  {
+    const { c, p } = await mkE()
+    await p.getByRole('button', { name: /^Alle Buchungen/ }).click(); await settled(p)
+    await touch(p, 'touchStart', 6, 300)
+    for (let i = 1; i <= 6; i++) { await touch(p, 'touchMove', 6 + i * 20, 300); await sleep(30) } // 126 px = 32 %
+    mustE(await vibes(p), 0, 'Unter der Zurück-Schwelle kein Tick')
+    for (let i = 1; i <= 4; i++) { await touch(p, 'touchMove', 126 + i * 30, 300); await sleep(30) } // 246 px = 63 %
+    mustE(await vibes(p), 1, 'Über der Zurück-Schwelle ein Tick')
+    await touch(p, 'touchEnd')
+    await waitH1E(p, 'Finanzklar'); await settled(p)
+    mustE(await vibes(p), 1, 'Loslassen tickt nicht noch einmal')
+    await tabE(p, 'Monat').click()
+    await dragTo(p, 320, 420, 70, 420)
+    await p.waitForFunction(() => /November 2026/.test(document.querySelector('.week-nav .label')?.textContent ?? ''))
+    mustE(await vibes(p), 2, 'Monatswechsel per Wischen tickt')
+    await c.close()
+    ok('Kanten-Wischen: genau ein Tick beim Überschreiten der Zurück-Schwelle (keiner beim Loslassen); Monatswechsel per Wischen tickt')
+  }
+  async function waitH1E(p, text) { for (let i = 0; i < 40; i++) { if ((await p.locator('h1').first().innerText()).trim() === text) return; await sleep(100) } throw new Error('Überschrift ' + text) }
+
+  // 4) Scroll: großer Titel klappt zur kompakten Leiste, Zurück-Knopf bleibt, Verlauf bleibt zurück; Budget-Balken unten füllen sich beim Hereinscrollen
+  {
+    const { c, p } = await mkE()
+    const bar = () => p.evaluate(() => { const w = document.querySelector('.navbar-wrap'); const h = document.querySelector('h1'); return { v: w.style.getPropertyValue('--bar'), mode: w.dataset.bar, op: h.style.opacity, glow: document.querySelector('.navbar-glow').style.transform } })
+    mustE((await bar()).mode, 'off', 'Oben: Leiste aus')
+    await p.evaluate(() => window.scrollTo(0, 120))
+    await p.waitForFunction(() => document.querySelector('.navbar-wrap').dataset.bar === 'on')
+    const on = await bar()
+    mustE(on.v, '1', 'Leiste voll'); mustE(on.op, '0', 'Großer Titel ausgeblendet')
+    if (!/translate3d\(0px, 54px/.test(on.glow)) throw new Error('Verlauf bleibt zurück: ' + on.glow)
+    const barBox = await p.locator('.navbar-bg').boundingBox()
+    if (!(barBox.y === 0 && barBox.height >= 56)) throw new Error('Leiste klebt oben: ' + JSON.stringify(barBox))
+    if (!(await p.locator('.navbar-title').isVisible()) || (await p.locator('.navbar-title').evaluate((e) => getComputedStyle(e).opacity)) !== '1') throw new Error('Kleiner Titel sichtbar')
+    // der gespiegelte Sperr-Knopf in der Leiste ist antippbar (nicht für Screenreader), der große ist weg gescrollt
+    await p.locator('.navbar-action').click()
+    await p.locator('main.lock-screen').waitFor()
+    await c.close()
+    ok('Start scrollt: großer Titel blendet aus, kompakte Leiste (klebt oben, kleiner Titel, Sperr-Knopf antippbar), Verlauf bleibt um 45 % zurück')
+  }
+  {
+    const { c, p } = await mkE()
+    await openSettings(p, 'Kategorien')
+    await p.evaluate(() => window.scrollTo(0, 200))
+    await p.waitForFunction(() => document.querySelector('.navbar-wrap').dataset.bar === 'on')
+    const back = await p.getByRole('button', { name: 'Zurück', exact: true }).boundingBox()
+    if (!(back.y >= 0 && back.y < 60 && back.height >= 44)) throw new Error('Zurück-Knopf in der Leiste: ' + JSON.stringify(back))
+    await p.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled(p)
+    await waitH1E(p, 'Einstellungen')
+    mustE(await p.evaluate(() => document.querySelector('.navbar-wrap').dataset.bar), 'off', 'Übersicht startet oben mit großem Titel')
+    await tabE(p, 'Budgets').click()
+    const fills = p.locator('.bar-fill')
+    await p.waitForFunction(() => document.querySelectorAll('.bar-fill').length >= 6)
+    const pending = await p.evaluate(() => [...document.querySelectorAll('.bar-fill')].map((f) => f.hasAttribute('data-pending')))
+    if (!(pending.includes(true) && pending[0] === false)) throw new Error('Balken: oben voll, unten wartend ' + JSON.stringify(pending))
+    const last = fills.nth(pending.length - 1)
+    mustE(await last.evaluate((f) => new DOMMatrix(getComputedStyle(f).transform).a), 0, 'Unterer Balken startet leer')
+    await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    await p.waitForFunction(() => ![...document.querySelectorAll('.bar-fill')].some((f) => f.hasAttribute('data-pending')))
+    await p.waitForFunction(() => { const f = [...document.querySelectorAll('.bar-fill')].pop(); return new DOMMatrix(getComputedStyle(f).transform).a === 1 }, null, { timeout: 5000 })
+    await c.close()
+    ok('Unterseite scrollt: Zurück-Knopf bleibt in der Leiste (44 px, oben), Übersicht startet mit großem Titel; Budget-Balken: oben sofort voll, unterhalb leer und füllen sich beim Hereinscrollen (einmalig)')
+  }
+  {
+    const { c, p } = await mkE({ reduced: true })
+    await tabE(p, 'Budgets').click()
+    await p.waitForFunction(() => document.querySelectorAll('.bar-fill').length >= 6)
+    mustE(await p.evaluate(() => document.querySelectorAll('.bar-fill[data-pending]').length), 0, 'Bewegung reduzieren: Balken sofort voll')
+    await p.evaluate(() => window.scrollTo(0, 120))
+    await p.waitForFunction(() => document.querySelector('.navbar-wrap').dataset.bar === 'on')
+    mustE(await p.evaluate(() => document.querySelector('.navbar-glow').style.transform), '', 'Bewegung reduzieren: Verlauf bleibt stehen')
+    await c.close()
+    ok('Bewegung reduzieren: Balken sofort gefüllt, kein Verlauf-Versatz (die Leiste blendet trotzdem ein)')
+  }
 }
 
 await browser.close()

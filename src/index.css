@@ -47,6 +47,7 @@
   --top: #eceaf7;
   --tint-lav: #ecebfb;
   --tint-sky: #e3edfa;
+  --tint-sky-hi: #eef4fc; /* lighter end of the hero gradient (text on it stays >= 4.5:1) */
   --tint-mist: #e8edf2;
   --tint-sand: #f5eee2;
   --chip: rgba(255, 255, 255, 0.72);
@@ -111,6 +112,7 @@
     --top: #22264a;
     --tint-lav: #282c47;
     --tint-sky: #1f2e44;
+    --tint-sky-hi: #22334b;
     --tint-mist: #253140;
     --tint-sand: #2e2e36;
     --chip: rgba(255, 255, 255, 0.09);
@@ -168,6 +170,7 @@
   --top: #22264a;
   --tint-lav: #282c47;
   --tint-sky: #1f2e44;
+  --tint-sky-hi: #22334b;
   --tint-mist: #253140;
   --tint-sand: #2e2e36;
   --chip: rgba(255, 255, 255, 0.09);
@@ -193,13 +196,16 @@
 html,
 body {
   margin: 0;
-  background: var(--bg);
+  /* the colour comes from html alone (it fills the canvas): a body background would cover the page's gradient layer (z-index -1) */
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
   font-size: 17px;
   line-height: 1.3;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+}
+html {
+  background: var(--bg);
 }
 
 button,
@@ -264,10 +270,99 @@ button.row:is(:active, [data-pressed]),
   max-width: 600px;
   margin: 0 auto;
   min-height: 100dvh;
-  padding: calc(env(safe-area-inset-top) + 12px) 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 96px);
+  /* the top space (safe area + 12 px) is .navbar-spacer of the LargeTitleHeader, so the sticky bar can start at the very top */
+  padding: 0 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 96px);
   overflow-x: clip; /* a sliding month pane must not widen the page */
-  /* quiet top tint that runs out into the page colour and scrolls away with the content (not behind sheets) */
-  background: linear-gradient(180deg, var(--top) 0, var(--bg) 380px) no-repeat;
+  position: relative; /* anchors the gradient layer; no stacking context on purpose, sheets inside a page must stay above the tab bar */
+}
+
+/* Large title -> compact bar (LargeTitleHeader.tsx). The wrapper is sticky and has no height; the bar hangs out of it. */
+.navbar-glow {
+  /* quiet top tint that runs out into the page colour; lags behind the content while scrolling (transform from JS) */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 380px;
+  z-index: -1;
+  background: linear-gradient(180deg, var(--top) 0, var(--bg) 100%);
+  pointer-events: none;
+  will-change: transform;
+}
+.navbar-wrap {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 10;
+  --bar: 0;
+}
+.navbar {
+  position: absolute;
+  top: 0;
+  left: -16px;
+  right: -16px;
+  height: calc(env(safe-area-inset-top) + 56px);
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+  pointer-events: none; /* only the buttons in it take touches; the translucent bar lets the page below through */
+}
+.navbar-bg {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  border-bottom: 0.5px solid var(--sep);
+  opacity: var(--bar);
+}
+.navbar-wrap[data-bar='off'] :is(.navbar-bg, .navbar-title, .navbar-action) {
+  visibility: hidden; /* nothing to composite, nothing to blur while the large title shows */
+}
+.navbar-row {
+  position: relative;
+  height: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  padding: 0 20px 0 8px;
+}
+.navbar-side {
+  display: flex;
+  align-items: center;
+}
+.navbar-end {
+  justify-content: flex-end;
+}
+.navbar-title {
+  max-width: 56vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 600;
+  /* appears in the second half of the collapse, when the large title is mostly gone */
+  opacity: max(0, calc((var(--bar) - 0.5) * 2));
+  transform: translate3d(0, calc((1 - var(--bar)) * 6px), 0);
+}
+.navbar .back-btn {
+  pointer-events: auto;
+}
+.navbar .back-btn span {
+  opacity: calc(1 - var(--bar)); /* the label gives way to the centred title */
+}
+.navbar-action {
+  opacity: var(--bar);
+}
+.navbar-wrap[data-bar='on'] .navbar .navbar-action {
+  pointer-events: auto;
+}
+.navbar-spacer {
+  height: calc(env(safe-area-inset-top) + 12px);
+}
+.subnav-space {
+  height: 44px;
+}
+.page-title {
+  transform-origin: left center;
 }
 
 /* Tab switch: the new page fades in */
@@ -653,6 +748,13 @@ button.row:is(:active, [data-pressed]) {
   height: 100%;
   border-radius: 4px;
   background: var(--expense);
+  transform-origin: left center;
+  /* fills from the left when it scrolls into view (BudgetBar.tsx sets data-pending until then) */
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bar-fill[data-pending] {
+  transform: scaleX(0);
+  transition: none;
 }
 
 /* FAB */
@@ -755,9 +857,9 @@ button.row:is(:active, [data-pressed]) {
   padding: 0 16px;
   position: relative;
   overscroll-behavior: contain;
-  /* reaches below the screen edge, so the springy overshoot of the rise never shows a gap (Sheet.tsx: BELOW_EDGE_PX) */
-  margin-bottom: -40px;
-  padding-bottom: calc(env(safe-area-inset-bottom) + 20px + 40px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 20px);
+  /* the colour continues below the screen edge, so the springy overshoot of the rise never shows a gap */
+  box-shadow: 0 40px 0 0 var(--bg);
 }
 /* a sheet that needs no scrolling can be dragged from anywhere */
 .sheet[data-fits] {
@@ -875,7 +977,8 @@ button.row:is(:active, [data-pressed]) {
   .backdrop.closing .dialog {
     transform: none;
   }
-  .field input.switch::after {
+  .field input.switch::after,
+  .bar-fill {
     transition: none;
   }
   /* the pressed highlight goes away at once (no 0.2 s fade back) */
@@ -1364,12 +1467,6 @@ button.row:is(:active, [data-pressed]) {
   height: 18px;
 }
 
-.subnav {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  margin: 0 -8px;
-}
 .back-btn {
   display: flex;
   align-items: center;
@@ -1883,6 +1980,10 @@ html[data-privacy] #privacy-cover {
   place-items: center;
   background: var(--chip);
   color: var(--text);
+}
+.hero.tint-sky {
+  /* tone in tone: a lighter corner that slides away while the page scrolls (StartPage.tsx) */
+  background: linear-gradient(160deg, var(--tint-sky-hi), var(--tint-sky) 60%) 0 0 / 100% 160% no-repeat;
 }
 .hero {
   margin-top: 12px;

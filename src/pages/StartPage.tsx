@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { accountBalance, totalBalance } from '../domain/calc'
 import { todayISO, formatDayMonth, formatShortDay, monthLabel } from '../domain/dates'
 import { formatCents, formatPercent, formatSigned } from '../domain/money'
@@ -7,7 +7,10 @@ import { builtInId } from '../domain/defaults'
 import { dueInvoices, dueText, invoiceTitle, isOverdue, openInvoicesTotal } from '../domain/invoices'
 import type { PendingConfirmation } from '../domain/recurring'
 import { monthlyEquivalent, pendingConfirmations, recurringTitle, upcoming } from '../domain/recurring'
+import { heroShift } from '../domain/scrollFx'
+import { useScrollEffect } from '../hooks/useScrollEffect'
 import { haptic } from '../lib/haptics'
+import { reducedMotion } from '../lib/motion'
 import { useFinance } from '../state/FinanceContext'
 import { useLock } from '../state/LockContext'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -17,6 +20,7 @@ import { BudgetBar } from '../components/BudgetBar'
 import { InvoiceFlowDialogs, InvoiceListSheet } from '../components/InvoiceSheets'
 import type { InvoiceFlow } from '../components/InvoiceSheets'
 import { CashIcon, ChevronRight, ContractIcon, ListIcon, LockIcon, PlusIcon, ReceiptIcon, RefreshIcon } from '../components/Icons'
+import { LargeTitleHeader } from '../components/LargeTitleHeader'
 
 export type StartView = 'hub' | 'bookings' | 'cash' | 'contracts'
 
@@ -38,6 +42,11 @@ export const StartPage = memo(function StartPage({
   const [skipping, setSkipping] = useState<PendingConfirmation | null>(null)
   const [invoiceList, setInvoiceList] = useState(false)
   const [invoiceFlow, setInvoiceFlow] = useState<InvoiceFlow | null>(null)
+  // the lighter corner of the hero gradient slides away while the page scrolls (cheap: one background-position per frame)
+  const heroRef = useRef<HTMLElement>(null)
+  useScrollEffect(heroRef, (y) => {
+    if (heroRef.current && !reducedMotion()) heroRef.current.style.backgroundPosition = `0 ${heroShift(y)}%`
+  })
   const today = todayISO()
   const balance = accountBalance(data, 'konto')
   const cash = accountBalance(data, 'bargeld')
@@ -54,13 +63,8 @@ export const StartPage = memo(function StartPage({
 
   return (
     <>
-      <div className="titlebar">
-        <h1 className="page-title">Finanzklar</h1>
-        <button className="round-btn" aria-label="Jetzt sperren" onClick={lockNow}>
-          <LockIcon />
-        </button>
-      </div>
-      <section className="hero tint-sky" aria-label="Kontostand">
+      <LargeTitleHeader title="Finanzklar" action={{ label: 'Jetzt sperren', icon: <LockIcon />, onClick: lockNow }} />
+      <section ref={heroRef} className="hero tint-sky" aria-label="Kontostand">
         <div className="balance-label">Kontostand</div>
         <div
           className={`balance-value num ${balance < 0 ? 'expense-text' : ''}`}
