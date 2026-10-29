@@ -54,6 +54,7 @@ export function SwipeRow({ label, onDelete, children }: { label: string; onDelet
       el.style.transition = ''
       if (reducedMotion()) {
         paint(x)
+        el.style.willChange = ''
         return resolve()
       }
       el.style.willChange = 'transform'

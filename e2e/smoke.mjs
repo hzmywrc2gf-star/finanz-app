@@ -2333,7 +2333,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
   const SEED_BAL = '2.614,00 €' // 1000 + 2500 − 800 − 45,99 − 12,01 − 20 − 8
   const row = (p, t) => p.locator('.swipe-li', { hasText: t }).first()
-  const waitState = (p, t, s) => p.waitForFunction(([t, s]) => [...document.querySelectorAll('.swipe-li')].some((li) => li.textContent.includes(t) && li.getAttribute('data-swipe') === s && li.querySelector('.swipe-content').style.transition === ''), [t, s])
+  const waitState = (p, t, s) => p.waitForFunction(([t, s]) => [...document.querySelectorAll('.swipe-li')].some((li) => li.textContent.includes(t) && li.getAttribute('data-swipe') === s && li.querySelector('.swipe-content').style.willChange === ''), [t, s])
   const toast = (p) => p.getByRole('status').filter({ hasText: 'gelöscht' })
   // Wischt eine Zeile nach links um `dx` px (Start 20 px vom rechten Rand der Zeile)
   async function swipeRow(p, t, dx, opts = {}) {
