@@ -31,11 +31,12 @@ export function createDefaultCategories(): Category[] {
 
 export function createDefaultData(): AppData {
   return {
-    version: 6,
+    version: 7,
     settings: { startBalanceCents: 0, startCashCents: 0 },
     categories: createDefaultCategories(),
     transactions: [],
     recurring: [],
     transfers: [],
+    invoices: [],
   }
 }

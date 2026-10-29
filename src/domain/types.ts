@@ -76,11 +76,33 @@ export interface Settings {
   displayName?: string
 }
 
+/**
+ * A purchase on account (Kauf auf Rechnung): an expense from the Konto that is not paid yet.
+ * Open invoices are not transactions; they only count once paid (`payInvoice`).
+ */
+export interface Invoice {
+  id: string
+  createdAt: number
+  /** Merchant (Händler), trimmed, at most 200 characters; absent = none. */
+  note?: string
+  /** Expense category. */
+  categoryId: string
+  /** Positive integer amount in cents. */
+  amountCents: number
+  /** Local calendar date of the purchase, 'YYYY-MM-DD'. */
+  purchaseDate: string
+  /** Pay-by date, not before the purchase date. */
+  dueDate: string
+  /** "Später": the reminder stays hidden until this date (inclusive end of the snooze). */
+  snoozedUntil?: string
+}
+
 export interface AppData {
-  version: 6
+  version: 7
   settings: Settings
   categories: Category[]
   transactions: Transaction[]
   recurring: RecurringRule[]
   transfers: Transfer[]
+  invoices: Invoice[]
 }

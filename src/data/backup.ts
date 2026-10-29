@@ -1,4 +1,4 @@
-import type { Account, AppData, Category, Interval, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
+import type { Account, AppData, Category, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
 import { isValidISODate } from '../domain/dates'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { migrate } from './migrate'
@@ -25,10 +25,10 @@ const isDirection = (v: unknown): v is TransferDirection => v === 'withdrawal' |
 
 const isInterval = (v: unknown): v is Interval => v === 'monthly' || v === 'quarterly' || v === 'yearly'
 
-/** Strictly validates a parsed object of the current version (6); also used for stored data. Throws German Error. */
+/** Strictly validates a parsed object of the current version (7); also used for stored data. Throws German Error. */
 export function validateAppData(raw: unknown): AppData {
   if (!isObj(raw)) return fail('Kein gültiges Objekt.')
-  if (raw.version !== 6) return fail('Unbekannte Version.')
+  if (raw.version !== 7) return fail('Unbekannte Version.')
   if (!isObj(raw.settings)) return fail('Einstellungen fehlen.')
   const start = raw.settings.startBalanceCents
   if (typeof start !== 'number' || !Number.isSafeInteger(start)) {
@@ -49,6 +49,7 @@ export function validateAppData(raw: unknown): AppData {
   if (!Array.isArray(raw.transactions)) return fail('Buchungen fehlen.')
   if (!Array.isArray(raw.recurring)) return fail('Wiederkehrende Buchungen fehlen.')
   if (!Array.isArray(raw.transfers)) return fail('Umbuchungen fehlen.')
+  if (!Array.isArray(raw.invoices)) return fail('Rechnungen fehlen.')
 
   const categories: Category[] = []
   const catIds = new Map<string, Category>()
@@ -187,13 +188,51 @@ export function validateAppData(raw: unknown): AppData {
     transfers.push(transfer)
   }
 
+  const invoices: Invoice[] = []
+  const invoiceIds = new Set<string>()
+  for (const inv of raw.invoices as unknown[]) {
+    if (!isObj(inv)) return fail('Eine Rechnung ist ungültig.')
+    if (typeof inv.id !== 'string' || !inv.id) return fail('Eine Rechnung hat keine ID.')
+    if (invoiceIds.has(inv.id)) return fail('Doppelte Rechnungs-ID.')
+    invoiceIds.add(inv.id)
+    if (typeof inv.amountCents !== 'number' || !Number.isSafeInteger(inv.amountCents) || inv.amountCents <= 0) {
+      return fail('Ein Betrag bei Rechnungen ist keine positive ganze Zahl (Cent).')
+    }
+    if (typeof inv.categoryId !== 'string') return fail('Eine Rechnung hat keine Kategorie.')
+    const cat = catIds.get(inv.categoryId)
+    if (!cat) return fail('Eine Rechnung verweist auf eine unbekannte Kategorie.')
+    if (cat.kind !== 'expense') return fail('Die Kategorie einer Rechnung ist keine Ausgaben-Kategorie.')
+    if (inv.note !== undefined && (typeof inv.note !== 'string' || inv.note.length > 200)) return fail('Eine Notiz bei Rechnungen ist ungültig.')
+    if (typeof inv.purchaseDate !== 'string' || !isValidISODate(inv.purchaseDate)) return fail('Ein Kaufdatum bei Rechnungen ist ungültig.')
+    if (typeof inv.dueDate !== 'string' || !isValidISODate(inv.dueDate)) return fail('Ein Zahlungsdatum bei Rechnungen ist ungültig.')
+    if (inv.dueDate < inv.purchaseDate) return fail('Eine Rechnung ist vor dem Kaufdatum fällig.')
+    if (inv.snoozedUntil !== undefined && (typeof inv.snoozedUntil !== 'string' || !isValidISODate(inv.snoozedUntil))) {
+      return fail('Ein Erinnerungsaufschub bei Rechnungen ist ungültig.')
+    }
+    if (typeof inv.createdAt !== 'number' || !Number.isFinite(inv.createdAt)) {
+      return fail('Ein Erstellungszeitpunkt bei Rechnungen ist ungültig.')
+    }
+    const invoice: Invoice = {
+      id: inv.id,
+      createdAt: inv.createdAt,
+      categoryId: inv.categoryId,
+      amountCents: inv.amountCents,
+      purchaseDate: inv.purchaseDate,
+      dueDate: inv.dueDate,
+    }
+    if (inv.note) invoice.note = inv.note
+    if (inv.snoozedUntil !== undefined) invoice.snoozedUntil = inv.snoozedUntil
+    invoices.push(invoice)
+  }
+
   return {
-    version: 6,
+    version: 7,
     settings: { startBalanceCents: start, startCashCents: startCash, ...(displayName ? { displayName } : {}) },
     categories,
     transactions,
     recurring,
     transfers,
+    invoices,
   }
 }
 

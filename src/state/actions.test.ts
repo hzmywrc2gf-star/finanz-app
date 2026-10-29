@@ -5,8 +5,12 @@ import {
   addCategory, addRecurring, bookNextNow, confirmOccurrence, skipOccurrence, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
   addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
   restoreTransaction, restoreTransfer, setDisplayName, updateTransaction, updateTransfer, importTransactions, undoImport,
-  createRecurringFromSuggestion,
+  createRecurringFromSuggestion, addInvoice, updateInvoice, deleteInvoice, restoreInvoice, payInvoice, undoPayInvoice,
+  changeInvoiceAmount, returnInvoice, snoozeInvoice,
 } from './actions'
+import { accountBalance } from '../domain/calc'
+import { monthSummary } from '../domain/month'
+import { budgetAlerts } from '../domain/budget'
 import { detectRecurring } from '../domain/recurringDetect'
 import type { RecurringSuggestion } from '../domain/recurringDetect'
 import type { RecurringInput } from './actions'
@@ -469,5 +473,97 @@ describe('createRecurringFromSuggestion', () => {
     expect(() => createRecurringFromSuggestion(d0, { ...s, categoryId: 'expense-sonstiges' }, { autoBook: true })).toThrow('Die Kategorie passt nicht zur Art der Buchung.')
     expect(() => createRecurringFromSuggestion(d0, { ...s, amountCents: 0 }, { autoBook: true })).toThrow('Der Betrag muss größer als 0 sein.')
     expect(() => createRecurringFromSuggestion(d0, { ...s, startDate: 'kaputt' } as RecurringSuggestion, { autoBook: true })).toThrow('Ungültiges Startdatum.')
+  })
+})
+
+describe('invoices (Kauf auf Rechnung)', () => {
+  const inInput = { amountCents: 13980, note: '  Otto ', categoryId: 'expense-kleidung', purchaseDate: '2026-10-20', dueDate: '2026-11-03' }
+  const open = () => addInvoice(base(), inInput, 7, 'i1')
+
+  it('adds an invoice that is not a transaction and changes no balance, month or budget', () => {
+    const d = open()
+    expect(d.invoices).toEqual([{ id: 'i1', createdAt: 7, note: 'Otto', categoryId: 'expense-kleidung', amountCents: 13980, purchaseDate: '2026-10-20', dueDate: '2026-11-03' }])
+    expect(d.transactions).toEqual([])
+    expect(accountBalance(d, 'konto')).toBe(accountBalance(base(), 'konto'))
+    expect(monthSummary(d, '2026-10-01').expenseCents).toBe(0)
+    expect(budgetAlerts(d, '2026-10-28')).toEqual([])
+  })
+  it('allows no merchant and rejects invalid input with German errors', () => {
+    expect(addInvoice(base(), { ...inInput, note: '  ' }, 1, 'x').invoices[0]).not.toHaveProperty('note')
+    expect(() => addInvoice(base(), { ...inInput, amountCents: 0 })).toThrow('Der Betrag muss größer als 0 sein.')
+    expect(() => addInvoice(base(), { ...inInput, amountCents: 1.5 })).toThrow('Betrag')
+    expect(() => addInvoice(base(), { ...inInput, dueDate: '2026-10-19' })).toThrow('„Zahlen bis“ darf nicht vor dem Kaufdatum liegen.')
+    expect(() => addInvoice(base(), { ...inInput, purchaseDate: 'x' })).toThrow('Kaufdatum')
+    expect(() => addInvoice(base(), { ...inInput, categoryId: 'income-gehalt' })).toThrow('Ausgaben-Kategorie')
+    expect(() => addInvoice(base(), { ...inInput, categoryId: 'nope' })).toThrow('Kategorie existiert nicht')
+    expect(() => addInvoice(base(), { ...inInput, note: 'x'.repeat(201) })).toThrow('200')
+    expect(addInvoice(base(), { ...inInput, dueDate: '2026-10-20' }, 1, 'x').invoices).toHaveLength(1)
+  })
+  it('updates fields, keeps createdAt and a snooze unless the pay-by date changes', () => {
+    let d = open()
+    d = snoozeInvoice(d, 'i1', '2026-10-31')
+    const kept = updateInvoice(d, 'i1', { ...inInput, amountCents: 9900, note: 'Zalando' })
+    expect(kept.invoices[0]).toMatchObject({ createdAt: 7, amountCents: 9900, note: 'Zalando', snoozedUntil: '2026-11-02' })
+    const moved = updateInvoice(d, 'i1', { ...inInput, dueDate: '2026-11-10' })
+    expect(moved.invoices[0].snoozedUntil).toBeUndefined()
+    expect(() => updateInvoice(d, 'zz', inInput)).toThrow('Die Rechnung wurde nicht gefunden.')
+    expect(() => updateInvoice(d, 'i1', { ...inInput, amountCents: -1 })).toThrow()
+  })
+  it('deletes and restores exactly; unknown ids throw', () => {
+    const d = open()
+    const gone = deleteInvoice(d, 'i1')
+    expect(gone.invoices).toEqual([])
+    expect(restoreInvoice(gone, d.invoices[0])).toEqual(d)
+    expect(() => restoreInvoice(d, d.invoices[0])).toThrow('existiert bereits')
+    expect(() => deleteInvoice(d, 'zz')).toThrow('Die Rechnung wurde nicht gefunden.')
+  })
+  it('paying removes the invoice and books a Konto expense with the paid date, category and note', () => {
+    const d = open()
+    const r = payInvoice(d, 'i1', { paidDate: '2026-11-02' }, 50, 'tx9')
+    expect(r.data.invoices).toEqual([])
+    expect(r.data.transactions).toEqual([
+      { id: 'tx9', kind: 'expense', amountCents: 13980, date: '2026-11-02', categoryId: 'expense-kleidung', account: 'konto', note: 'Otto', createdAt: 50 },
+    ])
+    expect(r.transactionId).toBe('tx9')
+    expect(accountBalance(r.data, 'konto')).toBe(-13980)
+  })
+  it('paying can use another amount; invalid amounts, dates and ids throw', () => {
+    const d = open()
+    expect(payInvoice(d, 'i1', { paidDate: '2026-11-02', amountCents: 9990 }).data.transactions[0].amountCents).toBe(9990)
+    expect(() => payInvoice(d, 'i1', { paidDate: '2026-11-02', amountCents: 0 })).toThrow('Betrag')
+    expect(() => payInvoice(d, 'i1', { paidDate: 'x' })).toThrow('Datum')
+    expect(() => payInvoice(d, 'zz', { paidDate: '2026-11-02' })).toThrow('nicht gefunden')
+    expect(d.invoices).toHaveLength(1)
+  })
+  it('undoing a payment removes the booking and restores the invoice exactly (with snooze)', () => {
+    const snoozed = snoozeInvoice(open(), 'i1', '2026-10-30')
+    const inv = snoozed.invoices[0]
+    const r = payInvoice(snoozed, 'i1', { paidDate: '2026-11-02' }, 50, 'tx9')
+    expect(undoPayInvoice(r.data, inv, r.transactionId)).toEqual(snoozed)
+  })
+  it('changing the amount keeps the invoice open and its dates, and ends a snooze', () => {
+    const d = snoozeInvoice(open(), 'i1', '2026-10-30')
+    const c = changeInvoiceAmount(d, 'i1', 9990)
+    expect(c.invoices[0]).toEqual({ id: 'i1', createdAt: 7, note: 'Otto', categoryId: 'expense-kleidung', amountCents: 9990, purchaseDate: '2026-10-20', dueDate: '2026-11-03' })
+    expect(() => changeInvoiceAmount(d, 'i1', 0)).toThrow('Betrag')
+    expect(() => changeInvoiceAmount(d, 'zz', 100)).toThrow('nicht gefunden')
+  })
+  it('returning removes the invoice and books nothing', () => {
+    const r = returnInvoice(open(), 'i1')
+    expect(r.invoices).toEqual([])
+    expect(r.transactions).toEqual([])
+    expect(() => returnInvoice(r, 'i1')).toThrow('nicht gefunden')
+  })
+  it('snoozing sets the date: 2 days, capped at the pay-by date, +1 once due', () => {
+    expect(snoozeInvoice(open(), 'i1', '2026-10-31').invoices[0].snoozedUntil).toBe('2026-11-02')
+    expect(snoozeInvoice(open(), 'i1', '2026-11-02').invoices[0].snoozedUntil).toBe('2026-11-03')
+    expect(snoozeInvoice(open(), 'i1', '2026-11-03').invoices[0].snoozedUntil).toBe('2026-11-04')
+    expect(() => snoozeInvoice(open(), 'zz', '2026-11-03')).toThrow('nicht gefunden')
+  })
+  it('deleting a category moves its invoices to Sonstiges', () => {
+    const d = deleteCategory(addCategory(open(), 'expense', 'Technik', 'tech'), 'tech')
+    expect(d.invoices[0].categoryId).toBe('expense-kleidung')
+    const e = deleteCategory(addInvoice(addCategory(base(), 'expense', 'Technik', 'tech'), { ...inInput, categoryId: 'tech' }, 1, 'i2'), 'tech')
+    expect(e.invoices[0].categoryId).toBe('expense-sonstiges')
   })
 })

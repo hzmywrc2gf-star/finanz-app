@@ -1,10 +1,11 @@
-import type { Account, AppData, Category, Interval, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
+import type { Account, AppData, Category, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { addDays, isValidISODate } from '../domain/dates'
 import { bookDue, nextOccurrence } from '../domain/recurring'
 import { MIN_COUNT, coveredByRule } from '../domain/recurringDetect'
 import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { findCategory } from '../domain/importRows'
+import { snoozeDate } from '../domain/invoices'
 
 export interface TransactionInput {
   kind: Kind
@@ -237,6 +238,9 @@ export function deleteCategory(data: AppData, id: string): AppData {
     ),
     recurring: data.recurring.map((r) =>
       r.categoryId === id ? { ...r, categoryId: fallback.id } : r,
+    ),
+    invoices: data.invoices.map((inv) =>
+      inv.categoryId === id ? { ...inv, categoryId: fallback.id } : inv,
     ),
   }
 }
@@ -526,4 +530,138 @@ export function undoImport(data: AppData, result: Pick<ImportResult, 'transactio
   const used = new Set([...transactions.map((t) => t.categoryId), ...data.recurring.map((r) => r.categoryId)])
   const drop = new Set(result.categoryIds.filter((id) => !used.has(id)))
   return { ...data, transactions, categories: data.categories.filter((c) => !drop.has(c.id)) }
+}
+
+export interface InvoiceInput {
+  amountCents: number
+  /** Merchant, optional. */
+  note?: string
+  categoryId: string
+  purchaseDate: string
+  dueDate: string
+}
+
+function validateInvoiceInput(data: AppData, input: InvoiceInput): void {
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
+    throw new Error('Der Betrag muss größer als 0 sein.')
+  }
+  if (!isValidISODate(input.purchaseDate)) throw new Error('Ungültiges Kaufdatum.')
+  if (!isValidISODate(input.dueDate)) throw new Error('Ungültiges Datum bei „Zahlen bis“.')
+  if (input.dueDate < input.purchaseDate) throw new Error('„Zahlen bis“ darf nicht vor dem Kaufdatum liegen.')
+  const cat = data.categories.find((c) => c.id === input.categoryId)
+  if (!cat) throw new Error('Die Kategorie existiert nicht.')
+  if (cat.kind !== 'expense') throw new Error('Rechnungen brauchen eine Ausgaben-Kategorie.')
+  if ((input.note?.trim().length ?? 0) > 200) throw new Error('Die Notiz darf höchstens 200 Zeichen haben.')
+}
+
+function findInvoice(data: AppData, id: string): Invoice {
+  const inv = data.invoices.find((i) => i.id === id)
+  if (!inv) throw new Error('Die Rechnung wurde nicht gefunden.')
+  return inv
+}
+
+/** A purchase on account: stays out of the books (balance, budgets, month) until `payInvoice`. */
+export function addInvoice(
+  data: AppData,
+  input: InvoiceInput,
+  now: number = Date.now(),
+  id: string = crypto.randomUUID(),
+): AppData {
+  validateInvoiceInput(data, input)
+  const inv: Invoice = {
+    id,
+    createdAt: now,
+    categoryId: input.categoryId,
+    amountCents: input.amountCents,
+    purchaseDate: input.purchaseDate,
+    dueDate: input.dueDate,
+  }
+  const note = cleanNote(input.note)
+  if (note) inv.note = note
+  return { ...data, invoices: [...data.invoices, inv] }
+}
+
+/** Replaces the editable fields; a changed pay-by date or amount ends a snooze (the reminder is re-evaluated). */
+export function updateInvoice(data: AppData, id: string, input: InvoiceInput): AppData {
+  validateInvoiceInput(data, input)
+  const existing = findInvoice(data, id)
+  const updated: Invoice = {
+    id,
+    createdAt: existing.createdAt,
+    categoryId: input.categoryId,
+    amountCents: input.amountCents,
+    purchaseDate: input.purchaseDate,
+    dueDate: input.dueDate,
+  }
+  const note = cleanNote(input.note)
+  if (note) updated.note = note
+  if (existing.snoozedUntil && input.dueDate === existing.dueDate) updated.snoozedUntil = existing.snoozedUntil
+  return { ...data, invoices: data.invoices.map((i) => (i.id === id ? updated : i)) }
+}
+
+export function deleteInvoice(data: AppData, id: string): AppData {
+  findInvoice(data, id)
+  return { ...data, invoices: data.invoices.filter((i) => i.id !== id) }
+}
+
+/** Undo of a removal: puts the exact invoice back (same id, createdAt, snooze). */
+export function restoreInvoice(data: AppData, inv: Invoice): AppData {
+  if (data.invoices.some((i) => i.id === inv.id)) throw new Error('Die Rechnung existiert bereits.')
+  return { ...data, invoices: [...data.invoices, inv] }
+}
+
+export interface PayInvoiceResult {
+  data: AppData
+  /** Id of the expense booked for the payment (what the undo removes). */
+  transactionId: string
+}
+
+/**
+ * Pays an invoice: it disappears and a normal expense on the Konto is booked on `paidDate` with the paid amount
+ * (default: the invoice's amount), the invoice's category and note.
+ */
+export function payInvoice(
+  data: AppData,
+  id: string,
+  opts: { paidDate: string; amountCents?: number },
+  now: number = Date.now(),
+  newId: string = crypto.randomUUID(),
+): PayInvoiceResult {
+  const inv = findInvoice(data, id)
+  const input: TransactionInput = {
+    kind: 'expense',
+    amountCents: opts.amountCents ?? inv.amountCents,
+    date: opts.paidDate,
+    categoryId: inv.categoryId,
+    account: 'konto',
+    note: inv.note,
+  }
+  validateTransactionInput(data, input)
+  const without: AppData = { ...data, invoices: data.invoices.filter((i) => i.id !== id) }
+  return { data: addTransaction(without, input, { id: newId, createdAt: now }), transactionId: newId }
+}
+
+/** Undo of a payment: removes the booked expense and puts the invoice back exactly as it was. */
+export function undoPayInvoice(data: AppData, inv: Invoice, transactionId: string): AppData {
+  return restoreInvoice(deleteTransaction(data, transactionId), inv)
+}
+
+/** Partial return: the invoice stays open with the new (lower or changed) amount; a snooze ends. */
+export function changeInvoiceAmount(data: AppData, id: string, amountCents: number): AppData {
+  const inv = findInvoice(data, id)
+  if (!Number.isInteger(amountCents) || amountCents <= 0) throw new Error('Der Betrag muss größer als 0 sein.')
+  const { snoozedUntil: _snooze, ...rest } = inv
+  return { ...data, invoices: data.invoices.map((i) => (i.id === id ? { ...rest, amountCents } : i)) }
+}
+
+/** "Komplett zurückgeschickt": the invoice is gone and nothing is booked. */
+export function returnInvoice(data: AppData, id: string): AppData {
+  return deleteInvoice(data, id)
+}
+
+/** "Später": hides the reminder until `snoozeDate` (2 days, at most to "Zahlen bis"). */
+export function snoozeInvoice(data: AppData, id: string, today: string): AppData {
+  const inv = findInvoice(data, id)
+  const snoozedUntil = snoozeDate(inv, today)
+  return { ...data, invoices: data.invoices.map((i) => (i.id === id ? { ...inv, snoozedUntil } : i)) }
 }

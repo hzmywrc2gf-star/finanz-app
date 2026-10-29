@@ -2,7 +2,7 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
- * Brings stored/imported raw data to the current version (6). Pure; unknown shapes
+ * Brings stored/imported raw data to the current version (7). Pure; unknown shapes
  * are returned unchanged so validation can reject them with a proper message.
  */
 export function migrate(raw: unknown): unknown {
@@ -40,6 +40,10 @@ export function migrate(raw: unknown): unknown {
   if (isObj(data) && data.version === 5) {
     // v5 -> v6: optional settings.displayName was added, nothing to convert
     data = { ...data, version: 6 }
+  }
+  if (isObj(data) && data.version === 6) {
+    // v6 -> v7: invoices (Kauf auf Rechnung) were added, none yet
+    data = { ...data, version: 7, invoices: [] }
   }
   return data
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultData } from '../domain/defaults'
-import { addRecurring, addTransaction, addTransfer, setCategoryBudget, setStartCash } from '../state/actions'
+import { addInvoice, addRecurring, addTransaction, addTransfer, setCategoryBudget, setStartCash } from '../state/actions'
 import { exportJSON, parseBackup } from './backup'
 import { decodeBackupFile, exportEncrypted, isEncryptedBackup } from './backupCrypto'
 
@@ -43,7 +43,7 @@ describe('backup', () => {
   it('rejects invalid input with German errors', () => {
     expect(() => parseBackup('nope')).toThrow(/JSON/)
     expect(() => parseBackup('[]')).toThrow(/Ungültige Sicherungsdatei/)
-    expect(() => parseBackup(mutate((d) => (d.version = 7)))).toThrow(/Version/)
+    expect(() => parseBackup(mutate((d) => (d.version = 8)))).toThrow(/Version/)
     expect(() => parseBackup(mutate((d) => (d.transactions = {})))).toThrow(/Buchungen/)
     expect(() => parseBackup(mutate((d) => (d.categories = null)))).toThrow(/Kategorien/)
     expect(() => parseBackup(mutate((d) => (d.settings.startBalanceCents = 1.5)))).toThrow()
@@ -58,7 +58,7 @@ describe('backup', () => {
   })
   it('exports version 6 with accounts, start cash and transfers', () => {
     const out = JSON.parse(exportJSON(sample()))
-    expect(out.version).toBe(6)
+    expect(out.version).toBe(7)
     expect(out.settings.startCashCents).toBe(2000)
     expect(out.transactions.map((t: any) => t.account)).toEqual(['konto', 'bargeld'])
     expect(out.transfers).toEqual([{ id: 't1', direction: 'withdrawal', amountCents: 20000, date: '2026-10-03', note: 'Automat', createdAt: 3 }])
@@ -87,10 +87,11 @@ describe('backup', () => {
     const out = parseBackup(JSON.stringify(v1))
     expect(out).toEqual({
       ...v1,
-      version: 6,
+      version: 7,
       settings: { startBalanceCents: 5, startCashCents: 0 },
       recurring: [],
       transfers: [],
+      invoices: [],
     })
   })
   it('validates recurring rules strictly', () => {
@@ -121,10 +122,10 @@ describe('backup', () => {
     expect(parseBackup(JSON.stringify(d)).transactions[0].recurringId).toBe('gone')
     expect(() => parseBackup(mutate((x) => (x.transactions[0].recurringId = 5)))).toThrow(/Regel/)
   })
-  it('migrates a v2 backup up to v6 (everything on the Konto)', () => {
+  it('migrates a v2 backup up to v7 (everything on the Konto)', () => {
     const v2 = { ...JSON.parse(exportJSON(sample())), version: 2 }
     const out = parseBackup(JSON.stringify(v2))
-    expect(out.version).toBe(6)
+    expect(out.version).toBe(7)
     expect(out.transactions.every((t) => t.account === 'konto')).toBe(true)
     expect(out.transfers).toEqual([])
     expect(out.settings.startCashCents).toBe(0)
@@ -136,26 +137,71 @@ describe('backup', () => {
     delete v3.settings.startCashCents
     for (const t of v3.transactions) delete t.account
     const out = parseBackup(JSON.stringify(v3))
-    expect(out.version).toBe(6)
+    expect(out.version).toBe(7)
     expect(out.settings).toEqual({ startBalanceCents: 0, startCashCents: 0 })
     expect(out.transfers).toEqual([])
     expect(out.transactions.map((t) => [t.id, t.account, t.amountCents])).toEqual([['a', 'konto', 250000], ['b', 'konto', 4550]])
     expect(out.recurring).toEqual(JSON.parse(exportJSON(sample())).recurring)
   })
-  it('migrates a v4 backup to v6: every rule gets autoBook = true, the rest stays', () => {
+  it('migrates a v4 backup to v7: every rule gets autoBook = true, the rest stays', () => {
     const v4 = JSON.parse(exportJSON(sample()))
     v4.version = 4
     for (const r of v4.recurring) delete r.autoBook
     const out = parseBackup(JSON.stringify(v4))
-    expect(out.version).toBe(6)
+    expect(out.version).toBe(7)
     expect(out.recurring.map((r) => [r.id, r.autoBook, r.bookedThrough])).toEqual([['r1', true, '2026-10-31']])
     expect(out).toEqual(sample())
   })
-  it('migrates a v5 backup to v6 without changing anything else', () => {
+  it('migrates a v6 backup to v7 with no invoices and nothing else changed', () => {
+    const v6 = JSON.parse(exportJSON(sample()))
+    v6.version = 6
+    delete v6.invoices
+    const out = parseBackup(JSON.stringify(v6))
+    expect(out.version).toBe(7)
+    expect(out.invoices).toEqual([])
+    expect(out).toEqual(sample())
+  })
+  it('roundtrips invoices and exports version 7', () => {
+    const d = addInvoice(
+      sample(),
+      { amountCents: 13980, note: 'Otto', categoryId: 'expense-kleidung', purchaseDate: '2026-10-20', dueDate: '2026-11-03' },
+      9,
+      'inv1',
+    )
+    const withSnooze = { ...d, invoices: [{ ...d.invoices[0], snoozedUntil: '2026-10-31' }] }
+    expect(JSON.parse(exportJSON(withSnooze)).version).toBe(7)
+    expect(parseBackup(exportJSON(withSnooze))).toEqual(withSnooze)
+  })
+  it('validates invoices strictly', () => {
+    const withInvoice = (fn: (i: any) => void) =>
+      mutate((d) => {
+        d.invoices = [{ id: 'i1', createdAt: 1, note: 'Otto', categoryId: 'expense-kleidung', amountCents: 500, purchaseDate: '2026-10-20', dueDate: '2026-11-03' }]
+        fn(d.invoices[0])
+      })
+    expect(parseBackup(withInvoice(() => {})).invoices).toHaveLength(1)
+    const bad = (fn: (i: any) => void, re: RegExp) => expect(() => parseBackup(withInvoice(fn))).toThrow(re)
+    bad((i) => (i.amountCents = 1.5), /Betrag/)
+    bad((i) => (i.amountCents = 0), /Betrag/)
+    bad((i) => (i.categoryId = 'zzz'), /Kategorie/)
+    bad((i) => (i.categoryId = 'income-gehalt'), /Ausgaben/)
+    bad((i) => (i.purchaseDate = '2026-02-30'), /Kaufdatum/)
+    bad((i) => (i.dueDate = 'x'), /Zahlungsdatum/)
+    bad((i) => (i.dueDate = '2026-10-19'), /vor dem Kaufdatum/)
+    bad((i) => (i.snoozedUntil = '31.10.2026'), /Erinnerungsaufschub/)
+    bad((i) => (i.note = 5), /Notiz/)
+    bad((i) => (i.note = 'x'.repeat(201)), /Notiz/)
+    bad((i) => (i.createdAt = 'x'), /Erstellungszeitpunkt/)
+    bad((i) => (i.id = ''), /ID/)
+    expect(() => parseBackup(mutate((d) => (d.invoices = {})))).toThrow(/Rechnungen/)
+    expect(() => parseBackup(mutate((d) => delete d.invoices))).toThrow(/Rechnungen/)
+    expect(() => parseBackup(mutate((d) => (d.invoices = [5])))).toThrow(/Rechnung/)
+    expect(() => parseBackup(mutate((d) => (d.invoices = [{ ...JSON.parse(withInvoice(() => {})).invoices[0] }, { ...JSON.parse(withInvoice(() => {})).invoices[0] }])))).toThrow(/Doppelte/)
+  })
+  it('migrates a v5 backup to v7 without changing anything else', () => {
     const v5 = JSON.parse(exportJSON(sample()))
     v5.version = 5
     const out = parseBackup(JSON.stringify(v5))
-    expect(out.version).toBe(6)
+    expect(out.version).toBe(7)
     expect(out).toEqual(sample())
     expect(out.settings.displayName).toBeUndefined()
   })
