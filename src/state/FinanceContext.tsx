@@ -5,6 +5,7 @@ import type { FinanceRepository } from '../data/repository'
 import { LocalStorageRepository } from '../data/localStorageRepo'
 import { todayISO } from '../domain/dates'
 import { bookDue } from '../domain/recurring'
+import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { haptic } from '../lib/haptics'
 import { UndoToast } from '../components/UndoToast'
 import * as A from './actions'
@@ -40,8 +41,10 @@ export interface FinanceApi {
   /** "Jetzt buchen": handles the next unhandled occurrence now, even if it lies in the future. */
   bookNextNow(ruleId: string, input: ContractBookingInput): void
   replaceAll(data: AppData): void
-  /** File import: adds the bookings (new categories are created); "Rückgängig" in the toast removes the whole batch. Returns the count. */
-  importTransactions(bookings: A.ImportBooking[]): number
+  /** File import: adds the bookings (new categories are created); "Rückgängig" in the toast removes the whole batch. Returns the new ids. */
+  importTransactions(bookings: A.ImportBooking[]): string[]
+  /** Turns a found pattern into a Vertrag (links its bookings, handles the past); throws German errors. */
+  createRecurringFromSuggestion(suggestion: RecurringSuggestion, autoBook: boolean): void
 }
 
 /** How often due recurring bookings are re-checked while the app stays open. */
@@ -171,8 +174,10 @@ export function FinanceProvider({
         const done = result as A.ImportResult
         const n = done.transactionIds.length
         setUndo({ id: ++undoSeq.current, message: n === 1 ? '1 Buchung importiert' : `${n} Buchungen importiert`, revert: (d) => A.undoImport(d, done) })
-        return n
+        return done.transactionIds
       },
+      createRecurringFromSuggestion: (s, autoBook) =>
+        apply((d) => bookDue(A.createRecurringFromSuggestion(d, s, { autoBook }), todayISO())),
     }),
     [apply],
   )

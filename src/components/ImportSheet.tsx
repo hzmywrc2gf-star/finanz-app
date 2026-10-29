@@ -36,7 +36,7 @@ function initialMapping(rows: RawCell[][]): { headerRow: number; mapping: Column
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** "Import prüfen": column mapping, summary and the rows to pick from before anything is written. */
-export function ImportSheet({ source, onClose, onImported }: { source: ImportSource; onClose: () => void; onImported: (count: number) => void }) {
+export function ImportSheet({ source, onClose, onImported }: { source: ImportSource; onClose: () => void; onImported: (count: number, ids: string[]) => void }) {
   const { data, importTransactions } = useFinance()
   const [sheetIndex, setSheetIndex] = useState(0)
   const rows = useMemo(() => source.readSheet(sheetIndex), [source, sheetIndex])
@@ -81,12 +81,12 @@ export function ImportSheet({ source, onClose, onImported }: { source: ImportSou
   function submit() {
     if (picked.length === 0) return
     try {
-      const count = importTransactions(
+      const ids = importTransactions(
         picked.map((r) => ({ kind: r.kind, amountCents: r.amountCents, date: r.date, account: r.account, categoryName: r.categoryName, note: r.note })),
       )
       saveMapping(headerSignature(headers), mapping)
       haptic()
-      onImported(count)
+      onImported(ids.length, ids)
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Einlesen fehlgeschlagen.')

@@ -1,8 +1,11 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { todayISO } from '../domain/dates'
 import { formatCents } from '../domain/money'
 import { monthlyEquivalent } from '../domain/recurring'
+import { detectRecurring } from '../domain/recurringDetect'
+import { getDismissedKeys } from '../lib/recurringDismissed'
 import { useFinance } from '../state/FinanceContext'
+import { RecurringSuggestions } from '../components/RecurringSuggestions'
 import { RecurringManager } from '../components/RecurringManager'
 import { SubPageHeader } from '../components/SubPageHeader'
 
@@ -10,6 +13,17 @@ import { SubPageHeader } from '../components/SubPageHeader'
 export const ContractsPage = memo(function ContractsPage({ onBack }: { onBack: () => void }) {
   const { data } = useFinance()
   const { activeCount, monthlyCents } = monthlyEquivalent(data.recurring, todayISO())
+  const [suggesting, setSuggesting] = useState(false)
+  const [none, setNone] = useState(false)
+
+  function detect() {
+    if (detectRecurring(data, todayISO(), getDismissedKeys()).length === 0) {
+      setNone(true)
+      return
+    }
+    setNone(false)
+    setSuggesting(true)
+  }
 
   return (
     <>
@@ -24,6 +38,15 @@ export const ContractsPage = memo(function ContractsPage({ onBack }: { onBack: (
         </div>
       </div>
       <RecurringManager />
+      <button className="btn secondary detect-btn" type="button" onClick={detect}>
+        Verträge aus Buchungen erkennen
+      </button>
+      {none && (
+        <div className="footnote" role="status">
+          Keine wiederkehrenden Buchungen gefunden.
+        </div>
+      )}
+      {suggesting && <RecurringSuggestions onClose={() => setSuggesting(false)} />}
       <div className="footnote">Vierteljährliche und jährliche Beträge sind auf den Monat umgerechnet. Einnahmen zählen nicht mit.</div>
     </>
   )

@@ -1,17 +1,20 @@
 import { memo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { monthStart, todayISO } from '../../domain/dates'
+import { detectRecurring } from '../../domain/recurringDetect'
 import { buildExportSheets, countExportRows, exportFileName, resolveExportRange } from '../../domain/exportSheet'
 import type { ExportMode, ExportRange } from '../../domain/exportSheet'
 import { decodeText, parseCsvText } from '../../lib/csv'
 import { downloadFile } from '../../lib/download'
 import { haptic } from '../../lib/haptics'
+import { getDismissedKeys } from '../../lib/recurringDismissed'
 import { openXlsx } from '../../lib/xlsx/read'
 import { XLSX_MIME, buildXlsx } from '../../lib/xlsx/write'
 import { useFinance } from '../../state/FinanceContext'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ImportSheet } from '../../components/ImportSheet'
 import type { ImportSource } from '../../components/ImportSheet'
+import { RecurringSuggestions } from '../../components/RecurringSuggestions'
 import { SaveError } from '../../components/SaveError'
 import { SegmentedControl } from '../../components/SegmentedControl'
 import { SubPageHeader } from '../../components/SubPageHeader'
@@ -54,6 +57,17 @@ export const ExcelPage = memo(function ExcelPage({ onBack }: { onBack: () => voi
   const [reading, setReading] = useState(false)
   const [source, setSource] = useState<ImportSource | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // after an import: the ids of the new bookings (waiting for the data to arrive) / the suggestions sheet limited to them
+  const [afterImport, setAfterImport] = useState<string[] | null>(null)
+  const [suggestIds, setSuggestIds] = useState<string[] | null>(null)
+
+  // Adjusted during render (no effect): the new data arrives in the same update as the ids.
+  if (afterImport) {
+    const wanted = new Set(afterImport)
+    const found = detectRecurring(data, todayISO(), getDismissedKeys()).some((s) => s.transactionIds.some((id) => wanted.has(id)))
+    setAfterImport(null)
+    if (found) setSuggestIds(afterImport)
+  }
 
   let range: ExportRange | null = null
   let rangeError: string | null = null
@@ -168,9 +182,13 @@ export const ExcelPage = memo(function ExcelPage({ onBack }: { onBack: () => voi
         <ImportSheet
           source={source}
           onClose={() => setSource(null)}
-          onImported={(count) => setImportMsg({ ok: true, text: `${plural(count, 'Buchung', 'Buchungen')} importiert.` })}
+          onImported={(count, ids) => {
+            setImportMsg({ ok: true, text: `${plural(count, 'Buchung', 'Buchungen')} importiert.` })
+            setAfterImport(ids)
+          }}
         />
       )}
+      {suggestIds && <RecurringSuggestions importedIds={suggestIds} onClose={() => setSuggestIds(null)} />}
     </>
   )
 })

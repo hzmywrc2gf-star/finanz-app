@@ -359,7 +359,7 @@ button.row:is(:active, [data-pressed]),
   margin: 0 auto;
   max-width: 568px;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
-  z-index: 40;
+  z-index: 60; /* above sheets (50): "Rückgängig" of an import stays reachable behind the suggestions */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2219,4 +2219,59 @@ html[data-privacy] #privacy-cover {
 }
 :root[data-theme='dark'] .import-check:checked {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+
+/* Verträge erkennen (Sheet mit Vorschlägen) */
+.suggest {
+  /* room for the undo toast, which floats above the sheet after an import */
+  padding-bottom: 72px;
+}
+.suggest-intro {
+  margin: 4px 4px 0;
+  font-size: 15px;
+  color: var(--text-2);
+}
+.suggest-card .prow {
+  align-items: flex-start;
+}
+.suggest-card .pamt {
+  padding-top: 1px;
+}
+.suggest-auto {
+  margin-top: 8px;
+  padding: 0;
+  min-height: 48px;
+}
+.suggest-error {
+  margin: 4px 0 0;
+}
+.suggest-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.suggest-links .link-btn {
+  flex: 1;
+  padding: 0 4px;
+  font-size: 15px;
+}
+.suggest-done {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: var(--r-card);
+  background: var(--tint-mist);
+  font-size: 15px;
+}
+.suggest-done .pico {
+  background: var(--chip-solid);
+}
+.suggest-close {
+  margin-top: 18px;
+}
+.detect-btn {
+  margin-top: 14px;
 }
