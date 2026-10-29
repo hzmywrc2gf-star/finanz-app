@@ -2,6 +2,7 @@ import type { Account, AppData, Category, Interval, Kind, RecurringRule, Transac
 import { FALLBACK_NAME } from '../domain/defaults'
 import { addDays, isValidISODate } from '../domain/dates'
 import { bookDue, nextOccurrence } from '../domain/recurring'
+import { findCategory } from '../domain/importRows'
 
 export interface TransactionInput {
   kind: Kind
@@ -407,4 +408,78 @@ export function bookNextNow(data: AppData, ruleId: string, input: ContractBookin
   const next = nextOccurrence(rule, rule.bookedThrough)
   if (next === null) throw new Error('Dieser Vertrag ist beendet, es gibt keinen weiteren Termin.')
   return bookOccurrence(data, rule, next, input, now)
+}
+
+/** One booking read from a file: the category comes by name (matched case-insensitively, created if new, empty = Sonstiges). */
+export interface ImportBooking {
+  kind: Kind
+  amountCents: number
+  date: string
+  account: Account
+  categoryName: string
+  note?: string
+}
+
+export interface ImportResult {
+  data: AppData
+  /** Ids of the new bookings and of the categories this import created (what `undoImport` removes). */
+  transactionIds: string[]
+  categoryIds: string[]
+}
+
+/**
+ * Adds many bookings at once (file import). All or nothing: the first invalid row throws and nothing changes.
+ * New bookings get fresh ids and consecutive createdAt values (file order), no recurringId.
+ */
+export function importTransactions(
+  data: AppData,
+  bookings: ImportBooking[],
+  now: number = Date.now(),
+  newId: () => string = () => crypto.randomUUID(),
+): ImportResult {
+  if (bookings.length === 0) throw new Error('Es gibt nichts einzulesen.')
+  const categories = [...data.categories]
+  const categoryIds: string[] = []
+  const transactions: Transaction[] = []
+  const transactionIds: string[] = []
+  bookings.forEach((b, i) => {
+    let cat = findCategory(categories, b.kind, b.categoryName)
+    if (!cat) {
+      const name = b.categoryName.trim()
+      if (!name) throw new Error(`Die Kategorie „${FALLBACK_NAME}“ fehlt.`)
+      cat = { id: newId(), name, kind: b.kind, builtIn: false }
+      categories.push(cat)
+      categoryIds.push(cat.id)
+    }
+    const input: TransactionInput = {
+      kind: b.kind,
+      amountCents: b.amountCents,
+      date: b.date,
+      categoryId: cat.id,
+      account: b.account,
+    }
+    validateTransactionInput({ ...data, categories }, input)
+    const t: Transaction = { id: newId(), ...input, createdAt: now + i }
+    const note = cleanNote(b.note)
+    if (note) t.note = note
+    transactions.push(t)
+    transactionIds.push(t.id)
+  })
+  return {
+    data: { ...data, categories, transactions: [...data.transactions, ...transactions] },
+    transactionIds,
+    categoryIds,
+  }
+}
+
+/**
+ * Undo of an import: removes exactly the imported bookings and the categories the import created,
+ * unless something else uses such a category by now (it then stays).
+ */
+export function undoImport(data: AppData, result: Pick<ImportResult, 'transactionIds' | 'categoryIds'>): AppData {
+  const removed = new Set(result.transactionIds)
+  const transactions = data.transactions.filter((t) => !removed.has(t.id))
+  const used = new Set([...transactions.map((t) => t.categoryId), ...data.recurring.map((r) => r.categoryId)])
+  const drop = new Set(result.categoryIds.filter((id) => !used.has(id)))
+  return { ...data, transactions, categories: data.categories.filter((c) => !drop.has(c.id)) }
 }

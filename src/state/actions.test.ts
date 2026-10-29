@@ -4,7 +4,7 @@ import { bookDue, pendingConfirmations } from '../domain/recurring'
 import {
   addCategory, addRecurring, bookNextNow, confirmOccurrence, skipOccurrence, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
   addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
-  restoreTransaction, restoreTransfer, setDisplayName, updateTransaction, updateTransfer,
+  restoreTransaction, restoreTransfer, setDisplayName, updateTransaction, updateTransfer, importTransactions, undoImport,
 } from './actions'
 import type { RecurringInput } from './actions'
 
@@ -343,5 +343,56 @@ describe('display name', () => {
     expect(setDisplayName(setDisplayName(d, 'Felix'), '   ').settings).not.toHaveProperty('displayName')
     expect(setDisplayName(d, 'x'.repeat(40)).settings.displayName).toHaveLength(40)
     expect(() => setDisplayName(d, 'x'.repeat(41))).toThrow(/40/)
+  })
+})
+
+describe('importTransactions', () => {
+  const rows = [
+    { kind: 'expense' as const, amountCents: 4550, date: '2026-10-01', account: 'konto' as const, categoryName: ' lebensmittel ', note: ' Rewe ' },
+    { kind: 'expense' as const, amountCents: 1230, date: '2026-10-05', account: 'bargeld' as const, categoryName: 'Yoga' },
+    { kind: 'expense' as const, amountCents: 500, date: '2026-10-06', account: 'konto' as const, categoryName: 'yoga' },
+    { kind: 'income' as const, amountCents: 8000, date: '2026-10-07', account: 'konto' as const, categoryName: '' },
+  ]
+  let n = 0
+  const ids = () => `id${++n}`
+
+  it('adds the bookings, creates unknown categories once and keeps file order', () => {
+    n = 0
+    const res = importTransactions(base(), rows, 1000, ids)
+    expect(res.data.transactions).toHaveLength(4)
+    expect(res.categoryIds).toEqual(['id2'])
+    expect(res.data.categories.find((c) => c.id === 'id2')).toEqual({ id: 'id2', name: 'Yoga', kind: 'expense', builtIn: false })
+    expect(res.data.transactions.map((t) => [t.categoryId, t.createdAt, t.account, t.note])).toEqual([
+      ['expense-lebensmittel', 1000, 'konto', 'Rewe'],
+      ['id2', 1001, 'bargeld', undefined],
+      ['id2', 1002, 'konto', undefined],
+      ['income-sonstiges', 1003, 'konto', undefined],
+    ])
+    expect(res.transactionIds).toEqual(res.data.transactions.map((t) => t.id))
+    expect(res.data.transactions.every((t) => t.recurringId === undefined)).toBe(true)
+  })
+
+  it('is all or nothing', () => {
+    const before = base()
+    expect(() => importTransactions(before, [rows[0], { ...rows[1], date: '2026-02-30' }])).toThrow('Ungültiges Datum.')
+    expect(() => importTransactions(before, [{ ...rows[0], amountCents: 0 }])).toThrow('Der Betrag muss größer als 0 sein.')
+    expect(() => importTransactions(before, [])).toThrow('Es gibt nichts einzulesen.')
+    expect(before.transactions).toHaveLength(0)
+  })
+
+  it('undo removes exactly the imported bookings and the categories created by the import', () => {
+    n = 0
+    const start = addTransaction(base(), input, meta)
+    const res = importTransactions(start, rows, 1000, ids)
+    expect(undoImport(res.data, res)).toEqual(start)
+  })
+
+  it('undo keeps a created category that is in use by something else by now', () => {
+    n = 0
+    const res = importTransactions(base(), rows, 1000, ids)
+    const used = addTransaction(res.data, { ...input, categoryId: 'id2' }, { id: 'later', createdAt: 9 })
+    const undone = undoImport(used, res)
+    expect(undone.transactions.map((t) => t.id)).toEqual(['later'])
+    expect(undone.categories.some((c) => c.id === 'id2')).toBe(true)
   })
 })
