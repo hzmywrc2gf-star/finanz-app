@@ -116,7 +116,7 @@ function InvoiceAmountSheet({ invoice, onClose }: { invoice: Invoice; onClose: (
     <Sheet title="Betrag ändern" onClose={onClose}>
       <form onSubmit={submit} noValidate>
         <p className="inv-lead">{invoiceTitle(invoice, data.categories)}</p>
-        <div className="card">
+        <div className="card wide-labels">
           <div className="field">
             <label htmlFor="amt-amount">Neuer Betrag</label>
             <input
