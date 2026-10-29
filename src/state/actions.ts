@@ -2,6 +2,8 @@ import type { Account, AppData, Category, Interval, Kind, RecurringRule, Transac
 import { FALLBACK_NAME } from '../domain/defaults'
 import { addDays, isValidISODate } from '../domain/dates'
 import { bookDue, nextOccurrence } from '../domain/recurring'
+import { MIN_COUNT, coveredByRule } from '../domain/recurringDetect'
+import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { findCategory } from '../domain/importRows'
 
 export interface TransactionInput {
@@ -324,6 +326,48 @@ export function updateRecurring(data: AppData, id: string, input: RecurringInput
   if (!existing) throw new Error('Die wiederkehrende Buchung wurde nicht gefunden.')
   const updated: RecurringRule = { id, ...ruleFields(input), bookedThrough: existing.bookedThrough }
   return { ...data, recurring: data.recurring.map((r) => (r.id === id ? updated : r)) }
+}
+
+/**
+ * Turns a found pattern (`detectRecurring`) into a Vertrag. The suggestion's own bookings are linked to it
+ * (recurringId) when they still exist as free Konto bookings; if fewer than the pattern needs are left (e.g. the
+ * import was undone) or a Vertrag already covers it, this throws. The past counts as handled: bookedThrough is the
+ * last found booking, or the rule's date in that month if that is later (a salary found on the 28th with day 31 must
+ * not be booked again on the 31st). The next occurrence is booked (autoBook) or asked for when it is due.
+ */
+export function createRecurringFromSuggestion(
+  data: AppData,
+  suggestion: RecurringSuggestion,
+  opts: { autoBook: boolean; id?: string },
+): AppData {
+  const input: RecurringInput = {
+    kind: suggestion.kind,
+    amountCents: suggestion.amountCents,
+    categoryId: suggestion.categoryId,
+    note: suggestion.note,
+    interval: suggestion.interval,
+    dayOfMonth: suggestion.dayOfMonth,
+    startDate: suggestion.startDate,
+    autoBook: opts.autoBook,
+  }
+  validateRecurringInput(data, input)
+  if (!isValidISODate(suggestion.lastDate) || suggestion.lastDate < suggestion.startDate) throw new Error('Ungültiges Datum.')
+  const wanted = new Set(suggestion.transactionIds)
+  const free = data.transactions.filter(
+    (t) => wanted.has(t.id) && !t.recurringId && t.account === 'konto' && t.kind === suggestion.kind,
+  )
+  if (free.length < MIN_COUNT[suggestion.interval]) throw new Error('Die passenden Buchungen gibt es nicht mehr.')
+  if (coveredByRule({ ...suggestion, note: input.note }, data.recurring)) throw new Error('Dafür gibt es schon einen Vertrag.')
+  const id = opts.id ?? crypto.randomUUID()
+  const draft: RecurringRule = { id, ...ruleFields(input), bookedThrough: suggestion.lastDate }
+  const inMonth = nextOccurrence(draft, addDays(`${suggestion.lastDate.slice(0, 7)}-01`, -1))
+  if (inMonth && inMonth.slice(0, 7) === suggestion.lastDate.slice(0, 7) && inMonth > suggestion.lastDate) draft.bookedThrough = inMonth
+  const linked = new Set(free.map((t) => t.id))
+  return {
+    ...data,
+    recurring: [...data.recurring, draft],
+    transactions: data.transactions.map((t) => (linked.has(t.id) ? { ...t, recurringId: id } : t)),
+  }
 }
 
 /** Already booked transactions stay. */

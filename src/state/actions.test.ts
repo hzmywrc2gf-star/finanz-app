@@ -5,7 +5,10 @@ import {
   addCategory, addRecurring, bookNextNow, confirmOccurrence, skipOccurrence, addTransaction, deleteCategory, deleteRecurring, deleteTransaction,
   addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
   restoreTransaction, restoreTransfer, setDisplayName, updateTransaction, updateTransfer, importTransactions, undoImport,
+  createRecurringFromSuggestion,
 } from './actions'
+import { detectRecurring } from '../domain/recurringDetect'
+import type { RecurringSuggestion } from '../domain/recurringDetect'
 import type { RecurringInput } from './actions'
 
 const base = () => createDefaultData()
@@ -394,5 +397,77 @@ describe('importTransactions', () => {
     const undone = undoImport(used, res)
     expect(undone.transactions.map((t) => t.id)).toEqual(['later'])
     expect(undone.categories.some((c) => c.id === 'id2')).toBe(true)
+  })
+})
+
+describe('createRecurringFromSuggestion', () => {
+  const seed = (dates: string[], over: Partial<Parameters<typeof addTransaction>[1]> = {}) => {
+    let d = base()
+    dates.forEach((date, i) => {
+      d = addTransaction(d, { kind: 'income', amountCents: 300000, date, categoryId: 'income-gehalt', account: 'konto', ...over }, { id: `g${i}`, createdAt: i })
+    })
+    return d
+  }
+  const monthly = ['2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01']
+  const found = (d: ReturnType<typeof base>) => detectRecurring(d, '2026-10-28')[0]
+
+  it('creates the rule, links the bookings and handles the past', () => {
+    const d0 = seed(monthly)
+    const d1 = createRecurringFromSuggestion(d0, found(d0), { autoBook: true, id: 'r-new' })
+    expect(d1.recurring).toEqual([
+      { id: 'r-new', kind: 'income', amountCents: 300000, categoryId: 'income-gehalt', interval: 'monthly', dayOfMonth: 1, startDate: '2026-05-01', bookedThrough: '2026-10-01', autoBook: true },
+    ])
+    expect(d1.transactions.every((t) => t.recurringId === 'r-new')).toBe(true)
+    // nothing is booked for the past, nor for the current month again
+    expect(bookDue(d1, '2026-10-28').transactions).toStrictEqual(d1.transactions)
+    // the next one is booked exactly once when due
+    const d2 = bookDue(d1, '2026-11-02', 99)
+    expect(d2.transactions).toHaveLength(7)
+    expect(d2.transactions[6]).toMatchObject({ date: '2026-11-01', recurringId: 'r-new', amountCents: 300000, account: 'konto' })
+    expect(bookDue(d2, '2026-11-20').transactions).toHaveLength(7)
+  })
+
+  it('does not book a second time in the month of the last found booking', () => {
+    const d0 = seed(['2026-07-31', '2026-08-31', '2026-09-30', '2026-10-28'])
+    // paid on the 28th although the rhythm says month end: the 31st is not another payment
+    const s = { ...found(seed(['2026-07-31', '2026-08-31', '2026-09-30', '2026-10-31'])), lastDate: '2026-10-28' }
+    const d1 = createRecurringFromSuggestion(d0, { ...s, transactionIds: ['g0', 'g1', 'g2', 'g3'] }, { autoBook: true })
+    expect(d1.recurring[0].dayOfMonth).toBe(31)
+    expect(d1.recurring[0].bookedThrough).toBe('2026-10-31')
+    expect(bookDue(d1, '2026-11-15').transactions).toHaveLength(4)
+    expect(bookDue(d1, '2026-11-30').transactions[4].date).toBe('2026-11-30')
+  })
+
+  it('manual rule: next occurrence waits for a confirmation, nothing for the past', () => {
+    const d0 = seed(monthly)
+    const d1 = createRecurringFromSuggestion(d0, found(d0), { autoBook: false })
+    expect(pendingConfirmations(d1, '2026-10-28')).toEqual([])
+    expect(pendingConfirmations(d1, '2026-11-03').map((p) => p.date)).toEqual(['2026-11-01'])
+    expect(bookDue(d1, '2026-11-03').transactions).toStrictEqual(d1.transactions)
+  })
+
+  it('links only free Konto bookings and keeps them when the rule is deleted', () => {
+    const d0 = seed(monthly)
+    const s = found(d0)
+    const d1 = createRecurringFromSuggestion(d0, s, { autoBook: true, id: 'r1' })
+    const d2 = deleteRecurring(d1, 'r1')
+    expect(d2.transactions).toHaveLength(6)
+    // two bookings were deleted in between, one belongs to another rule: not enough left
+    const gone = { ...d0, transactions: d0.transactions.slice(0, 2) }
+    expect(() => createRecurringFromSuggestion(gone, s, { autoBook: true })).toThrow('Die passenden Buchungen gibt es nicht mehr.')
+    const taken = { ...d0, transactions: d0.transactions.map((t, i) => (i < 4 ? { ...t, recurringId: 'other' } : t)) }
+    expect(() => createRecurringFromSuggestion(taken, s, { autoBook: true })).toThrow('Die passenden Buchungen gibt es nicht mehr.')
+    // after an undone import nothing is left
+    expect(() => createRecurringFromSuggestion(base(), s, { autoBook: true })).toThrow()
+  })
+
+  it('refuses a duplicate and invalid input with German errors', () => {
+    const d0 = seed(monthly)
+    const s = found(d0)
+    const d1 = createRecurringFromSuggestion(d0, s, { autoBook: true })
+    expect(() => createRecurringFromSuggestion({ ...d1, transactions: d0.transactions }, s, { autoBook: true })).toThrow('Dafür gibt es schon einen Vertrag.')
+    expect(() => createRecurringFromSuggestion(d0, { ...s, categoryId: 'expense-sonstiges' }, { autoBook: true })).toThrow('Die Kategorie passt nicht zur Art der Buchung.')
+    expect(() => createRecurringFromSuggestion(d0, { ...s, amountCents: 0 }, { autoBook: true })).toThrow('Der Betrag muss größer als 0 sein.')
+    expect(() => createRecurringFromSuggestion(d0, { ...s, startDate: 'kaputt' } as RecurringSuggestion, { autoBook: true })).toThrow('Ungültiges Startdatum.')
   })
 })
