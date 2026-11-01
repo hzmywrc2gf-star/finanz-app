@@ -1,4 +1,5 @@
 import { memo, useRef, useState } from 'react'
+import { ERR_TOO_BIG, MAX_FILE_BYTES } from '../../lib/fileLimit'
 import type { ChangeEvent } from 'react'
 import { formatDateDE, todayISO } from '../../domain/dates'
 import { useBackupSettings } from '../../hooks/useBackupSettings'
@@ -47,6 +48,7 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
     e.target.value = ''
     if (!file) return
     try {
+      if (file.size > MAX_FILE_BYTES) throw new Error(ERR_TOO_BIG)
       const text = await file.text()
       if (isVaultBackup(text)) {
         setVaultFile(text) // sheet "Sicherung entschlüsseln": app password or recovery key
@@ -115,6 +117,8 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
       <div className="footnote">
         Die Datei ist verschlüsselt und braucht kein eigenes Passwort: Zum Wiederherstellen reicht dein App-Passwort oder der
         Wiederherstellungsschlüssel. Wähle beim Sichern „In Dateien sichern“ und dann iCloud Drive.
+        Die Sicherung lässt sich mit dem Passwort und Schlüssel von damals öffnen, wähle daher ein langes Passwort. Ein neuer
+        Schlüssel oder ein neues Passwort ändert ältere Sicherungen nicht.
       </div>
 
       <div className="section-title">Eigene Sicherung</div>

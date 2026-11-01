@@ -122,6 +122,18 @@ describe('restore', () => {
     await expect(restoreVaultBackup(file, PW)).rejects.toThrow('Die Datei ist beschädigt.')
   })
 
+  it('rejects an envelope carrying a __proto__ key and never pollutes prototypes', async () => {
+    const { file } = await makeBackup()
+    const env = JSON.parse(file)
+    // JSON.parse makes `__proto__` an ordinary own key, so build the text by hand
+    const outer = JSON.stringify(env).replace(/^\{/, '{"__proto__":{"polluted":true},')
+    await expect(restoreVaultBackup(outer, PW, FAST)).rejects.toThrow('Die Datei ist beschädigt.')
+    const innerText = JSON.stringify({ ...env, vault: '@@' }).replace('"@@"', JSON.stringify(env.vault).replace(/^\{/, '{"__proto__":{"polluted":true},'))
+    // inside the vault unknown keys are ignored (only known fields are read), so nothing is copied onto a prototype
+    await restoreVaultBackup(innerText, PW, FAST)
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
   it('migrates data of an older version stored inside the vault', async () => {
     const store = memoryStore()
     const vault = createVault({ store: () => store, iterations: FAST })

@@ -4418,13 +4418,59 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
     await p.locator(SETUP).getByText(/Sicherung geladen: 1 Buchungen/).waitFor({ timeout: 60000 })
     const NEW_PW = 'Ganz-Neues-Passwort-9!'
-    await runSetup(p, { password: NEW_PW })
+    // Klartext-Schlüssel darf die wiederhergestellten Daten zu keinem Zeitpunkt enthalten (nur im Speicher bis zum Tresor)
+    const plain = () => p.evaluate(() => localStorage.getItem('finanz-app:v1'))
+    const leaks = (v) => v !== null && (v.includes('Zahnarzt') || v.includes('98,76') || v.includes('9876'))
+    if (leaks(await plain())) throw new Error('Klartext enthält wiederhergestellte Daten (nach dem Wiederherstellen)')
+    await p.fill('#lock-pw', NEW_PW); await p.fill('#lock-pw2', NEW_PW)
+    await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+    await p.getByTestId('recovery-key').waitFor()
+    if (leaks(await plain())) throw new Error('Klartext enthält wiederhergestellte Daten (vor dem Passwort-Schritt)')
+    await p.getByRole('checkbox', { name: /Ich habe den Schlüssel sicher notiert/ }).check()
+    await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+    await p.locator(SETUP).getByRole('heading', { name: /Finanzklar ist geschützt|Face ID hinzufügen\?/ }).waitFor({ timeout: 60000 })
+    mustB(await plain(), null, 'Klartext nach dem Erzeugen des Tresors')
+    if (await p.getByRole('heading', { name: 'Face ID hinzufügen?' }).count()) { await p.getByRole('button', { name: 'Überspringen' }).click(); await p.getByRole('heading', { name: 'Finanzklar ist geschützt' }).waitFor() }
+    await p.getByRole('button', { name: 'Fertig' }).click()
     await p.locator(APPNAV).waitFor()
+    await nav(p, 'Start').click()
+    await p.getByTestId('balance').waitFor()
+    mustB(nbsp(await p.getByTestId('balance').innerText()).includes('98,76'), true, 'App zeigt die wiederhergestellten Daten')
     const d = await storedWhen(p, (x) => x.transactions.length === 1, NEW_PW)
     mustB(d.transactions[0].note, 'Zahnarzt Privat', 'Daten aus der Sicherung')
+    mustB(await plain(), null, 'Klartext nach der Einrichtung')
     await reload(p, { password: NEW_PW })
-    ok('Wiederherstellen bei der Einrichtung: Sicherung wählen, falscher Eintrag wird abgelehnt, Wiederherstellungsschlüssel öffnet sie, danach neues Passwort + Schlüssel; die Buchung ist im neuen Tresor, Entsperren nur mit dem neuen Passwort')
+    await nav(p, 'Start').click()
+    mustB(nbsp(await p.getByTestId('balance').innerText()).includes('98,76'), true, 'Daten nach Neuladen/Entsperren')
+    mustB(await plain(), null, 'Klartext nach Neuladen')
+    ok('Wiederherstellen bei der Einrichtung: Sicherung wählen, falscher Eintrag wird abgelehnt, Wiederherstellungsschlüssel öffnet sie, danach neues Passwort + Schlüssel; die Buchung ist im neuen Tresor und wird angezeigt, der Klartext-Schlüssel enthält die Daten nie, Entsperren nur mit dem neuen Passwort')
     await c.close()
+  }
+
+  // Hängendes navigator.share(): die Auto-Sperre wird nicht dauerhaft ausgesetzt
+  {
+    const hideB = (p, hidden) => p.evaluate((h) => {
+      if (h) {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+      } else {
+        delete document.visibilityState
+        delete document.hidden
+      }
+      document.dispatchEvent(new Event('visibilitychange'))
+    }, hidden)
+    const { c, p } = await mkB()
+    await ensureOpen(p)
+    await card(p).waitFor()
+    await p.waitForFunction(() => !document.querySelector('[aria-label="Monatliche Sicherung"] .pbtn')?.disabled)
+    await p.evaluate(() => { window.__stuck = 0; Object.defineProperty(Navigator.prototype, 'share', { configurable: true, value: () => { window.__stuck++; return new Promise(() => {}) } }) })
+    await card(p).getByRole('button', { name: 'Jetzt in iCloud sichern' }).click()
+    await p.waitForFunction(() => window.__stuck === 1)
+    await hideB(p, true)
+    await p.clock.fastForward(125_000) // Frist von 2 Minuten für das Halten ist um, die Seite war > 1 Minute versteckt
+    await p.locator(LOCKED).waitFor({ timeout: 10000 })
+    await c.close()
+    ok('Hängendes navigator.share(): Seite versteckt, nach 2 Minuten (Frist) ist die App trotzdem gesperrt (Auto-Sperre läuft nicht endlos weiter)')
   }
 }
 

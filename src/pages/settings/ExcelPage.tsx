@@ -1,4 +1,5 @@
 import { memo, useRef, useState } from 'react'
+import { ERR_TOO_BIG, MAX_FILE_BYTES } from '../../lib/fileLimit'
 import type { ChangeEvent } from 'react'
 import { monthStart, todayISO } from '../../domain/dates'
 import { detectRecurring } from '../../domain/recurringDetect'
@@ -19,7 +20,6 @@ import { SaveError } from '../../components/SaveError'
 import { SegmentedControl } from '../../components/SegmentedControl'
 import { SubPageHeader } from '../../components/SubPageHeader'
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024
 
 const MODES: { value: ExportMode; label: string }[] = [
   { value: 'all', label: 'Alles' },
@@ -34,7 +34,7 @@ const isOldExcel = (b: Uint8Array) => b.length > 4 && b[0] === 0xd0 && b[1] === 
 
 /** Reads a chosen file as a table source (.xlsx by content, everything else as delimited text). */
 async function readSource(file: File): Promise<ImportSource> {
-  if (file.size > MAX_FILE_BYTES) throw new Error('Die Datei ist zu groß (höchstens 10 MB).')
+  if (file.size > MAX_FILE_BYTES) throw new Error(ERR_TOO_BIG)
   const bytes = new Uint8Array(await file.arrayBuffer())
   if (isOldExcel(bytes)) throw new Error('Alte .xls-Dateien werden nicht unterstützt. Bitte als .xlsx oder .csv speichern.')
   if (isZip(bytes)) {

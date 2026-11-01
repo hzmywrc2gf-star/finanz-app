@@ -6,6 +6,7 @@ import { LocalStorageRepository } from '../data/localStorageRepo'
 import { VaultError, vault } from '../data/vault'
 import { buildVaultBackup, vaultBackupFileName } from '../data/vaultBackup'
 import { todayISO } from '../domain/dates'
+import type { AppData } from '../domain/types'
 import type { AutoLockMinutes, VaultSession } from '../data/vault'
 import { Greeting } from '../components/Greeting'
 import { LockScreen, NewPasswordScreen } from '../components/LockScreen'
@@ -23,6 +24,8 @@ const localRepo = new LocalStorageRepository()
 /** Inactivity limit while "Sofort" is chosen: the app locks when it is hidden, and after this long without input. */
 const IMMEDIATE_IDLE_MS = 60_000
 const IDLE_CHECK_MS = 1000
+/** A hold on the auto-lock (share sheet, Face ID prompt) ends by itself after this long, e.g. if `share()` never settles. */
+const HOLD_MAX_MS = 2 * 60_000
 
 type Unlocked = { session: VaultSession; repo: EncryptedRepository }
 type LockReason = 'start' | 'auto' | 'manual'
@@ -40,6 +43,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
   const [unlocked, setUnlocked] = useState<Unlocked | null>(null)
   const [pending, setPending] = useState<VaultSession | null>(null) // opened with the recovery key, new password still due
   const [reason, setReason] = useState<LockReason>('start')
+  const [seed, setSeed] = useState<AppData | null>(null) // data handed to the new vault during setup (restored backup)
   const [greeting, setGreeting] = useState<string | null>(null)
   const [passkeyLikely, setPasskeyLikely] = useState(false)
   // the setup screen stays until its last step ("Fertig"), even though the vault already exists after step 2
@@ -49,6 +53,11 @@ export function LockProvider({ children }: { children: ReactNode }) {
   const locking = useRef(false)
   const busyOps = useRef(0) // > 0 while a Face ID prompt is open: the system sheet must not trigger the auto-lock
   const lastActive = useRef(0) // set when the app opens and on every input
+  const hiddenAtRef = useRef<number | null>(null) // when the page went hidden (also recorded during a hold)
+  const hiddenSpanRef = useRef(0) // longest hidden time seen while a hold was active
+  const settleRef = useRef<() => void>(() => {
+    lastActive.current = Date.now()
+  }) // called when a hold ends: locks if the page was hidden too long, else counts as activity
   useEffect(() => {
     unlockedRef.current = unlocked
   })
@@ -70,6 +79,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
       await u.repo.flush() // pending saves reach the vault before the key is dropped
       u.repo.close()
       unlockedRef.current = null
+      setSeed(null)
       setReason(why)
       setUnlocked(null) // unmounts the whole app: sheets, undo toast and all data leave React state
       setPending(null)
@@ -87,23 +97,36 @@ export function LockProvider({ children }: { children: ReactNode }) {
     if (!signedIn || !enabled) return
     const limitMs = minutes === 0 ? 0 : minutes * 60_000
     const idleMs = minutes === 0 ? IMMEDIATE_IDLE_MS : limitMs
-    let hiddenAt: number | null = null
     let hiddenTimer: number | undefined
     lastActive.current = Date.now()
+    hiddenAtRef.current = document.visibilityState === 'hidden' ? Date.now() : null
+    hiddenSpanRef.current = 0
 
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now() // recorded even during a hold
         if (busyOps.current > 0) return
-        hiddenAt = Date.now()
         if (limitMs === 0) void lock('auto')
         else hiddenTimer = window.setTimeout(() => void lock('auto'), limitMs) // may be frozen by the OS; the check on return catches that
       } else {
         window.clearTimeout(hiddenTimer)
-        const wasHiddenFor = hiddenAt === null ? 0 : Date.now() - hiddenAt
-        hiddenAt = null
+        const wasHiddenFor = hiddenAtRef.current === null ? 0 : Date.now() - hiddenAtRef.current
+        hiddenAtRef.current = null
+        if (busyOps.current > 0) {
+          hiddenSpanRef.current = Math.max(hiddenSpanRef.current, wasHiddenFor) // decided when the hold ends
+          return
+        }
         if (wasHiddenFor >= limitMs && wasHiddenFor > 0) void lock('auto')
         else lastActive.current = Date.now()
       }
+    }
+    settleRef.current = () => {
+      const hiddenNow = hiddenAtRef.current
+      const hiddenFor = Math.max(hiddenSpanRef.current, hiddenNow === null ? 0 : Date.now() - hiddenNow)
+      hiddenSpanRef.current = 0
+      const tooLong = limitMs === 0 ? hiddenNow !== null : hiddenFor >= limitMs && hiddenFor > 0
+      if (tooLong) void lock('auto')
+      else if (document.visibilityState === 'visible') lastActive.current = Date.now()
     }
     const onActivity = () => {
       lastActive.current = Date.now()
@@ -123,6 +146,9 @@ export function LockProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('scroll', onActivity, { capture: true })
       window.clearInterval(idleTimer)
       window.clearTimeout(hiddenTimer)
+      settleRef.current = () => {
+        lastActive.current = Date.now()
+      }
     }
   }, [signedIn, enabled, minutes, lock])
 
@@ -220,7 +246,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
         return await fn()
       } finally {
         busyOps.current--
-        lastActive.current = Date.now()
+        if (busyOps.current === 0) settleRef.current()
       }
     }
     return {
@@ -230,6 +256,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
       passkeyLikely,
       async enable(data, password, recoveryKey) {
         const { session } = await vault.enable(data, password, recoveryKey)
+        setSeed(data)
         setHeader(readHeader())
         setEnabled(true)
         // the running FinanceProvider carries its in-memory data over to the new (encrypted) repository
@@ -261,12 +288,15 @@ export function LockProvider({ children }: { children: ReactNode }) {
       holdAutoLock() {
         busyOps.current++
         let released = false
-        return () => {
+        const release = () => {
           if (released) return
           released = true
+          window.clearTimeout(deadline)
           busyOps.current--
-          lastActive.current = Date.now()
+          if (busyOps.current === 0) settleRef.current()
         }
+        const deadline = window.setTimeout(release, HOLD_MAX_MS) // a stuck share sheet must not suspend the lock forever
+        return release
       },
       async createVaultBackup() {
         await current().repo.flush() // every save requested so far is in the vault
@@ -294,7 +324,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
   } else {
     // no vault yet (or setup not finished): only the setup screen, never the app on unprotected data
     const content = enabled && unlocked && !settingUp ? children : <LockSetupScreen onDone={finishSetup} />
-    body = <FinanceProvider repository={unlocked?.repo ?? localRepo}>{content}</FinanceProvider>
+    body = <FinanceProvider repository={unlocked?.repo ?? localRepo} seed={unlocked ? seed : null}>{content}</FinanceProvider>
   }
   return (
     <LockContext.Provider value={api}>

@@ -75,9 +75,12 @@ const SAVE_ERROR = 'Speichern fehlgeschlagen. Bitte Speicherplatz prüfen.'
 export function FinanceProvider({
   children,
   repository = defaultRepo,
+  seed = null,
 }: {
   children: ReactNode
   repository?: FinanceRepository
+  /** Data that replaces the in-memory data when the repository is swapped (restored backup during setup). */
+  seed?: AppData | null
 }) {
   const [data, setData] = useState<AppData | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -89,6 +92,10 @@ export function FinanceProvider({
     // The repository was swapped while running (app lock turned on or off): hand the data we already hold to the
     // new one instead of reloading, so nothing changed in between is lost.
     if (ref.current) {
+      if (seed && seed !== ref.current) {
+        ref.current = seed
+        setData(seed)
+      }
       repository.save(ref.current).catch(() => setSaveError(SAVE_ERROR))
       return
     }
@@ -103,6 +110,7 @@ export function FinanceProvider({
     return () => {
       cancelled = true
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `seed` is only read at the moment the repository changes
   }, [repository])
 
   const commit = useCallback(

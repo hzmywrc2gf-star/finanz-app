@@ -6,6 +6,7 @@ import type { AppData } from '../domain/types'
 import { generateRecoveryKey } from '../lib/crypto'
 import { todayISO } from '../domain/dates'
 import { downloadTextFile } from '../lib/download'
+import { ERR_TOO_BIG, MAX_FILE_BYTES } from '../lib/fileLimit'
 import { haptic } from '../lib/haptics'
 import { validateNewPassword } from '../lib/password'
 import { useFinance } from '../state/FinanceContext'
@@ -33,7 +34,7 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : 'Unbekannter Fe
  * the recovery key was confirmed; the vault is created (and verified) when leaving step 2, existing data is carried over.
  */
 export function LockSetupScreen({ onDone }: { onDone: () => void }) {
-  const { data, replaceAll } = useFinance()
+  const { data } = useFinance()
   const lock = useLock()
   const [step, setStep] = useState<Step>('password')
   const [password, setPassword] = useState('')
@@ -46,6 +47,7 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
   const [confirmPlain, setConfirmPlain] = useState(false)
   const [vaultFile, setVaultFile] = useState<string | null>(null)
   const [restored, setRestored] = useState<AppData | null>(null) // decrypted backup waiting for "Ersetzen" (only if data exists)
+  const [restoredData, setRestoredData] = useState<AppData | null>(null) // confirmed backup, kept in memory only until `enable`
   const [restoreMsg, setRestoreMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const hasData = data.transactions.length > 0 || data.transfers.length > 0 || data.recurring.length > 0
@@ -66,7 +68,7 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
     setBusy(true)
     setError(null)
     try {
-      await lock.enable(data, password, recoveryKey)
+      await lock.enable(restoredData ?? data, password, recoveryKey)
       setPassword('')
       setRepeat('')
       setStep(lock.passkeyLikely ? 'face' : 'done')
@@ -94,6 +96,7 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
     e.target.value = ''
     if (!file) return
     try {
+      if (file.size > MAX_FILE_BYTES) throw new Error(ERR_TOO_BIG)
       const text = await file.text()
       if (!isVaultBackup(text)) throw new Error('Das ist keine Finanzklar-Sicherung aus der Monatlichen Sicherung.')
       setRestoreMsg(null)
@@ -103,11 +106,11 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
     }
   }
 
-  // The restored data is carried into the new vault like any existing data: the setup continues with a NEW password
-  // and recovery key, and `lock.enable` verifies the vault against exactly these data.
+  // The restored data stay in memory (component state) and never touch the plaintext repository: `lock.enable` writes
+  // them straight into the vault under a NEW password and recovery key and verifies the vault against exactly these data.
   function applyRestored(next: AppData) {
     try {
-      replaceAll(next)
+      setRestoredData(next)
       setRestoreMsg({ ok: true, text: `Sicherung geladen: ${next.transactions.length} Buchungen. Lege jetzt ein neues Passwort fest.` })
     } catch (err) {
       setRestoreMsg({ ok: false, text: err instanceof Error ? err.message : 'Wiederherstellen fehlgeschlagen.' })
