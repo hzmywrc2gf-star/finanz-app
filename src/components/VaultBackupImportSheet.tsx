@@ -44,9 +44,9 @@ export function VaultBackupImportSheet({
   return (
     <Sheet title="Sicherung entschlüsseln" onClose={onClose} dismissible={!busy}>
       <form onSubmit={submit} noValidate>
-        <div className="card wide-labels">
+        <div className="card wide-labels pw-fields">
           <div className="field">
-            <label htmlFor="vb-secret">Passwort oder Wiederherstellungsschlüssel</label>
+            <label htmlFor="vb-secret">Passwort / Schlüssel</label>
             <input
               id="vb-secret"
               type={show ? 'text' : 'password'}

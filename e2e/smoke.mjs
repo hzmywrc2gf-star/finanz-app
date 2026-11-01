@@ -4221,7 +4221,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.fill('#tx-amount', amount)
     await p.selectOption('#tx-cat', { label: 'Gesundheit' })
     await p.fill('#tx-note', note)
-    await p.getByRole('button', { name: 'Sichern' }).click()
+    await p.getByRole('button', { name: 'Sichern', exact: true }).click()
     await p.getByRole('dialog').waitFor({ state: 'detached' })
   }
   const nav = (p, name) => tabOn(p, name)
