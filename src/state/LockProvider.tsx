@@ -258,6 +258,16 @@ export function LockProvider({ children }: { children: ReactNode }) {
         setHeader(readHeader())
       },
       lockNow: () => void lock('manual'),
+      holdAutoLock() {
+        busyOps.current++
+        let released = false
+        return () => {
+          if (released) return
+          released = true
+          busyOps.current--
+          lastActive.current = Date.now()
+        }
+      },
       async createVaultBackup() {
         await current().repo.flush() // every save requested so far is in the vault
         const now = new Date()

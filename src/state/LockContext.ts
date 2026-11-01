@@ -18,6 +18,8 @@ export interface LockApi {
   removePasskey(): void
   setAutoLock(minutes: AutoLockMinutes): void
   lockNow(): void
+  /** Pauses the auto-lock while a system sheet (share sheet) is open; call the returned function when it closes. */
+  holdAutoLock(): () => void
   /**
    * The monthly backup as a file: a snapshot of the encrypted vault (see data/vaultBackup.ts), no plaintext. Waits for
    * pending saves first, so it is async: build it BEFORE the tap (see hooks/useVaultBackup.ts), then share on the tap.

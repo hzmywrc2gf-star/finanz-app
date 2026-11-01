@@ -19,7 +19,9 @@ export type BackupOutcome = 'shared' | 'downloaded'
  */
 export function useVaultBackup(onDone?: (outcome: BackupOutcome) => void) {
   const { data } = useFinance()
-  const { createVaultBackup } = useLock()
+  const { createVaultBackup, holdAutoLock } = useLock()
+  const holdRef = useRef(holdAutoLock)
+  holdRef.current = holdAutoLock
   const [built, setBuilt] = useState<{ data: AppData; file: File } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,6 +59,8 @@ export function useVaultBackup(onDone?: (outcome: BackupOutcome) => void) {
     setBusy(true)
     setError(null)
     let outcome: Promise<BackupOutcome>
+    // the share sheet hides the page on iOS: with „Sofort“ the auto-lock would lock the app behind it
+    const release = holdRef.current()
     try {
       // no `await` before this point: the share sheet needs the tap's user activation
       if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
@@ -82,6 +86,7 @@ export function useVaultBackup(onDone?: (outcome: BackupOutcome) => void) {
         },
       )
       .finally(() => {
+        release()
         busyRef.current = false
         setBusy(false)
       })
