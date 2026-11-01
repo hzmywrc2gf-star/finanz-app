@@ -2473,3 +2473,29 @@ html[data-privacy] #privacy-cover {
 .btn.secondary.inv-calendar {
   margin-top: 12px;
 }
+
+/* Monatliche Sicherung (Start-Karte + Datensicherung) */
+.pcard .backup-actions {
+  margin-top: 14px;
+}
+.backup-actions .pbtn:first-child {
+  flex: 1.6;
+}
+.pcard .backup-error {
+  margin: 8px 0 0;
+}
+.backup-monthly {
+  padding: 16px 16px 4px;
+}
+.backup-last {
+  font-size: 17px;
+  font-weight: 500;
+}
+.btn.backup-now {
+  margin: 12px 0 8px;
+}
+.backup-monthly .switch-row {
+  padding-left: 0;
+  padding-right: 0;
+  border-top: 0.5px solid var(--sep);
+}

@@ -15,6 +15,7 @@ import { useFinance } from '../state/FinanceContext'
 import { useLock } from '../state/LockContext'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { TransactionForm } from '../components/TransactionForm'
+import { BackupReminderCard } from '../components/BackupReminderCard'
 import { BalanceChart } from '../components/BalanceChart'
 import { BudgetBar } from '../components/BudgetBar'
 import { InvoiceFlowDialogs, InvoiceListSheet } from '../components/InvoiceSheets'
@@ -93,6 +94,8 @@ export const StartPage = memo(function StartPage({
       <button className="btn add-btn" onClick={onAdd} aria-label="Buchung hinzufügen">
         <PlusIcon /> Buchung hinzufügen
       </button>
+
+      <BackupReminderCard />
 
       {toConfirm.length > 0 && (
         <section className="pcard tint-lav" aria-label="Zu bestätigen">

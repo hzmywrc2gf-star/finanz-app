@@ -4,6 +4,8 @@ import { EncryptedRepository } from '../data/encryptedRepo'
 import { recordFailure, recordSuccess, remainingWaitMs } from '../data/lockAttempts'
 import { LocalStorageRepository } from '../data/localStorageRepo'
 import { VaultError, vault } from '../data/vault'
+import { buildVaultBackup, vaultBackupFileName } from '../data/vaultBackup'
+import { todayISO } from '../domain/dates'
 import type { AutoLockMinutes, VaultSession } from '../data/vault'
 import { Greeting } from '../components/Greeting'
 import { LockScreen, NewPasswordScreen } from '../components/LockScreen'
@@ -256,6 +258,12 @@ export function LockProvider({ children }: { children: ReactNode }) {
         setHeader(readHeader())
       },
       lockNow: () => void lock('manual'),
+      async createVaultBackup() {
+        await current().repo.flush() // every save requested so far is in the vault
+        const now = new Date()
+        const text = buildVaultBackup(vault.snapshot(), now)
+        return new File([text], vaultBackupFileName(todayISO(now)), { type: 'application/json' })
+      },
     }
   }, [enabled, minutes, hasPasskey, passkeyLikely, lock])
 

@@ -1,17 +1,23 @@
 import { memo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { todayISO } from '../../domain/dates'
+import { formatDateDE, todayISO } from '../../domain/dates'
+import { useBackupSettings } from '../../hooks/useBackupSettings'
+import { useVaultBackup } from '../../hooks/useVaultBackup'
+import { setBackupReminderEnabled } from '../../lib/backupReminder'
 import { downloadTextFile } from '../../lib/download'
 import { haptic } from '../../lib/haptics'
 import { exportJSON, parseBackup } from '../../data/backup'
 import { isEncryptedBackup } from '../../data/backupCrypto'
+import { isVaultBackup } from '../../data/vaultBackup'
 import type { AppData } from '../../domain/types'
 import { useFinance } from '../../state/FinanceContext'
 import { BackupExportSheet } from '../../components/BackupExportSheet'
 import { BackupImportSheet } from '../../components/BackupImportSheet'
+import { VaultBackupImportSheet } from '../../components/VaultBackupImportSheet'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { SaveError } from '../../components/SaveError'
 import { SubPageHeader } from '../../components/SubPageHeader'
+import { Switch } from '../../components/Switch'
 
 /** Settings > Datensicherung: export (encrypted or plain) and import of backup files. */
 export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => void }) {
@@ -21,7 +27,12 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
   const [exporting, setExporting] = useState(false)
   const [confirmPlain, setConfirmPlain] = useState(false)
   const [encryptedFile, setEncryptedFile] = useState<string | null>(null)
+  const [vaultFile, setVaultFile] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const { last, enabled } = useBackupSettings()
+  const monthly = useVaultBackup((outcome) =>
+    setBackupMsg({ ok: true, text: outcome === 'shared' ? 'Sicherung erstellt.' : 'Sicherung wurde als Datei geladen.' }),
+  )
 
   function exportPlain() {
     downloadTextFile(`finanz-backup-${todayISO()}.json`, exportJSON(data))
@@ -37,6 +48,11 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
     if (!file) return
     try {
       const text = await file.text()
+      if (isVaultBackup(text)) {
+        setVaultFile(text) // sheet "Sicherung entschlüsseln": app password or recovery key
+        setBackupMsg(null)
+        return
+      }
       if (isEncryptedBackup(text)) {
         setEncryptedFile(text) // the password sheet decrypts, then the usual validation and confirmation follow
         setBackupMsg(null)
@@ -51,6 +67,7 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
   }
 
   function onDecrypted(json: string) {
+    setVaultFile(null)
     try {
       setPending(parseBackup(json))
       setBackupMsg(null)
@@ -79,6 +96,28 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
     <>
       <SubPageHeader title="Datensicherung" parent="Einstellungen" onBack={onBack} />
       <SaveError message={saveError} />
+      <div className="section-title">Monatliche Sicherung</div>
+      <div className="card backup-monthly">
+        <div className="backup-last">{last ? `Letzte Sicherung: ${formatDateDE(last)}` : 'Noch keine Sicherung'}</div>
+        <button className="btn backup-now" disabled={!monthly.ready || monthly.busy} aria-busy={monthly.busy} onClick={monthly.run}>
+          Jetzt in iCloud sichern
+        </button>
+        <div className="field switch-row">
+          <label htmlFor="backup-reminder">Am 1. des Monats erinnern</label>
+          <Switch id="backup-reminder" checked={enabled} onChange={setBackupReminderEnabled} />
+        </div>
+      </div>
+      {monthly.error && (
+        <div className="error" role="alert">
+          {monthly.error}
+        </div>
+      )}
+      <div className="footnote">
+        Die Datei ist verschlüsselt und braucht kein eigenes Passwort: Zum Wiederherstellen reicht dein App-Passwort oder der
+        Wiederherstellungsschlüssel. Wähle beim Sichern „In Dateien sichern“ und dann iCloud Drive.
+      </div>
+
+      <div className="section-title">Eigene Sicherung</div>
       <div className="card btn-row">
         <button className="btn secondary" style={{ background: 'var(--card-2)' }} onClick={() => setExporting(true)}>
           Exportieren
@@ -112,6 +151,9 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
           onCancel={() => setConfirmPlain(false)}
           onConfirm={exportPlain}
         />
+      )}
+      {vaultFile && (
+        <VaultBackupImportSheet fileText={vaultFile} onClose={() => setVaultFile(null)} onRestored={onDecrypted} />
       )}
       {encryptedFile && (
         <BackupImportSheet fileText={encryptedFile} onClose={() => setEncryptedFile(null)} onDecrypted={onDecrypted} />
