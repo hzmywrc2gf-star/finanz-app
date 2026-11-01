@@ -13,6 +13,14 @@ const ok = (msg) => console.log(`✔ ${++step}. ${msg}`)
 const nbsp = (s) => s.replace(/ /g, ' ')
 
 const browser = await chromium.launch()
+// Die Monatliche Sicherung (Karte auf der Start-Übersicht) ist in allen älteren Prüfungen ausgeschaltet, sonst verschiebt sie
+// deren Layout; Kontexte mit `{ backupReminder: true }` bekommen sie (Abschnitt „Monatliche Sicherung“).
+const rawNewContext = browser.newContext.bind(browser)
+browser.newContext = async ({ backupReminder = false, ...opts } = {}) => {
+  const c = await rawNewContext(opts)
+  if (!backupReminder) await c.addInitScript(() => { try { if (!localStorage.getItem('finanz-app:backup-reminder')) localStorage.setItem('finanz-app:backup-reminder', 'off') } catch { /* gesperrt */ } })
+  return c
+}
 const ctx = await browser.newContext({ ...devices['iPhone 13'], acceptDownloads: true, locale: 'de-DE', timezoneId: 'Europe/Berlin' })
 const page = await ctx.newPage()
 // Alle erwarteten Werte gehen von „heute = Di, 27.10.2026“ aus – Uhr festsetzen, damit der Test an jedem Tag läuft.
@@ -4176,6 +4184,247 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     mustE(await p.evaluate(() => document.querySelector('.navbar-glow').style.transform), '', 'Bewegung reduzieren: Verlauf bleibt stehen')
     await c.close()
     ok('Bewegung reduzieren: Balken sofort gefüllt, kein Verlauf-Versatz (die Leiste blendet trotzdem ein)')
+  }
+}
+
+// ---------- Monatliche Sicherung (iCloud): Erinnerung, Teilen, Wiederherstellen ----------
+{
+  const PW_B = 'Anderes-Passwort-77!'
+  const mustB = (a, b, what) => { if (a !== b) throw new Error(`${what}: erwartet ${JSON.stringify(b)}, war ${JSON.stringify(a)}`) }
+  const mkB = async ({ at = '2026-11-01T10:00:00+01:00', share = 'ok', vault = true, download = false } = {}) => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', acceptDownloads: download, backupReminder: true })
+    // Teilen-Attrappe: merkt Datei (Name, Typ, Text); 'none' = Browser ohne Dateien-Teilen (dann Download)
+    await c.addInitScript((mode) => {
+      window.__shared = []
+      if (mode === 'none') { Object.defineProperty(Navigator.prototype, 'share', { value: undefined, configurable: true }); Object.defineProperty(Navigator.prototype, 'canShare', { value: undefined, configurable: true }); return }
+      Object.defineProperty(Navigator.prototype, 'canShare', { value: (d) => !!(d && d.files && d.files.length), configurable: true })
+      Object.defineProperty(Navigator.prototype, 'share', {
+        configurable: true,
+        value: async (d) => {
+          const f = d.files[0]
+          window.__shared.push({ name: f.name, type: f.type, title: d.title, text: await f.text(), activation: navigator.userActivation.isActive })
+          if (window.__shareMode === 'abort') throw new DOMException('cancelled', 'AbortError')
+        },
+      })
+    }, share)
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date(at) })
+    await keepAlive(p)
+    if (vault) await withVault(p)
+    await p.goto(URL)
+    return { c, p }
+  }
+  const addNote = async (p, amount, note) => {
+    await p.getByRole('button', { name: 'Buchung hinzufügen', exact: true }).first().click()
+    await p.fill('#tx-amount', amount)
+    await p.selectOption('#tx-cat', { label: 'Gesundheit' })
+    await p.fill('#tx-note', note)
+    await p.getByRole('button', { name: 'Sichern' }).click()
+    await p.getByRole('dialog').waitFor({ state: 'detached' })
+  }
+  const nav = (p, name) => tabOn(p, name)
+  const expectOn = async (p, t) => { for (let i = 0; i < 50; i++) { if (nbsp(await p.locator('body').innerText()).includes(t)) return; await p.waitForTimeout(100) } throw new Error(`Text nicht gefunden: "${t}"`) }
+  const card = (p) => p.getByRole('region', { name: 'Monatliche Sicherung' })
+  const lastKey = (p) => p.evaluate(() => localStorage.getItem('finanz-app:last-backup'))
+  const openBackupPage = async (p) => { await openSettings(p, 'Datensicherung') }
+  let fileA // Text der Sicherung aus Kontext A (eigenes Passwort PW_B, bekannter Wiederherstellungsschlüssel)
+  let keyA
+
+  // A: Einrichtung mit eigenem Passwort (Schlüssel merken), Karte, Später, Abbruch, Teilen
+  {
+    const { c, p } = await mkB({ vault: false })
+    await p.locator(SETUP).waitFor()
+    await p.fill('#lock-pw', PW_B); await p.fill('#lock-pw2', PW_B)
+    await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+    keyA = (await p.getByTestId('recovery-key').innerText()).replace(/\s+/g, '')
+    await p.getByRole('checkbox', { name: /Ich habe den Schlüssel sicher notiert/ }).check()
+    await p.locator(SETUP).getByRole('button', { name: 'Weiter', exact: true }).click()
+    await p.locator(SETUP).getByRole('heading', { name: /Finanzklar ist geschützt|Face ID hinzufügen\?/ }).waitFor({ timeout: 60000 })
+    if (await p.getByRole('heading', { name: 'Face ID hinzufügen?' }).count()) { await p.getByRole('button', { name: 'Überspringen' }).click(); await p.getByRole('heading', { name: 'Finanzklar ist geschützt' }).waitFor() }
+    await p.getByRole('button', { name: 'Fertig' }).click()
+    await p.locator(APPNAV).waitFor()
+    await addNote(p, '98,76', 'Zahnarzt Privat')
+
+    await card(p).waitFor()
+    const t = nbsp(await card(p).innerText())
+    if (!t.includes('Noch keine Sicherung') || !t.includes('Jetzt in iCloud sichern') || !t.includes('Später')) throw new Error('Karte: ' + t)
+    // Reihenfolge: Buchung hinzufügen, Karte, (darunter erst alles andere)
+    const ys = await p.evaluate(() => [document.querySelector('.add-btn').getBoundingClientRect().bottom, document.querySelector('[aria-label="Monatliche Sicherung"]').getBoundingClientRect().top])
+    if (!(ys[1] > ys[0])) throw new Error('Karte nicht unter „Buchung hinzufügen“')
+    ok('Monatliche Sicherung: am 01.11.2026 ohne bisherige Sicherung erscheint die Karte direkt unter „Buchung hinzufügen“ („Noch keine Sicherung“, „Jetzt in iCloud sichern“, „Später“)')
+
+    // Später: weg bis morgen
+    await card(p).getByRole('button', { name: 'Später' }).click()
+    await card(p).waitFor({ state: 'detached' })
+    mustB(await p.evaluate(() => localStorage.getItem('finanz-app:backup-snooze')), '2026-11-02', 'Später merkt morgen')
+    await nav(p, 'Einstellungen').click(); await nav(p, 'Start').click()
+    if (await card(p).count()) throw new Error('Karte trotz „Später“ am selben Tag')
+    await p.clock.setSystemTime(new Date('2026-11-02T09:00:00+01:00'))
+    await nav(p, 'Einstellungen').click(); await nav(p, 'Start').click()
+    await card(p).waitFor()
+    ok('„Später“ blendet die Karte bis morgen aus (merkt 2026-11-02), am nächsten Tag ist sie wieder da')
+
+    // Abbruch im Teilen-Fenster = keine Sicherung, keine Meldung
+    await p.evaluate(() => { window.__shareMode = 'abort' })
+    const btn = card(p).getByRole('button', { name: 'Jetzt in iCloud sichern' })
+    await p.waitForFunction(() => !document.querySelector('[aria-label="Monatliche Sicherung"] .pbtn')?.disabled)
+    await btn.click()
+    await p.waitForFunction(() => window.__shared.length === 1)
+    await p.waitForTimeout(300)
+    if (!(await card(p).count()) || await lastKey(p) !== null || await p.getByRole('alert').count()) throw new Error('Abbrechen zählte als Sicherung oder zeigte einen Fehler')
+    const aborted = await p.evaluate(() => window.__shared[0].activation)
+    if (aborted !== true) throw new Error('share() lief ohne Nutzeraktivierung')
+    ok('Teilen abgebrochen (AbortError): Karte bleibt, nichts gemerkt, keine Fehlermeldung; share() wurde direkt im Tippen aufgerufen (Nutzeraktivierung aktiv)')
+
+    // Teilen klappt
+    await p.evaluate(() => { window.__shareMode = 'ok'; window.__shared.length = 0 })
+    await btn.click()
+    await card(p).waitFor({ state: 'detached' })
+    const shared = await p.evaluate(() => window.__shared)
+    mustB(shared.length, 1, 'Anzahl geteilter Dateien')
+    mustB(shared[0].name, 'finanzklar-sicherung-2026-11-02.json', 'Dateiname')
+    mustB(shared[0].type, 'application/json', 'Dateityp')
+    mustB(shared[0].title, 'Finanzklar-Sicherung', 'Titel')
+    const env = JSON.parse(shared[0].text)
+    mustB(env.format, 'finanzklar-vault-backup', 'Umschlag-Format'); mustB(env.version, 1, 'Umschlag-Version')
+    mustB(env.vault.format, 'finanzklar-vault', 'Tresor im Umschlag')
+    for (const needle of ['Zahnarzt', 'Privat', '9876', '98,76', 'Gesundheit', 'amountCents', PW_B]) if (shared[0].text.includes(needle)) throw new Error('Klartext in der Sicherung: ' + needle)
+    mustB(await lastKey(p), '2026-11-02', 'Datum der letzten Sicherung')
+    fileA = shared[0].text
+    ok('Teilen: Datei finanzklar-sicherung-2026-11-02.json (application/json), Umschlag „finanzklar-vault-backup“ mit dem Tresor, kein Klartext (weder Notiz noch Betrag noch Passwort); Karte weg, Datum gemerkt')
+
+    // Datensicherung: Zeile + Schalter, nächster Monat bringt die Karte zurück
+    await openBackupPage(p)
+    await expectOn(p, 'Letzte Sicherung: 02.11.2026')
+    await p.getByRole('button', { name: 'Jetzt in iCloud sichern' }).waitFor()
+    if (!(await p.getByRole('switch', { name: 'Am 1. des Monats erinnern' }).isChecked())) throw new Error('Erinnerung standardmäßig aus')
+    await p.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled(p)
+    await p.clock.setSystemTime(new Date('2026-11-30T09:00:00+01:00'))
+    await nav(p, 'Einstellungen').click(); await nav(p, 'Start').click()
+    if (await card(p).count()) throw new Error('Karte im selben Monat')
+    await p.clock.setSystemTime(new Date('2026-12-01T09:00:00+01:00'))
+    await nav(p, 'Einstellungen').click(); await nav(p, 'Start').click()
+    await card(p).waitFor()
+    if (!nbsp(await card(p).innerText()).includes('Letzte Sicherung: 02.11.2026')) throw new Error('Karte ohne Datum')
+    ok('Datensicherung zeigt „Letzte Sicherung: 02.11.2026“ und den Schalter (an); am 30.11. keine Karte, am 01.12. kommt sie zurück („Letzte Sicherung: 02.11.2026“)')
+
+    // Schalter aus → keine Karte, bleibt nach Neuladen aus
+    await openBackupPage(p)
+    await p.getByRole('switch', { name: 'Am 1. des Monats erinnern' }).uncheck()
+    mustB(await p.evaluate(() => localStorage.getItem('finanz-app:backup-reminder')), 'off', 'Schalter gespeichert')
+    await p.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled(p)
+    await nav(p, 'Start').click()
+    if (await card(p).count()) throw new Error('Karte trotz ausgeschalteter Erinnerung')
+    await reload(p, { password: PW_B })
+    await nav(p, 'Start').click()
+    if (await card(p).count()) throw new Error('Karte nach Neuladen trotz „aus“')
+    await p.close(); await c.close()
+    ok('Schalter „Am 1. des Monats erinnern“ aus: keine Karte, auch nach Neuladen nicht (finanz-app:backup-reminder = off)')
+  }
+
+  // Ohne Datei-Teilen (Desktop-Browser): Download
+  {
+    const { c, p } = await mkB({ share: 'none', download: true })
+    await ensureOpen(p)
+    await card(p).waitFor()
+    await p.waitForFunction(() => !document.querySelector('[aria-label="Monatliche Sicherung"] .pbtn')?.disabled)
+    const [d] = await Promise.all([p.waitForEvent('download'), card(p).getByRole('button', { name: 'Jetzt in iCloud sichern' }).click()])
+    mustB(d.suggestedFilename(), 'finanzklar-sicherung-2026-11-01.json', 'Download-Name')
+    const txt = fs.readFileSync(await d.path(), 'utf8')
+    mustB(JSON.parse(txt).format, 'finanzklar-vault-backup', 'Download-Format')
+    await card(p).waitFor({ state: 'detached' })
+    mustB(await lastKey(p), '2026-11-01', 'Datum nach Download')
+    await c.close()
+    ok('Ohne Teilen-Funktion (Fallback): die Sicherung wird als Datei geladen, Karte weg, Datum gemerkt')
+  }
+
+  // Wiederherstellen über Importieren: Kontext mit eigenem Tresor (TEST_PW) und eigener Buchung
+  {
+    const { c, p } = await mkB({ download: false })
+    await ensureOpen(p)
+    await addNote(p, '5,00', 'Lokal behalten?')
+    await openBackupPage(p)
+    const importFile = async (text) => {
+      await p.locator('input[type=file]').setInputFiles({ name: 'sicherung.json', mimeType: 'application/json', buffer: Buffer.from(text) })
+    }
+    const sheet = p.getByRole('dialog', { name: 'Sicherung entschlüsseln' })
+    const vaultBefore = await p.evaluate((k) => localStorage.getItem(k), KEY_VAULT)
+
+    await importFile(fileA)
+    await sheet.waitFor()
+    await p.fill('#vb-secret', 'falsch-falsch-falsch')
+    await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+    await sheet.getByRole('alert').filter({ hasText: 'Passwort oder Schlüssel falsch.' }).waitFor({ timeout: 60000 })
+    ok('Wiederherstellen (Importieren): falsches Passwort → „Passwort oder Schlüssel falsch.“, das Fenster bleibt offen')
+
+    await p.fill('#vb-secret', PW_B)
+    await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+    const dlg = p.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' })
+    await dlg.waitFor({ timeout: 60000 })
+    await dlg.getByRole('button', { name: 'Ersetzen' }).click()
+    await p.getByText(/Import erfolgreich: 1 Buchungen/).waitFor()
+    let d = await storedWhen(p, (x) => x.transactions.length === 1 && x.transactions[0].note === 'Zahnarzt Privat')
+    mustB(d.transactions.length, 1, 'Daten ersetzt')
+    mustB(await p.evaluate((k) => localStorage.getItem(k), KEY_VAULT) !== null, true, 'Tresor des Geräts vorhanden')
+    const hdr = JSON.parse(await p.evaluate((k) => localStorage.getItem(k), KEY_VAULT))
+    mustB(hdr.unlock.password.wrapped, JSON.parse(vaultBefore).unlock.password.wrapped, 'Passwort des Geräts unverändert')
+    ok('Wiederherstellen mit dem Passwort der Sicherung: „Alle Daten ersetzen?“ → Daten ersetzt (lokale Buchung weg), der Tresor des Geräts behält sein eigenes Passwort')
+
+    // Wiederherstellungsschlüssel (klein geschrieben, mit Leerzeichen statt Bindestrichen)
+    await nav(p, 'Start').click()
+    await addNote(p, '7,00', 'Noch eine lokale')
+    await openBackupPage(p)
+    await importFile(fileA)
+    await sheet.waitFor()
+    await p.fill('#vb-secret', keyA.toLowerCase().replace(/-/g, ' '))
+    await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+    await dlg.waitFor({ timeout: 60000 })
+    await dlg.getByRole('button', { name: 'Ersetzen' }).click()
+    d = await storedWhen(p, (x) => x.transactions.length === 1 && x.transactions[0].note === 'Zahnarzt Privat')
+    ok('Wiederherstellen mit dem Wiederherstellungsschlüssel der Sicherung (andere Schreibweise): Daten ersetzt')
+
+    // beschädigte / fremde Dateien
+    const broken = JSON.parse(fileA); broken.vault.data.ciphertext = broken.vault.data.ciphertext.replace(/^./, (x) => (x === 'A' ? 'B' : 'A'))
+    await importFile(JSON.stringify(broken))
+    await sheet.waitFor()
+    await p.fill('#vb-secret', PW_B)
+    await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+    await sheet.getByRole('alert').filter({ hasText: 'Die Datei ist beschädigt.' }).waitFor({ timeout: 60000 })
+    await p.keyboard.press('Escape')
+    await sheet.waitFor({ state: 'detached' })
+    const oldFmt = JSON.parse(fileA); oldFmt.version = 2
+    await importFile(JSON.stringify(oldFmt))
+    await sheet.waitFor()
+    await p.fill('#vb-secret', PW_B)
+    await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+    await sheet.getByRole('alert').filter({ hasText: 'Unbekanntes Dateiformat.' }).waitFor({ timeout: 60000 })
+    ok('Beschädigte Sicherung → „Die Datei ist beschädigt.“, unbekannte Version → „Unbekanntes Dateiformat.“ (Daten bleiben unverändert)')
+    await c.close()
+  }
+
+  // Wiederherstellen bei der Einrichtung (frisches Gerät)
+  {
+    const { c, p } = await mkB({ vault: false })
+    await p.locator(SETUP).waitFor()
+    await p.locator('input[type=file]').setInputFiles({ name: 'sicherung.json', mimeType: 'application/json', buffer: Buffer.from(fileA) })
+    const sheet = p.getByRole('dialog', { name: 'Sicherung entschlüsseln' })
+    await sheet.waitFor()
+    await p.fill('#vb-secret', PW_B + 'x')
+    await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+    await sheet.getByRole('alert').filter({ hasText: 'Passwort oder Schlüssel falsch.' }).waitFor({ timeout: 60000 })
+    await p.fill('#vb-secret', keyA)
+    await sheet.getByRole('button', { name: 'Entschlüsseln' }).click()
+    await p.locator(SETUP).getByText(/Sicherung geladen: 1 Buchungen/).waitFor({ timeout: 60000 })
+    const NEW_PW = 'Ganz-Neues-Passwort-9!'
+    await runSetup(p, { password: NEW_PW })
+    await p.locator(APPNAV).waitFor()
+    const d = await storedWhen(p, (x) => x.transactions.length === 1, NEW_PW)
+    mustB(d.transactions[0].note, 'Zahnarzt Privat', 'Daten aus der Sicherung')
+    await reload(p, { password: NEW_PW })
+    ok('Wiederherstellen bei der Einrichtung: Sicherung wählen, falscher Eintrag wird abgelehnt, Wiederherstellungsschlüssel öffnet sie, danach neues Passwort + Schlüssel; die Buchung ist im neuen Tresor, Entsperren nur mit dem neuen Passwort')
+    await c.close()
   }
 }
 
