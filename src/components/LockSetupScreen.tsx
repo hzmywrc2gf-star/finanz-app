@@ -1,15 +1,19 @@
-import { useState } from 'react'
-import type { FormEvent } from 'react'
-import { exportJSON } from '../data/backup'
+import { useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
+import { exportJSON, parseBackup } from '../data/backup'
+import { isVaultBackup } from '../data/vaultBackup'
+import type { AppData } from '../domain/types'
 import { generateRecoveryKey } from '../lib/crypto'
 import { todayISO } from '../domain/dates'
 import { downloadTextFile } from '../lib/download'
+import { ERR_TOO_BIG, MAX_FILE_BYTES } from '../lib/fileLimit'
 import { haptic } from '../lib/haptics'
 import { validateNewPassword } from '../lib/password'
 import { useFinance } from '../state/FinanceContext'
 import { useLock } from '../state/LockContext'
 import { BackupExportSheet } from './BackupExportSheet'
 import { ConfirmDialog } from './ConfirmDialog'
+import { VaultBackupImportSheet } from './VaultBackupImportSheet'
 import { PasswordFields } from './PasswordFields'
 import { RecoveryKeyBox } from './RecoveryKeyBox'
 
@@ -41,6 +45,11 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [confirmPlain, setConfirmPlain] = useState(false)
+  const [vaultFile, setVaultFile] = useState<string | null>(null)
+  const [restored, setRestored] = useState<AppData | null>(null) // decrypted backup waiting for "Ersetzen" (only if data exists)
+  const [restoredData, setRestoredData] = useState<AppData | null>(null) // confirmed backup, kept in memory only until `enable`
+  const [restoreMsg, setRestoreMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const hasData = data.transactions.length > 0 || data.transfers.length > 0 || data.recurring.length > 0
 
   function toKey(e: FormEvent) {
@@ -59,7 +68,7 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
     setBusy(true)
     setError(null)
     try {
-      await lock.enable(data, password, recoveryKey)
+      await lock.enable(restoredData ?? data, password, recoveryKey)
       setPassword('')
       setRepeat('')
       setStep(lock.passkeyLikely ? 'face' : 'done')
@@ -80,6 +89,44 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
       setError(errMsg(e))
     }
     setBusy(false)
+  }
+
+  async function onRestoreFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      if (file.size > MAX_FILE_BYTES) throw new Error(ERR_TOO_BIG)
+      const text = await file.text()
+      if (!isVaultBackup(text)) throw new Error('Das ist keine Finanzklar-Sicherung aus der Monatlichen Sicherung.')
+      setRestoreMsg(null)
+      setVaultFile(text)
+    } catch (err) {
+      setRestoreMsg({ ok: false, text: err instanceof Error ? err.message : 'Die Datei konnte nicht gelesen werden.' })
+    }
+  }
+
+  // The restored data stay in memory (component state) and never touch the plaintext repository: `lock.enable` writes
+  // them straight into the vault under a NEW password and recovery key and verifies the vault against exactly these data.
+  function applyRestored(next: AppData) {
+    try {
+      setRestoredData(next)
+      setRestoreMsg({ ok: true, text: `Sicherung geladen: ${next.transactions.length} Buchungen. Lege jetzt ein neues Passwort fest.` })
+    } catch (err) {
+      setRestoreMsg({ ok: false, text: err instanceof Error ? err.message : 'Wiederherstellen fehlgeschlagen.' })
+    }
+    setRestored(null)
+  }
+
+  function onRestoredJson(json: string) {
+    setVaultFile(null)
+    try {
+      const next = parseBackup(json)
+      if (hasData) setRestored(next)
+      else applyRestored(next)
+    } catch (err) {
+      setRestoreMsg({ ok: false, text: err instanceof Error ? err.message : 'Wiederherstellen fehlgeschlagen.' })
+    }
   }
 
   function finish() {
@@ -137,9 +184,18 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
               </button>
             </div>
           )}
+          {restoreMsg && (
+            <div className={restoreMsg.ok ? 'success' : 'error'} role={restoreMsg.ok ? 'status' : 'alert'}>
+              {restoreMsg.text}
+            </div>
+          )}
           <button className="btn" type="submit">
             Weiter
           </button>
+          <button type="button" className="link-btn plain-skip" onClick={() => fileRef.current?.click()}>
+            Sicherung wiederherstellen
+          </button>
+          <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onRestoreFile} />
         </form>
       )}
 
@@ -199,6 +255,17 @@ export function LockSetupScreen({ onDone }: { onDone: () => void }) {
         </div>
       )}
 
+      {vaultFile && <VaultBackupImportSheet fileText={vaultFile} onClose={() => setVaultFile(null)} onRestored={onRestoredJson} />}
+      {restored && (
+        <ConfirmDialog
+          title="Vorhandene Daten ersetzen?"
+          message={`Die Daten auf diesem Gerät werden durch die Sicherung ersetzt (${restored.transactions.length} Buchungen).`}
+          confirmLabel="Ersetzen"
+          danger
+          onCancel={() => setRestored(null)}
+          onConfirm={() => applyRestored(restored)}
+        />
+      )}
       {exporting && (
         <BackupExportSheet
           data={data}

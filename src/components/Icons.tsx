@@ -74,3 +74,4 @@ export const ShieldIcon = () => wrap(<><path d="M12 3.5 5 6v5.5c0 4.2 2.8 7.4 7 
 export const ArchiveIcon = () => wrap(<><rect x="3.5" y="4.5" width="17" height="4" rx="1" /><path d="M5 8.5V18a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 18V8.5" /><path d="M10 12.5h4" /></>, 18)
 export const TableIcon = () => wrap(<><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10" /></>, 18)
 export const ReceiptIcon = () => wrap(<><path d="M6 3.5h12v17l-2.5-1.6-1.8 1.6-1.7-1.6-1.8 1.6-1.7-1.6L6 20.5z" /><path d="M9.5 8.5h5M9.5 12h5" /></>, 20)
+export const CloudUpIcon = () => wrap(<><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5" /><path d="M12 20v-7" /><path d="m9 15.5 3-3 3 3" /></>)

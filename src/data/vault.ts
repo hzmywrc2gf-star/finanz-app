@@ -384,6 +384,13 @@ export function createVault({ store, iterations = PBKDF2_ITERATIONS }: { store: 
     exists,
     info,
     loadData,
+
+    /** The stored vault text exactly as it is (still encrypted), after checking that it is a readable vault. For the backup file. */
+    snapshot(): string {
+      const text = store().getItem(VAULT_KEY)
+      parseVault(text, iterations)
+      return text as string
+    },
     saveData,
     unlockWithPassword,
     unlockWithRecoveryKey,
