@@ -16,7 +16,7 @@ function dayLabel(date: string, events: number, finance: number): string {
 
 /**
  * The month as a 7 x 6 grid (Monday first). Today is a filled circle, the selected day a ring; below the number a filled dot
- * marks own events and a hollow dot marks payments (Verträge, Rechnungen). On wide screens (iPad) the cells also show up to two titles.
+ * marks own events and a hollow dot marks payments (Verträge, Rechnungen). On wide screens (iPad) the cells also show up to two titles (events first, then payments on sand).
  */
 export const MonthGrid = memo(function MonthGrid({
   weeks,
@@ -47,8 +47,12 @@ export const MonthGrid = memo(function MonthGrid({
           {week.map(({ date, inMonth }) => {
             const evs = events.get(date)
             const fin = finance.get(date)
-            const titles = evs?.slice(0, 2) ?? []
-            const more = (evs?.length ?? 0) - titles.length
+            const items = [
+              ...(evs ?? []).map((o) => ({ key: o.key, title: o.event.title, fin: false })),
+              ...(fin ?? []).map((f) => ({ key: f.key, title: f.title, fin: true })),
+            ]
+            const titles = items.slice(0, 2)
+            const more = items.length - titles.length
             return (
               <button
                 key={date}
@@ -70,8 +74,8 @@ export const MonthGrid = memo(function MonthGrid({
                 </span>
                 <span className="cal-titles" aria-hidden="true">
                   {titles.map((o) => (
-                    <span key={o.key} className="cal-title">
-                      {o.event.title}
+                    <span key={o.key} className="cal-title" data-fin={o.fin || undefined}>
+                      {o.title}
                     </span>
                   ))}
                   {more > 0 && <span className="cal-title more">+{more}</span>}

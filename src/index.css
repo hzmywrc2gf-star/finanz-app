@@ -2998,6 +2998,10 @@ html[data-privacy] #privacy-cover {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .cal-title[data-fin] {
+    background: var(--tint-sand);
+    border-left: 2px dashed var(--text-2);
+  }
   .cal-title.more {
     background: transparent;
     border-left-color: transparent;
