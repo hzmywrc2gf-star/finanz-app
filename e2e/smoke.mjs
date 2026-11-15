@@ -301,7 +301,7 @@ await dl.saveAs(file)
 const json = JSON.parse(fs.readFileSync(file, 'utf8'))
 if (dl.suggestedFilename() !== 'finanz-backup-2026-10-27.json' || json.transactions.length !== 5 || json.settings.startBalanceCents !== 100000)
   throw new Error('Export unvollständig ' + dl.suggestedFilename())
-if (json.version !== 7 || !Array.isArray(json.invoices) || json.settings.startCashCents !== 0 || json.transfers.length !== 0 || json.transactions.some((t) => t.account !== 'konto'))
+if (json.version !== 8 || !Array.isArray(json.invoices) || json.settings.startCashCents !== 0 || json.transfers.length !== 0 || json.transactions.some((t) => t.account !== 'konto'))
   throw new Error('Export: Version 7 / Bargeld-Felder fehlen')
 ok(`Export ${dl.suggestedFilename()}: Version 7, 5 Buchungen (alle auf dem Konto), Startguthaben 100000 Cent, Startbestand Bargeld 0, keine Umbuchungen`)
 // Daten ändern, dann Backup wieder einspielen
@@ -739,7 +739,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await tab('Budgets').click()
   await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 105,8 % | 23,10 € drüber', 'Nach Reload')
   const st = await stored()
-  if (st.version !== 7 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
+  if (st.version !== 8 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
     throw new Error('Gespeicherte Daten: Version/Budget falsch')
   ok('Budget bleibt nach Neuladen erhalten (gespeichert als Version 7, monthlyBudgetCents 40000)')
 
@@ -939,7 +939,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await noOverflow('Monat 375 px')
   const tabbar = await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button').evaluateAll((els) =>
     els.map((b) => { const r = b.getBoundingClientRect(), l = b.querySelector('span').getBoundingClientRect(); return { t: b.innerText, w: r.width, h: r.height, l: l.left - r.left, rr: r.right - l.right, ls: b.querySelector('span').scrollWidth > b.querySelector('span').clientWidth + 1 } }))
-  must(tabbar.map((t) => t.t).join(' '), 'Start Monat Budgets Einstellungen', 'Reihenfolge der Tabs')
+  must(tabbar.map((t) => t.t).join(' '), 'Start Monat Budgets Kalender Einstellungen', 'Reihenfolge der Tabs')
   must(await tab('Woche').count(), 0, 'Kein Tab „Woche“ mehr')
   const widths = tabbar.map((t) => t.w)
   if (Math.max(...widths) - Math.min(...widths) > 1 || Math.abs(widths.reduce((a, b) => a + b, 0) - 375) > 1) throw new Error('Tabs nicht gleichmäßig auf 375 px verteilt: ' + widths)
@@ -947,7 +947,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await page.screenshot({ path: `${SHOTS}/23-tabbar-4.png` })
   await page.screenshot({ path: `${SHOTS}/17b-monat-se.png`, fullPage: true })
   await page.setViewportSize({ width: 390, height: 664 })
-  ok('375 px: kein horizontaler Überlauf auf „Monat“, 4 Tabs (Start, Monat, Budgets, Einstellungen) gleich breit (je 93,75 px), ≥ 44 px, kein Tab „Woche“, Beschriftungen nicht abgeschnitten')
+  ok('375 px: kein horizontaler Überlauf auf „Monat“, 5 Tabs (Start, Monat, Budgets, Kalender, Einstellungen) gleich breit (je 75 px), ≥ 44 px, kein Tab „Woche“, Beschriftungen nicht abgeschnitten')
 
   // Navigation: September, August, zurück
   await page.getByRole('button', { name: 'Vorheriger Monat' }).click()
@@ -1271,7 +1271,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const file2 = `${SHOTS}/../backup-test.json`
   await dl2.saveAs(file2)
   const j2 = JSON.parse(fs.readFileSync(file2, 'utf8'))
-  must(j2.version, 7, 'Export Version'); must(j2.settings.startCashCents, 2000, 'Export Startbestand Bargeld')
+  must(j2.version, 8, 'Export Version'); must(j2.settings.startCashCents, 2000, 'Export Startbestand Bargeld')
   must(JSON.stringify(j2.transfers.map((t) => [t.direction, t.amountCents, t.date, t.note])), '[["withdrawal",15000,"2026-10-27","Geldautomat"]]', 'Export Umbuchungen')
   must(j2.transactions.filter((t) => t.account === 'bargeld').map((t) => t.amountCents).join(), '4550', 'Export: Barbuchung')
   must(j2.transactions.length, 12, 'Export: 12 Buchungen')
@@ -1632,7 +1632,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p3.waitForTimeout(200)
   const s3 = await readStored(p3)
   must3(await p3.evaluate(() => localStorage.getItem('finanz-app:v1')), null, 'Klartext nach Einrichtung weg')
-  if (s3.version !== 7 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
+  if (s3.version !== 8 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
     throw new Error('Migration v3: gespeicherte Daten falsch ' + JSON.stringify(s3).slice(0, 300))
   await ctx3.close()
   ok('Migration v3 → v4 beim Laden: Kontostand 954,01 €, „Bargeld 0,00 € · Gesamt 954,01 €“, alte Buchung liegt auf dem Konto, Einrichtung übernimmt die Daten in den Tresor, gespeichert als Version 7 (startCashCents 0, keine Umbuchungen)')
@@ -1750,7 +1750,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p4.getByRole('button', { name: 'Sichern' }).click()
   await p4.waitForTimeout(200)
   const s4m = await readStored(p4)
-  if (s4m.version !== 7 || s4m.recurring[0].autoBook !== true) throw new Error('Migration v4: ' + JSON.stringify(s4m.recurring))
+  if (s4m.version !== 8 || s4m.recurring[0].autoBook !== true) throw new Error('Migration v4: ' + JSON.stringify(s4m.recurring))
   await ctx4.close()
   ok('Migration v4 → v5 beim Laden: bestehender Vertrag „Miete“ hat „Automatisch buchen“ an, gespeichert als Version 7 mit autoBook true')
 }
@@ -3844,7 +3844,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if ((await text7(p7.getByTestId('balance-sub'))).replace(/\s+/g, ' ') !== 'Bargeld 0,00 € Gesamt 0,00 €') throw new Error('Rechnung: balance-sub verändert')
   if (await card7().count()) throw new Error('Rechnung: Karte schon vor dem Erinnerungstag')
   let s = await st7()
-  if (s.version !== 7 || s.transactions.length !== 0 || s.invoices.length !== 1 || s.invoices[0].amountCents !== 13980 || s.invoices[0].dueDate !== '2026-11-03' || s.invoices[0].purchaseDate !== '2026-10-20' || s.invoices[0].note !== 'Otto' || s.invoices[0].categoryId !== 'expense-kleidung')
+  if (s.version !== 8 || s.transactions.length !== 0 || s.invoices.length !== 1 || s.invoices[0].amountCents !== 13980 || s.invoices[0].dueDate !== '2026-11-03' || s.invoices[0].purchaseDate !== '2026-10-20' || s.invoices[0].note !== 'Otto' || s.invoices[0].categoryId !== 'expense-kleidung')
     throw new Error('Rechnung: gespeicherter Stand ' + JSON.stringify(s.invoices))
   ok('Kauf auf Rechnung: Schalter nur bei neuen Ausgaben, Konto/Bargeld weg, „Kaufdatum“ + „Zahlen bis“ (heute + 14, folgt dem Kaufdatum, Fehler bei früherem Datum), Hinweis, „Rechnung sichern“; Kalender-Dialog („Erinnerung am 31.10.“) → .ics (CRLF, DTSTART 31.10. 09:00, SUMMARY, DESCRIPTION, VALARM); Kontostand unverändert, Chip „Offene Rechnungen 139,80 €“, balance-sub intakt, Rechnung gespeichert (keine Buchung)')
 
@@ -3981,7 +3981,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await openSettings(p7, 'Datensicherung')
   const bk = await plainExport(p7)
   const bkJson = JSON.parse(fs.readFileSync(await bk.path(), 'utf8'))
-  if (bkJson.version !== 7 || bkJson.invoices.length !== 2 || !bkJson.invoices.some((i) => i.amountCents === 11980 && i.snoozedUntil === '2026-11-02')) throw new Error('Rechnung: Backup-Export ' + JSON.stringify(bkJson.invoices))
+  if (bkJson.version !== 8 || bkJson.invoices.length !== 2 || !bkJson.invoices.some((i) => i.amountCents === 11980 && i.snoozedUntil === '2026-11-02')) throw new Error('Rechnung: Backup-Export ' + JSON.stringify(bkJson.invoices))
   const tmp = fs.mkdtempSync(`${process.env.TMPDIR ?? '/tmp'}/rechnung-`)
   const v6 = { ...bkJson, version: 6 }; delete v6.invoices
   fs.writeFileSync(`${tmp}/v6.json`, JSON.stringify(v6))
@@ -3993,10 +3993,10 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p7.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).getByRole('button', { name: 'Ersetzen' }).click()
   await has7('Import erfolgreich')
   s = await storedWhen(p7, (d) => d.invoices.length === 0)
-  if (s.version !== 7) throw new Error('Rechnung: v6-Import ' + s.version)
+  if (s.version !== 8) throw new Error('Rechnung: v6-Import ' + s.version)
   await tabOn(p7, 'Start').click()
   if (await chip7().count()) throw new Error('Rechnung: Chip nach v6-Import')
-  ok('Backup: Export hat Version 7 mit beiden Rechnungen (inkl. Aufschub); ungültige Rechnung („Ein Betrag bei Rechnungen …“) wird abgelehnt; ein v6-Backup ohne Rechnungen lässt sich importieren (migriert zu Version 7, keine Rechnungen, Chip weg)')
+  ok('Backup: Export hat Version 8 mit beiden Rechnungen (inkl. Aufschub); ungültige Rechnung („Ein Betrag bei Rechnungen …“) wird abgelehnt; ein v6-Backup ohne Rechnungen lässt sich importieren (migriert zu Version 8, keine Rechnungen, Chip weg)')
   await ctx7.close()
 }
 
@@ -4014,7 +4014,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
       id: `t${i}`, kind: 'expense', amountCents: 1500 + i * 400, date: `2026-10-${String(1 + (i % 26)).padStart(2, '0')}`,
       categoryId: `expense-${names[i % 6].toLowerCase()}`, note: `Posten ${i}`, account: 'konto', createdAt: 1700000000000 + i,
     }))
-    return { version: 7, settings: { startBalanceCents: 100000, startCashCents: 0 }, categories, transactions, recurring: [], transfers: [], invoices: [] }
+    return { version: 8, settings: { startBalanceCents: 100000, startCashCents: 0 }, categories, transactions, recurring: [], transfers: [], invoices: [], events: [] }
   }
   const mkE = async ({ reduced = false } = {}) => {
     const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', reducedMotion: reduced ? 'reduce' : 'no-preference' })
@@ -4471,6 +4471,348 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.locator(LOCKED).waitFor({ timeout: 10000 })
     await c.close()
     ok('Hängendes navigator.share(): Seite versteckt, nach 2 Minuten (Frist) ist die App trotzdem gesperrt (Auto-Sperre läuft nicht endlos weiter)')
+  }
+}
+
+// ---------- Kalender: Monatsraster, Termine, Wiederholung, Tagesansicht, Zahlungen, .ics-Import/-Export, iPad (frischer Kontext, Heute = So 15.11.2026) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`Kalender – ${what}: erwartet ${JSON.stringify(expected)}, war ${JSON.stringify(actual)}`) }
+  const mkK = async (opts = {}) => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], acceptDownloads: true, locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', ...opts })
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-11-15T10:00:00+01:00') })
+    await withVault(p); await keepAlive(p); await p.goto(URL); await ensureOpen(p)
+    return { c, p }
+  }
+  const swipeK = async (p, { x0, y0, x1, y1 }) => {
+    const cdp = await p.context().newCDPSession(p)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] })
+    for (let i = 1; i <= 10; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + ((x1 - x0) * i) / 10, y: y0 + ((y1 - y0) * i) / 10 }] }); await sleep(25) }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
+  const { c: cK, p: pK } = await mkK()
+  const navK = (name) => tabOn(pK, name)
+  const cell = (d) => pK.locator(`.cal-cell[data-date="${d}"]`)
+  const h1K = async () => (await pK.locator('h1').first().innerText()).trim()
+  const waitH1K = async (t) => { for (let i = 0; i < 30; i++) { if ((await h1K()) === t) return; await sleep(100) } throw new Error(`Kalender – Überschrift erwartet "${t}", war "${await h1K()}"`) }
+  const listK = async () => (await pK.getByTestId('cal-event').allInnerTexts()).map((t) => nbsp(t).replace(/\s*\n\s*/g, ' | '))
+  const cssK = (l, prop) => l.evaluate((e, p) => getComputedStyle(e)[p], prop)
+  const toastK = (t) => pK.getByRole('status').filter({ hasText: t })
+  const sheetClosed = () => pK.getByRole('dialog').waitFor({ state: 'detached' })
+  const startK = () => pK.locator('#ev-title').waitFor()
+  const stK = (pred) => storedWhen(pK, pred)
+  const paneIdleK = () => pK.waitForFunction(() => { const el = document.querySelector('.swipe-pane'); return el && el.style.transform === '' && !el.hasAttribute('data-dragging') && el.style.opacity === '' })
+  const eventsK = async (pred) => (await stK((d) => pred(d.events))).events
+
+  // --- Tab-Leiste mit 5 Tabs, Kalender-Monat ---
+  await pK.setViewportSize({ width: 375, height: 667 })
+  const tabs = await pK.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button').evaluateAll((els) =>
+    els.map((b) => { const r = b.getBoundingClientRect(), l = b.querySelector('span:last-child'); return { t: b.innerText, w: Math.round(r.width * 10) / 10, cut: l.scrollWidth > l.clientWidth + 1 } }))
+  must(tabs.map((t) => t.t), ['Start', 'Monat', 'Budgets', 'Kalender', 'Einstellungen'], 'Tabs')
+  if (tabs.some((t) => t.cut || t.w < 44)) throw new Error('Kalender – Tab-Beschriftung abgeschnitten: ' + JSON.stringify(tabs))
+  await navK('Kalender').click()
+  await waitH1K('November 2026')
+  must(await pK.locator('.cal-wd').allInnerTexts(), ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'], 'Wochentage')
+  must(await pK.locator('.cal-week').first().locator('.cal-cell').evaluateAll((els) => els.map((e) => e.dataset.date)),
+    ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01'], 'erste Woche (1.11. ist ein Sonntag)')
+  must(await pK.locator('.cal-cell').count(), 42, '6 Wochen')
+  must((await pK.locator('.cal-cell').last().getAttribute('data-date')), '2026-12-06', 'letzter Tag')
+  must(await pK.locator('.cal-cell[data-out="false"]').count(), 30, '30 Tage im November')
+  must(await pK.locator('.cal-cell[data-today="true"]').evaluateAll((els) => els.map((e) => e.dataset.date)), ['2026-11-15'], 'heute')
+  must(await cssK(cell('2026-11-15').locator('.cal-num'), 'backgroundColor'), 'rgb(30, 41, 59)', 'heute gefüllt')
+  must(await cell('2026-11-15').getAttribute('aria-selected'), 'true', 'heute ausgewählt')
+  await pK.getByText('Keine Termine').waitFor()
+  await pK.screenshot({ path: `${SHOTS}/k1-monat-leer-375.png` })
+  await pK.setViewportSize({ width: 390, height: 664 })
+  ok('Kalender: 5 Tabs (Start, Monat, Budgets, Kalender, Einstellungen) bei 375 px unbeschnitten; November 2026 beginnt am Montag 26.10. (1.11. = Sonntag), 6 Wochen, 30 Tage im Monat, Wochenkopf Mo–So, heute (15.11.) gefüllt und ausgewählt, „Keine Termine“')
+
+  // --- Zahlungen: Backup (v7, ohne Termine) einspielen ---
+  const tmpK = fs.mkdtempSync(`${process.env.TMPDIR ?? '/tmp'}/kalender-`)
+  const cats = [...['Lebensmittel', 'Fixkosten', 'Mobilität', 'Freizeit', 'Kleidung', 'Gesundheit', 'Sonstiges'].map((n) => ({ id: `expense-${n.toLowerCase()}`, name: n, kind: 'expense', builtIn: n === 'Sonstiges' })),
+    ...['Gehalt', 'Nebeneinkünfte', 'Sonstiges'].map((n) => ({ id: `income-${n.toLowerCase()}`, name: n, kind: 'income', builtIn: n === 'Sonstiges' }))]
+  const v7 = {
+    version: 7, settings: { startBalanceCents: 100000, startCashCents: 0 }, categories: cats, transactions: [], transfers: [],
+    recurring: [
+      { id: 'r-miete', kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: 'Miete', interval: 'monthly', dayOfMonth: 1, startDate: '2026-01-01', bookedThrough: '2026-11-15', autoBook: true },
+      { id: 'r-gehalt', kind: 'income', amountCents: 250000, categoryId: 'income-gehalt', note: 'Gehalt', interval: 'monthly', dayOfMonth: 28, startDate: '2026-01-28', bookedThrough: '2026-11-15', autoBook: true },
+    ],
+    invoices: [{ id: 'i-otto', createdAt: 1, note: 'Otto', categoryId: 'expense-kleidung', amountCents: 13980, purchaseDate: '2026-11-06', dueDate: '2026-11-20' }],
+  }
+  fs.writeFileSync(`${tmpK}/v7.json`, JSON.stringify(v7))
+  await openSettings(pK, 'Datensicherung')
+  await pK.locator('input[type=file]').setInputFiles(`${tmpK}/v7.json`)
+  await pK.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).getByRole('button', { name: 'Ersetzen' }).click()
+  await pK.getByText('Import erfolgreich').waitFor()
+  const imported = await stK((d) => d.recurring.length === 2)
+  must([imported.version, imported.events], [8, []], 'v7-Backup wird zu Version 8 mit leeren Terminen')
+  ok('Backup v7 (ohne Termine) lässt sich importieren: wird zu Version 8 mit events []')
+
+  // --- Termin anlegen: Zeitfelder, Ende folgt dem Beginn, Punkt + Listeneintrag ---
+  await navK('Kalender').click()
+  await pK.getByRole('button', { name: 'Termin hinzufügen', exact: true }).click()
+  await startK()
+  must(await pK.locator('#ev-start-d').inputValue(), '2026-11-15', 'neuer Termin am ausgewählten Tag')
+  await pK.getByRole('button', { name: 'Sichern', exact: true }).click()
+  await pK.getByRole('alert').filter({ hasText: 'Bitte einen Titel eingeben.' }).waitFor()
+  await pK.fill('#ev-title', 'Zahnarzt'); await pK.fill('#ev-loc', 'Praxis Dr. Weber')
+  await pK.fill('#ev-start-d', '2026-11-16'); await pK.fill('#ev-start-t', '09:30')
+  must([await pK.locator('#ev-end-d').inputValue(), await pK.locator('#ev-end-t').inputValue()], ['2026-11-16', '10:30'], 'Ende folgt dem Beginn (+1 h)')
+  await pK.fill('#ev-end-t', '09:00')
+  await pK.getByRole('button', { name: 'Sichern', exact: true }).click()
+  await pK.getByRole('alert').filter({ hasText: 'Das Ende muss nach dem Beginn liegen.' }).waitFor()
+  await pK.fill('#ev-end-t', '10:30')
+  await pK.screenshot({ path: `${SHOTS}/k2-termin-sheet.png` })
+  await pK.getByRole('button', { name: 'Sichern', exact: true }).click(); await sheetClosed()
+  await cell('2026-11-16').click()
+  must(await listK(), ['09:30 – 10:30 | Zahnarzt | Praxis Dr. Weber'], 'Liste am 16.11.')
+  must(await cell('2026-11-16').locator('.cal-dot:not(.hollow)').count(), 1, 'Punkt am 16.11.')
+  must(await cell('2026-11-17').locator('.cal-dot:not(.hollow)').count(), 0, 'kein Punkt am 17.11.')
+  let ev = await eventsK((e) => e.length === 1)
+  must([ev[0].title, ev[0].start, ev[0].end, ev[0].allDay, ev[0].location], ['Zahnarzt', '2026-11-16T09:30', '2026-11-16T10:30', false, 'Praxis Dr. Weber'], 'gespeicherter Termin')
+  ok('Termin anlegen: Titel Pflicht, Ende vor Beginn abgelehnt, Ende folgt dem Beginn (+1 h); danach Punkt unter dem 16.11., Listeneintrag „09:30 – 10:30 · Zahnarzt · Ort“, lokal gespeichert (2026-11-16T09:30)')
+
+  // --- Bearbeiten ---
+  await pK.getByTestId('cal-event').click()
+  await pK.getByRole('dialog', { name: 'Termin bearbeiten' }).waitFor()
+  await pK.fill('#ev-title', 'Zahnarzt Dr. Weber')
+  await pK.getByRole('button', { name: 'Sichern', exact: true }).click(); await sheetClosed()
+  must((await listK())[0].includes('Zahnarzt Dr. Weber'), true, 'Titel bearbeitet')
+  ok('Termin bearbeiten: neuer Titel erscheint in der Liste')
+
+  // --- Wiederholung wöchentlich, einzelne vs. alle löschen, Rückgängig ---
+  await pK.getByRole('button', { name: 'Termin hinzufügen', exact: true }).click(); await startK()
+  await pK.fill('#ev-title', 'Yoga'); await pK.fill('#ev-start-d', '2026-11-17'); await pK.fill('#ev-start-t', '18:00')
+  await pK.selectOption('#ev-repeat', 'weekly')
+  await pK.screenshot({ path: `${SHOTS}/k3-termin-wiederholung.png` })
+  await pK.getByRole('button', { name: 'Sichern', exact: true }).click(); await sheetClosed()
+  for (const d of ['2026-11-17', '2026-11-24', '2026-12-01']) must(await cell(d).locator('.cal-dot:not(.hollow)').count(), 1, `Yoga-Punkt ${d}`)
+  must(await cell('2026-11-18').locator('.cal-dot:not(.hollow)').count(), 0, 'kein Yoga am 18.11.')
+  await cell('2026-11-24').click()
+  must(await listK(), ['18:00 – 19:00 | Yoga'], 'Yoga am 24.11.')
+  await pK.getByTestId('cal-event').click()
+  await pK.getByRole('button', { name: 'Termin löschen' }).click()
+  const del = pK.getByRole('alertdialog', { name: 'Termin löschen?' })
+  await del.getByRole('button', { name: 'Nur diesen Termin' }).click(); await sheetClosed()
+  must(await cell('2026-11-24').locator('.cal-dot:not(.hollow)').count(), 0, '24.11. ohne Yoga')
+  must(await cell('2026-11-17').locator('.cal-dot:not(.hollow)').count(), 1, '17.11. mit Yoga')
+  must(await cell('2026-12-01').locator('.cal-dot:not(.hollow)').count(), 1, '1.12. mit Yoga')
+  ev = await eventsK((e) => e.length === 2 && e.find((x) => x.title === 'Yoga')?.exdates?.length === 1)
+  must(ev.find((x) => x.title === 'Yoga').exdates, ['2026-11-24'], 'exdates')
+  await toastK('Termin gelöscht').getByRole('button', { name: 'Rückgängig' }).click()
+  await eventsK((e) => e.find((x) => x.title === 'Yoga')?.exdates === undefined)
+  must(await cell('2026-11-24').locator('.cal-dot:not(.hollow)').count(), 1, '24.11. nach Rückgängig wieder mit Yoga')
+  await pK.getByTestId('cal-event').click()
+  await pK.getByRole('button', { name: 'Termin löschen' }).click()
+  await del.getByRole('button', { name: 'Alle Termine' }).click(); await sheetClosed()
+  await eventsK((e) => e.length === 1)
+  await toastK('Termin gelöscht').getByRole('button', { name: 'Rückgängig' }).click()
+  await eventsK((e) => e.length === 2)
+  ok('Wöchentlich wiederholen (17.11., 24.11., 1.12. mit Punkt, 18.11. ohne); „Nur diesen Termin“ blendet nur den 24.11. aus (exdates), „Rückgängig“ bringt ihn zurück; „Alle Termine“ löscht die Serie, „Rückgängig“ stellt sie wieder her')
+
+  // --- Monat wischen und Monatspfeile, „Heute“ ---
+  await cell('2026-11-15').click()
+  await swipeK(pK, { x0: 330, y0: 330, x1: 40, y1: 335 })
+  await waitH1K('Dezember 2026'); await paneIdleK()
+  must(await cell('2026-12-15').getAttribute('aria-selected'), 'true', 'gleicher Tag im nächsten Monat ausgewählt')
+  await swipeK(pK, { x0: 60, y0: 330, x1: 340, y1: 335 })
+  await waitH1K('November 2026'); await paneIdleK()
+  await pK.getByRole('button', { name: 'Nächster Monat' }).click(); await waitH1K('Dezember 2026')
+  await pK.getByRole('button', { name: 'Heute', exact: true }).click(); await waitH1K('November 2026')
+  must(await cell('2026-11-15').getAttribute('aria-selected'), 'true', 'Heute springt zurück')
+  ok('Monat wischen: links = Dezember (gleicher Tag 15.12. ausgewählt), rechts = zurück; Monatspfeil und „Heute“ funktionieren')
+
+  // --- Zahlungen im Kalender (Vertrag, Rechnung), Beträge rot/grün ---
+  must(await cell('2026-11-20').locator('.cal-dot.hollow').count(), 1, 'hohler Punkt am 20.11. (Rechnung)')
+  await cell('2026-11-20').click()
+  const fin = pK.getByTestId('cal-finance')
+  must(nbsp((await fin.innerText()).replace(/\s*\n\s*/g, ' | ')), 'Rechnung | Zahlen bis: Otto | −139,80 €', 'Rechnung am 20.11.')
+  must(await cssK(fin.locator('.cal-amt'), 'color'), 'rgb(220, 38, 38)', 'Rechnungsbetrag rot')
+  await cell('2026-11-28').click()
+  must(nbsp((await fin.innerText()).replace(/\s*\n\s*/g, ' | ')), 'Vertrag | Gehalt | +2.500,00 €', 'Gehalt am 28.11.')
+  must(await cssK(fin.locator('.cal-amt'), 'color'), 'rgb(4, 120, 87)', 'Gehalt grün')
+  await pK.screenshot({ path: `${SHOTS}/k4-tag-zahlungen.png` })
+  await cell('2026-11-01').click()
+  must(nbsp((await fin.innerText()).replace(/\s*\n\s*/g, ' | ')), 'Vertrag | Miete | −800,00 €', 'Miete am 1.11.')
+  await cell('2026-11-20').click()
+  await fin.click()
+  await pK.getByRole('dialog', { name: 'Rechnung' }).waitFor()
+  await pK.keyboard.press('Escape'); await sheetClosed()
+  await cell('2026-11-28').click(); await fin.click()
+  const vs = pK.getByRole('dialog', { name: 'Vertrag' })
+  await vs.waitFor()
+  await vs.getByRole('button', { name: 'Zu den Verträgen' }).click()
+  await pK.getByRole('heading', { name: 'Verträge', level: 1 }).waitFor()
+  ok('Zahlungen im Kalender: Miete 1.11. (−800,00 € rot), Rechnung „Zahlen bis: Otto“ 20.11. (−139,80 € rot, hohler Punkt, öffnet das Rechnungs-Sheet), Gehalt 28.11. (+2.500,00 € grün, Vertrag-Sheet mit „Zu den Verträgen“ → Verträge-Seite)')
+  await navK('Kalender').click(); await waitH1K('November 2026')
+
+  // --- Tagesansicht: Zeitleiste, Überlappung, Wischen, leeren Slot antippen ---
+  await pK.getByRole('button', { name: 'Termin hinzufügen', exact: true }).click(); await startK()
+  await pK.fill('#ev-title', 'Besprechung'); await pK.fill('#ev-start-d', '2026-11-16'); await pK.fill('#ev-start-t', '10:00'); await pK.fill('#ev-end-t', '11:00')
+  await pK.getByRole('button', { name: 'Sichern', exact: true }).click(); await sheetClosed()
+  await cell('2026-11-16').click()
+  await pK.getByRole('button', { name: /^Tagesansicht: Montag, 16\. November/ }).click(); await settled(pK)
+  await waitH1K('16. November')
+  must(await pK.getByTestId('tl-event').count(), 2, 'zwei Blöcke am 16.11.')
+  const boxes = await pK.getByTestId('tl-event').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), w: Math.round(r.width), t: e.innerText.split('\n')[0] } }))
+  boxes.sort((a, b) => a.x - b.x)
+  if (!(boxes[1].x - boxes[0].x > 60 && Math.abs(boxes[0].w - boxes[1].w) <= 4)) throw new Error('Kalender – Überlappung nicht in zwei Spalten: ' + JSON.stringify(boxes))
+  must(boxes.map((b) => b.t), ['Zahnarzt Dr. Weber', 'Besprechung'], 'Spaltenreihenfolge')
+  must(await pK.locator('.day-chip').count(), 7, 'Wochenleiste')
+  must(await pK.locator('.day-chip[data-selected="true"] .dn').innerText(), '16', 'gewählter Tag in der Leiste')
+  must(await pK.evaluate(() => window.scrollY > 200), true, 'Zeitleiste öffnet bei etwa 7 Uhr')
+  must(await pK.getByTestId('now-line').count(), 0, 'keine Jetzt-Linie an anderen Tagen')
+  await pK.screenshot({ path: `${SHOTS}/k5-tagesansicht.png` })
+  await swipeK(pK, { x0: 330, y0: 400, x1: 50, y1: 405 })
+  await waitH1K('17. November'); await paneIdleK()
+  must(await pK.getByTestId('tl-event').allInnerTexts().then((t) => t.map((x) => x.split('\n')[0])), ['Yoga'], 'Yoga am 17.11.')
+  await swipeK(pK, { x0: 60, y0: 400, x1: 340, y1: 405 })
+  await waitH1K('16. November'); await paneIdleK()
+  await swipeK(pK, { x0: 60, y0: 400, x1: 340, y1: 405 })
+  await waitH1K('15. November'); await paneIdleK()
+  must(await pK.locator('.day-chip[data-today="true"][data-selected="true"]').count(), 1, 'heute in der Leiste (Sonntag)')
+  must(await pK.getByTestId('now-line').count(), 1, 'Jetzt-Linie heute')
+  await swipeK(pK, { x0: 330, y0: 400, x1: 50, y1: 405 }); await waitH1K('16. November'); await paneIdleK()
+  await pK.getByRole('button', { name: 'Dienstag, 17. November' }).click(); await waitH1K('17. November')
+  await pK.getByTestId('timeline').click({ position: { x: 200, y: 14 * 56 + 28 } })
+  await pK.getByRole('dialog', { name: 'Neuer Termin' }).waitFor()
+  must([await pK.locator('#ev-start-d').inputValue(), await pK.locator('#ev-start-t').inputValue(), await pK.locator('#ev-end-t').inputValue()], ['2026-11-17', '14:00', '15:00'], 'Slot 14 Uhr')
+  await pK.keyboard.press('Escape'); await sheetClosed()
+  await pK.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled(pK)
+  await waitH1K('November 2026')
+  ok('Tagesansicht: Wochenleiste, Zeitleiste öffnet bei ~7 Uhr, überlappende Termine (Zahnarzt 9:30–10:30 / Besprechung 10–11) in zwei gleich breiten Spalten, Wischen links/rechts wechselt den Tag (Yoga am 17.11.), Jetzt-Linie nur heute, Tippen auf 14 Uhr öffnet „Neuer Termin“ 14:00–15:00, Zurück zum Monat')
+
+  // --- .ics-Export eines Termins ---
+  await cell('2026-11-17').click()
+  await pK.getByTestId('cal-event').click()
+  const [dlI] = await Promise.all([pK.waitForEvent('download'), pK.getByRole('button', { name: 'In den Apple-Kalender übernehmen' }).click()])
+  const icsT = fs.readFileSync(await dlI.path(), 'utf8')
+  for (const part of ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:Yoga', 'DTSTART:20261117T180000', 'DTEND:20261117T190000', 'RRULE:FREQ=WEEKLY', 'END:VEVENT']) if (!icsT.includes(part)) throw new Error(`Kalender – .ics ohne "${part}":\n${icsT}`)
+  must(dlI.suggestedFilename(), 'termin-2026-11-17.ics', 'Dateiname')
+  await pK.keyboard.press('Escape'); await sheetClosed()
+  ok('„In den Apple-Kalender übernehmen“: termin-2026-11-17.ics mit VEVENT, SUMMARY:Yoga, DTSTART:20261117T180000, RRULE:FREQ=WEEKLY')
+
+  // --- Import: Hilfe, Datei ohne Endung, Vorschau, Zeitzonen, Rückgängig, erneuter Import ---
+  const FIX = 'e2e/fixtures/kalender-mac.ics'
+  fs.copyFileSync(FIX, `${tmpK}/kalender-export`) // Safari kann Downloads ohne Endung ablegen
+  const before = (await stK(() => true)).events.length
+  await pK.getByRole('button', { name: 'Kalender importieren' }).first().click()
+  const imp = pK.getByRole('dialog', { name: 'Kalender importieren' })
+  await imp.waitFor()
+  const helpText = nbsp(await imp.innerText())
+  for (const t of ['Mit dem Mac', 'Ablage → Exportieren → Exportieren', 'iCloud Drive', 'Nur mit iPhone oder iPad', 'Öffentlicher Kalender', 'Link teilen', 'webcal://', 'https://', 'In Dateien sichern', 'Danach „Öffentlicher Kalender“ wieder ausschalten – sonst kann jeder mit dem Link deine Termine sehen.', 'einmalige Übernahme', 'nur auf diesem Gerät']) {
+    if (!helpText.includes(t)) throw new Error(`Kalender – Hilfetext ohne "${t}"`)
+  }
+  const warnColor = await cssK(imp.locator('.cal-warning'), 'color')
+  must(warnColor, 'rgb(194, 65, 12)', 'Warnung orange (nicht rot/grün)')
+  must(await imp.locator('input[type=file]').getAttribute('accept'), null, 'Dateiwahl ohne accept-Sperre')
+  await pK.screenshot({ path: `${SHOTS}/k6-import-hilfe.png` })
+  await imp.locator('input[type=file]').setInputFiles(`${tmpK}/v7.json`)
+  await imp.getByRole('alert').filter({ hasText: 'Das ist keine Kalender-Datei.' }).waitFor()
+  await imp.locator('input[type=file]').setInputFiles(`${tmpK}/kalender-export`)
+  const prev = pK.getByRole('dialog', { name: 'Termine importieren' })
+  await prev.waitFor()
+  must(nbsp(await prev.getByTestId('import-summary').innerText()), '8 neue Termine · 1 vereinfacht · 1 abgesagt (übersprungen)', 'Vorschau-Zähler')
+  must(await prev.locator('.cal-preview li').count(), 8, 'Vorschauzeilen')
+  await pK.screenshot({ path: `${SHOTS}/k7-import-vorschau.png` })
+  await prev.getByRole('button', { name: 'Importieren (8)' }).click(); await sheetClosed()
+  await toastK('8 Termine importiert').waitFor()
+  const all = (await eventsK((e) => e.length === before + 8)).filter((e) => e.importUid)
+  must(all.length, 8, '8 importierte Termine gespeichert')
+  const ny = all.find((e) => e.title === 'Call New York')
+  must([ny.start, ny.end], ['2026-10-26T14:00', '2026-10-26T15:00'], 'New York 09:00 EDT = 14:00 in Berlin (nach der Zeitumstellung)')
+  const tel = all.find((e) => e.title.startsWith('Telefonat'))
+  must(tel.start, '2026-11-17T14:00', 'UTC 13:00Z = 14:00 Berlin (Winterzeit)')
+  must(all.find((e) => e.title === 'Urlaub').end, '2026-12-28', 'Urlaub: exklusives Ende wird inklusiv')
+  must(all.some((e) => e.title === 'Zahnarzt' && e.importUid), false, 'abgesagter Termin fehlt')
+  // sichtbar an den erwarteten Tagen
+  await cell('2026-11-16').click()
+  must(await listK(), ['09:30 – 10:30 | Zahnarzt Dr. Weber | Praxis Dr. Weber', '10:00 – 11:00 | Besprechung', '14:00 – 15:00 | Team-Meeting (verschoben)'], 'Liste 16.11. (verschobenes Team-Meeting)')
+  await cell('2026-11-11').click()
+  must((await listK()).some((t) => t.includes('Team-Meeting')), false, 'Team-Meeting am 11.11. entfällt (EXDATE)')
+  await cell('2026-11-18').click()
+  must((await listK()).some((t) => t.startsWith('10:00 – 11:00 | Team-Meeting | Büro, Raum 4')), true, 'Team-Meeting am Mittwoch 18.11.')
+  await cell('2026-11-17').click()
+  must((await listK()).some((t) => t.startsWith('14:00 – 15:00 | Telefonat mit Steuerberater')), true, 'Telefonat 17.11. 14:00')
+  await cell('2026-11-20').click()
+  must((await listK()).some((t) => t.startsWith('ganztägig | Geburtstag Anna')), true, 'Geburtstag (jährlich, ganztägig) 20.11.')
+  await cell('2026-11-05').click()
+  must((await listK()).some((t) => t.startsWith('19:00 – 22:00 | Stammtisch')), true, 'Stammtisch (vereinfacht) 5.11.')
+  await cell('2026-10-26').click(); await waitH1K('Oktober 2026')
+  must((await listK()).some((t) => t.startsWith('14:00 – 15:00 | Call New York')), true, 'Call New York 26.10. 14:00')
+  await pK.getByRole('button', { name: 'Heute', exact: true }).click(); await waitH1K('November 2026')
+  await pK.getByRole('button', { name: 'Nächster Monat' }).click(); await waitH1K('Dezember 2026')
+  await cell('2026-12-23').click()
+  must((await listK()).some((t) => t.startsWith('ganztägig | Urlaub')), true, 'Urlaub mehrtägig am 23.12.')
+  must(await pK.locator('.cal-cell[data-date^="2026-12-2"] .cal-dot:not(.hollow)').count() >= 8, true, 'Urlaub 21.–28.12. mit Punkten')
+  ok('Import der macOS-Datei (auch ohne Dateiendung; eine Nicht-Kalender-Datei → „Das ist keine Kalender-Datei.“): Hilfetext mit Mac- und iPhone/iPad-Weg und oranger Warnung, Vorschau „8 neue Termine · 1 vereinfacht · 1 abgesagt“; Zeiten in Berlin: UTC 13:00 → 14:00, New York 09:00 → 14:00 (nach der Umstellung), Urlaub mehrtägig, EXDATE 11.11. fehlt, verschobenes Team-Meeting 16.11. 14:00, Geburtstag jährlich, Stammtisch nur erster Termin')
+  await pK.getByRole('button', { name: 'Kalender importieren' }).first().click()
+  const imp2 = pK.getByRole('dialog', { name: 'Kalender importieren' })
+  await imp2.locator('input[type=file]').setInputFiles(FIX)
+  const prev2 = pK.getByRole('dialog', { name: 'Termine importieren' })
+  await prev2.waitFor()
+  must(nbsp(await prev2.getByTestId('import-summary').innerText()), '0 neue Termine · 8 schon vorhanden · 1 vereinfacht · 1 abgesagt (übersprungen)', 'erneuter Import überspringt alles')
+  must(await prev2.getByRole('button', { name: 'Importieren (0)' }).isDisabled(), true, 'nichts zu importieren')
+  await pK.keyboard.press('Escape'); await prev2.waitFor({ state: 'detached' })
+  await pK.keyboard.press('Escape'); await sheetClosed()
+  must((await stK(() => true)).events.length, before + 8, 'keine Duplikate')
+  ok('Erneuter Import derselben Datei: „0 neue Termine · 8 schon vorhanden“, Knopf „Importieren (0)“ gesperrt, keine Duplikate')
+
+  // --- Zeitumstellung und Rückgängig des Imports ---
+  {
+    const ics = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:dst-a\r\nDTSTART:20261025T003000Z\r\nDTEND:20261025T010000Z\r\nSUMMARY:Umstellung A\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:dst-b\r\nDTSTART:20261025T013000Z\r\nDTEND:20261025T020000Z\r\nSUMMARY:Umstellung B\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:dst-c\r\nDTSTART:20270328T013000Z\r\nDTEND:20270328T023000Z\r\nSUMMARY:Umstellung C\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`
+    fs.writeFileSync(`${tmpK}/dst.ics`, ics)
+    await pK.getByRole('button', { name: 'Kalender importieren' }).first().click()
+    await pK.getByRole('dialog', { name: 'Kalender importieren' }).locator('input[type=file]').setInputFiles(`${tmpK}/dst.ics`)
+    await pK.getByRole('dialog', { name: 'Termine importieren' }).getByRole('button', { name: 'Importieren (3)' }).click(); await sheetClosed()
+    const d = (await eventsK((e) => e.length === before + 11)).filter((e) => e.title.startsWith('Umstellung'))
+    must(d.map((e) => [e.title, e.start]).sort(), [['Umstellung A', '2026-10-25T02:30'], ['Umstellung B', '2026-10-25T02:30'], ['Umstellung C', '2027-03-28T03:30']], 'Zeitumstellung (Okt: zwei Mal 02:30, März: 01:30Z = 03:30)')
+    await toastK('3 Termine importiert').getByRole('button', { name: 'Rückgängig' }).click()
+    await eventsK((e) => e.length === before + 8)
+    ok('Zeitumstellung: UTC-Zeiten am 25.10.2026 (00:30Z und 01:30Z) werden beide 02:30 Ortszeit, 28.03.2027 01:30Z wird 03:30 (Lücke); „Rückgängig“ entfernt genau den Import-Stapel (3 Termine)')
+  }
+
+  // --- Backup mit Terminen und ungültiger Termin ---
+  await openSettings(pK, 'Datensicherung')
+  const bkK = await plainExport(pK)
+  const bkj = JSON.parse(fs.readFileSync(await bkK.path(), 'utf8'))
+  must([bkj.version, bkj.events.length], [8, before + 8], 'Backup Version 8 mit Terminen')
+  must(bkj.events.find((e) => e.title === 'Yoga').recurrence, { freq: 'weekly', interval: 1 }, 'Wiederholung im Backup')
+  fs.writeFileSync(`${tmpK}/bad.json`, JSON.stringify({ ...bkj, events: [{ ...bkj.events[0], end: '2020-01-01T00:00' }] }))
+  await pK.locator('input[type=file]').setInputFiles(`${tmpK}/bad.json`)
+  await pK.getByRole('alert').filter({ hasText: 'Ein Termin endet vor seinem Beginn.' }).waitFor({ timeout: 5000 })
+  ok('Backup: Export hat Version 8 mit allen Terminen samt Wiederholung; ein Termin, der vor seinem Beginn endet, wird beim Import abgelehnt')
+  await cK.close()
+
+  // --- iPad: Raster links, Tagesliste rechts, Titel in den Zellen ---
+  {
+    const { c, p } = await mkK({ ...devices['iPad Pro 11'], acceptDownloads: true, locale: 'de-DE', timezoneId: 'Europe/Berlin' })
+    await tabOn(p, 'Kalender').click()
+    await p.getByRole('button', { name: 'Kalender importieren' }).first().click()
+    await p.getByRole('dialog', { name: 'Kalender importieren' }).locator('input[type=file]').setInputFiles(FIX)
+    await p.getByRole('dialog', { name: 'Termine importieren' }).getByRole('button', { name: /^Importieren/ }).click(); await p.getByRole('dialog').waitFor({ state: 'detached' })
+    await p.locator('.cal-cell[data-date="2026-11-16"]').click()
+    const layout = async () => p.evaluate(() => { const l = document.querySelector('.cal-left').getBoundingClientRect(), r = document.querySelector('.cal-right').getBoundingClientRect(); return { lx: l.x, lw: l.width, rx: r.x, rw: r.width, lt: l.top, rt: r.top, fab: getComputedStyle(document.querySelector('.cal-fab')).display, newBtn: getComputedStyle(document.querySelector('.cal-new-wide')).display } })
+    for (const [w, h, name] of [[834, 1194, 'hoch'], [1194, 834, 'quer']]) {
+      await p.setViewportSize({ width: w, height: h })
+      await sleep(200)
+      const l = await layout()
+      if (!(l.rx >= l.lx + l.lw - 1 && Math.abs(l.rt - l.lt) < 40 && l.lw > l.rw && l.fab === 'none' && l.newBtn !== 'none')) throw new Error(`Kalender – iPad ${name}: Raster und Liste nicht nebeneinander: ` + JSON.stringify(l))
+      const t = await p.locator('.cal-cell[data-date="2026-11-16"] .cal-title').allInnerTexts()
+      must(t.includes('Team-Meeting (verschoben)'), true, `iPad ${name}: Titel in der Zelle`)
+      const noOver = await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+      must(noOver, true, `iPad ${name}: kein horizontaler Überlauf`)
+      await p.screenshot({ path: `${SHOTS}/k8-ipad-${name}.png` })
+    }
+    await p.setViewportSize({ width: 390, height: 664 })
+    await sleep(200)
+    const narrow = await layout()
+    must(narrow.rx <= narrow.lx + 1 && narrow.fab !== 'none', true, 'schmal: eine Spalte, Plus-Knopf da')
+    ok('iPad (834×1194 hoch, 1194×834 quer): Monatsraster links (breiter), Tagesliste rechts auf gleicher Höhe, bis zu 2 Titel in den Zellen, „+“ in der Liste statt schwebendem Knopf, kein Überlauf; schmal wieder eine Spalte')
+    await c.close()
   }
 }
 

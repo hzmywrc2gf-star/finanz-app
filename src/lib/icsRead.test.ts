@@ -30,7 +30,7 @@ describe('text handling', () => {
     expect(unfold('A:1\r\n 23\r\n\t4\r\nB:2')).toEqual(['A:1234', 'B:2'])
   })
   it('unescapes text', () => {
-    expect(unescapeIcsText('a\\, b\; c\\nd \\\\ e')).toBe('a, b\; c\nd \\ e')
+    expect(unescapeIcsText('a\\, b\\; c\\nd \\\\ e')).toBe('a, b; c\nd \\ e')
   })
 })
 
@@ -71,7 +71,7 @@ describe('single events', () => {
     expect(one('DTSTART:20261115T100000\r\nDTEND:20261115T100000').events[0].end).toBe('2026-11-15T11:00')
   })
   it('title, location, notes and the uid', () => {
-    const p = one('DTSTART:20261115T100000\r\nSUMMARY:Essen\\, Trinken\r\nLOCATION:Café\; Bar\r\nDESCRIPTION:Zeile 1\\nZeile 2')
+    const p = one('DTSTART:20261115T100000\r\nSUMMARY:Essen\\, Trinken\r\nLOCATION:Café\\; Bar\r\nDESCRIPTION:Zeile 1\\nZeile 2')
     expect(p.events[0]).toMatchObject({ title: 'Essen, Trinken', location: 'Café; Bar', notes: 'Zeile 1\nZeile 2', importUid: 'u1' })
     expect(one('DTSTART:20261115T100000').events[0].title).toBe('(Ohne Titel)')
   })
