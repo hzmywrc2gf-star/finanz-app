@@ -1,4 +1,4 @@
-import type { Account, AppData, Category, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
+import type { Account, AppData, CalendarEvent, Category, EventRecurrence, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
 import { isValidISODate } from '../domain/dates'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { migrate } from './migrate'
@@ -25,10 +25,82 @@ const isDirection = (v: unknown): v is TransferDirection => v === 'withdrawal' |
 
 const isInterval = (v: unknown): v is Interval => v === 'monthly' || v === 'quarterly' || v === 'yearly'
 
-/** Strictly validates a parsed object of the current version (7); also used for stored data. Throws German Error. */
+const isLocalDateTime = (v: unknown): v is string => {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return false
+  const h = Number(v.slice(11, 13))
+  const m = Number(v.slice(14, 16))
+  return isValidISODate(v.slice(0, 10)) && h < 24 && m < 60
+}
+
+function validateRecurrence(r: unknown): EventRecurrence {
+  if (!isObj(r)) return fail('Eine Terminwiederholung ist ungültig.')
+  const { freq, interval, until, count, byWeekday } = r
+  if (freq !== 'daily' && freq !== 'weekly' && freq !== 'monthly' && freq !== 'yearly') return fail('Eine Terminwiederholung hat einen ungültigen Rhythmus.')
+  if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < 1 || interval > 99) return fail('Der Abstand einer Terminwiederholung ist ungültig (1–99).')
+  const out: EventRecurrence = { freq, interval }
+  if (until !== undefined) {
+    if (typeof until !== 'string' || !isValidISODate(until)) return fail('Das Ende einer Terminwiederholung ist ungültig.')
+    out.until = until
+  }
+  if (count !== undefined) {
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > 1000) return fail('Die Anzahl einer Terminwiederholung ist ungültig (1–1000).')
+    out.count = count
+  }
+  if (byWeekday !== undefined) {
+    if (freq !== 'weekly') return fail('Wochentage gibt es nur bei wöchentlichen Terminen.')
+    if (!Array.isArray(byWeekday) || byWeekday.length === 0 || byWeekday.length > 7 || byWeekday.some((d) => typeof d !== 'number' || !Number.isInteger(d) || d < 0 || d > 6) || new Set(byWeekday).size !== byWeekday.length) {
+      return fail('Die Wochentage einer Terminwiederholung sind ungültig.')
+    }
+    out.byWeekday = [...(byWeekday as number[])].sort((a, b) => a - b)
+  }
+  return out
+}
+
+export function validateEvents(list: unknown[]): CalendarEvent[] {
+  const events: CalendarEvent[] = []
+  const ids = new Set<string>()
+  for (const e of list) {
+    if (!isObj(e)) return fail('Ein Termin ist ungültig.')
+    if (typeof e.id !== 'string' || !e.id) return fail('Ein Termin hat keine ID.')
+    if (ids.has(e.id)) return fail('Doppelte Termin-ID.')
+    ids.add(e.id)
+    if (typeof e.title !== 'string' || !e.title.trim() || e.title.length > 200 || e.title.trim() !== e.title) return fail('Ein Termin hat keinen gültigen Titel (1–200 Zeichen).')
+    if (typeof e.allDay !== 'boolean') return fail('Ein Termin hat keine Angabe zu „ganztägig“.')
+    if (typeof e.createdAt !== 'number' || !Number.isFinite(e.createdAt)) return fail('Ein Erstellungszeitpunkt bei Terminen ist ungültig.')
+    if (e.allDay) {
+      if (typeof e.start !== 'string' || !isValidISODate(e.start) || typeof e.end !== 'string' || !isValidISODate(e.end)) return fail('Ein Datum bei Terminen ist ungültig.')
+    } else if (!isLocalDateTime(e.start) || !isLocalDateTime(e.end)) {
+      return fail('Eine Uhrzeit bei Terminen ist ungültig.')
+    }
+    if ((e.end as string) < (e.start as string)) return fail('Ein Termin endet vor seinem Beginn.')
+    if (!e.allDay && e.end === e.start) return fail('Ein Termin endet vor seinem Beginn.')
+    const ev: CalendarEvent = { id: e.id, createdAt: e.createdAt, title: e.title, allDay: e.allDay, start: e.start as string, end: e.end as string }
+    if (e.location !== undefined) {
+      if (typeof e.location !== 'string' || e.location.length > 200) return fail('Ein Ort bei Terminen ist ungültig (höchstens 200 Zeichen).')
+      if (e.location) ev.location = e.location
+    }
+    if (e.notes !== undefined) {
+      if (typeof e.notes !== 'string' || e.notes.length > 2000) return fail('Eine Notiz bei Terminen ist ungültig (höchstens 2000 Zeichen).')
+      if (e.notes) ev.notes = e.notes
+    }
+    if (e.recurrence !== undefined) ev.recurrence = validateRecurrence(e.recurrence)
+    if (e.exdates !== undefined) {
+      if (!Array.isArray(e.exdates) || e.exdates.some((d) => typeof d !== 'string' || !isValidISODate(d))) return fail('Ausgenommene Termine sind ungültig.')
+      if (e.exdates.length) ev.exdates = [...(e.exdates as string[])]
+    }
+    if (e.importUid !== undefined) {
+      if (typeof e.importUid !== 'string' || !e.importUid || e.importUid.length > 300) return fail('Eine Import-Kennung bei Terminen ist ungültig.')
+      ev.importUid = e.importUid
+    }
+    events.push(ev)
+  }
+  return events
+}
+
+/** Strictly validates a parsed object of the current version (8); also used for stored data. Throws German Error. */
 export function validateAppData(raw: unknown): AppData {
   if (!isObj(raw)) return fail('Kein gültiges Objekt.')
-  if (raw.version !== 7) return fail('Unbekannte Version.')
+  if (raw.version !== 8) return fail('Unbekannte Version.')
   if (!isObj(raw.settings)) return fail('Einstellungen fehlen.')
   const start = raw.settings.startBalanceCents
   if (typeof start !== 'number' || !Number.isSafeInteger(start)) {
@@ -50,6 +122,7 @@ export function validateAppData(raw: unknown): AppData {
   if (!Array.isArray(raw.recurring)) return fail('Wiederkehrende Buchungen fehlen.')
   if (!Array.isArray(raw.transfers)) return fail('Umbuchungen fehlen.')
   if (!Array.isArray(raw.invoices)) return fail('Rechnungen fehlen.')
+  if (!Array.isArray(raw.events)) return fail('Termine fehlen.')
 
   const categories: Category[] = []
   const catIds = new Map<string, Category>()
@@ -225,14 +298,17 @@ export function validateAppData(raw: unknown): AppData {
     invoices.push(invoice)
   }
 
+  const events = validateEvents(raw.events as unknown[])
+
   return {
-    version: 7,
+    version: 8,
     settings: { startBalanceCents: start, startCashCents: startCash, ...(displayName ? { displayName } : {}) },
     categories,
     transactions,
     recurring,
     transfers,
     invoices,
+    events,
   }
 }
 

@@ -75,3 +75,6 @@ export const ArchiveIcon = () => wrap(<><rect x="3.5" y="4.5" width="17" height=
 export const TableIcon = () => wrap(<><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10" /></>, 18)
 export const ReceiptIcon = () => wrap(<><path d="M6 3.5h12v17l-2.5-1.6-1.8 1.6-1.7-1.6-1.8 1.6-1.7-1.6L6 20.5z" /><path d="M9.5 8.5h5M9.5 12h5" /></>, 20)
 export const CloudUpIcon = () => wrap(<><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5" /><path d="M12 20v-7" /><path d="m9 15.5 3-3 3 3" /></>)
+export const CalendarIcon = () =>
+  wrap(<><rect x="4" y="5.5" width="16" height="14.5" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /><path d="M8.5 14h.01M12 14h.01M15.5 14h.01M8.5 17h.01M12 17h.01" strokeWidth={2.4} /></>)
+export const MoreIcon = () => wrap(<><circle cx="6" cy="12" r="1.3" fill="currentColor" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /><circle cx="18" cy="12" r="1.3" fill="currentColor" /></>, 22)

@@ -195,7 +195,7 @@ export function InvoiceListSheet({ onClose }: { onClose: () => void }) {
   )
 }
 
-function InvoiceDetailSheet({ id, onClose }: { id: string; onClose: () => void }) {
+export function InvoiceDetailSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const { data, updateInvoice, deleteInvoice } = useFinance()
   const invoice = data.invoices.find((i) => i.id === id)
   const [amount, setAmount] = useState(() => centsToInputString(invoice?.amountCents ?? 0))

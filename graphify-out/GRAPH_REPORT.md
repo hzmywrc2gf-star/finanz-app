@@ -1,22 +1,22 @@
-# Graph Report - finanz-app  (2026-11-01)
+# Graph Report - finanz-app  (2026-11-15)
 
 ## Corpus Check
-- 156 files · ~125,705 words
+- 167 files · ~143,446 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 6 file(s) not represented in the graph (top: .csv 3, (none) 2, .css 1)
+- Unclassified: 8 file(s) not represented in the graph (top: .csv 3, (none) 2, .ics 2)
 
 ## Summary
-- 1210 nodes · 3976 edges · 52 communities (49 shown, 3 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 202 edges (avg confidence: 0.94)
+- 1360 nodes · 4600 edges · 61 communities (59 shown, 2 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 220 edges (avg confidence: 0.93)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3f955800`
+- Built from commit: `f51fa402`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- recurring.ts
+- todayISO
 - actions.ts
 - Projektkontext: finanz-app („Finanzklar“)
 - StartPage.tsx
@@ -25,7 +25,7 @@
 - recurringDetect.ts
 - deploy.yml
 - gesture.ts
-- domain/types.ts
+- App.tsx
 - perf.mjs
 - compilerOptions
 - compilerOptions
@@ -39,15 +39,15 @@
 - LockScreen.tsx
 - crypto.ts
 - Transaction
-- todayISO
+- ExcelPage.tsx
 - dates.ts
-- LargeTitleHeader.tsx
+- Icons.tsx
 - lib/backupReminder.ts
 - ImportSheet.tsx
 - defaults.ts
 - vault.test.ts
 - AppData
-- Kind
+- ledger.ts
 - vaultBackup.ts
 - LockContext.ts
 - csv.ts
@@ -55,87 +55,96 @@
 - AppLockSettings.tsx
 - openStartPage
 - bodyText
-- exportSheet.ts
+- AppData
 - openSettings
 - zip.ts
 - isValidISODate
-- LockSetupScreen.tsx
+- icsRead.ts
 - RecurringSuggestions.tsx
-- LockSetupScreen
-- vitest
-- scripts
-- budget.ts
-- useVaultBackup.ts
-- dependencies
+- calendar.ts
+- domain/types.ts
+- CalendarPage.tsx
+- MonthPage.tsx
+- addDays
+- write.ts
+- CalendarImport.tsx
+- FinanceContext.tsx
+- ConfirmDialog
+- LedgerList.tsx
+- calendar.test.ts
+- RecurringSuggestion
+- bookNextNow
+- ref_node_fs
+- platform.ts
 
 ## God Nodes (most connected - your core abstractions)
-1. `haptic()` - 60 edges
-2. `useFinance()` - 59 edges
-3. `react` - 57 edges
+1. `useFinance()` - 69 edges
+2. `haptic()` - 66 edges
+3. `react` - 62 edges
 4. `Regeln` - 55 edges
-5. `AppData` - 50 edges
-6. `Architektur` - 49 edges
-7. `todayISO()` - 46 edges
-8. `StartPage` - 44 edges
-9. `vitest` - 35 edges
-10. `Sheet()` - 35 edges
+5. `Architektur` - 53 edges
+6. `todayISO()` - 52 edges
+7. `AppData` - 52 edges
+8. `addDays()` - 44 edges
+9. `StartPage` - 44 edges
+10. `Sheet()` - 42 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Technik` --references--> `FinanceRepository`  [INFERRED]
   README.md → src/data/repository.ts
+- `Kalender (5. Tab „Kalender“, Reihenfolge Start, Monat, Budgets, Kalender, Einstellungen)` --references--> `start()`  [INFERRED]
+  CLAUDE.md → e2e/perf.mjs
 - `Regeln` --references--> `balance()`  [INFERRED]
   CLAUDE.md → e2e/smoke.mjs
 - `Prüfen` --references--> `withVault()`  [INFERRED]
   CLAUDE.md → e2e/smoke.mjs
 - `Prüfen` --references--> `keepAlive()`  [INFERRED]
   CLAUDE.md → e2e/smoke.mjs
-- `Monatliche Sicherung (iCloud) (`domain/backupReminder.ts`, `lib/backupReminder.ts`, `data/vaultBackup.ts`, `hooks/useVaultBackup.ts`, `components/BackupReminderCard.tsx`, `VaultBackupImportSheet.tsx`)` --references--> `seed()`  [INFERRED]
-  CLAUDE.md → e2e/smoke.mjs
 
 ## Import Cycles
 - None detected.
 
-## Communities (52 total, 3 thin omitted)
+## Communities (61 total, 2 thin omitted)
 
-### Community 0 - "recurring.ts"
-Cohesion: 0.13
-Nodes (28): RecurringForm(), submit(), RecurringManager(), nextLabel(), create(), Switch(), formatDateDE(), bookDue() (+20 more)
+### Community 0 - "todayISO"
+Cohesion: 0.18
+Nodes (25): BudgetForm(), save(), submit(), FinanceEntrySheet(), InvoiceAmountSheet(), submit(), PayInvoiceSheet(), submit() (+17 more)
 
 ### Community 1 - "actions.ts"
 Cohesion: 0.13
-Nodes (30): ids(), addCategory(), AddRecurringOptions, bookNextNow(), bookOccurrence(), changeInvoiceAmount(), confirmOccurrence(), deleteCategory() (+22 more)
+Nodes (30): addCategory(), addEvent(), AddRecurringOptions, changeInvoiceAmount(), deleteCategory(), deleteEvent(), deleteInvoice(), deleteRecurring() (+22 more)
 
 ### Community 2 - "Projektkontext: finanz-app („Finanzklar“)"
 Cohesion: 0.14
 Nodes (12): Backlog (nicht in v1), ECC-Bausteine (`.claude/agents`, `.claude/skills`), Projektgraph (Graphify), Projektkontext: finanz-app („Finanzklar“), Stack, Auf dem iPhone installieren, Finanzklar – persönliche Haushalts-App, Funktionen (+4 more)
 
 ### Community 3 - "StartPage.tsx"
-Cohesion: 0.11
-Nodes (53): Architektur, Kauf auf Rechnung (`src/domain/invoices.ts`, `components/InvoiceSheets.tsx`, `lib/ics.ts`, `lib/invoiceCalendar.ts`), RFC-5545, ConfirmDialog(), ReceiptIcon(), InvoiceAmountSheet(), submit(), InvoiceDetailSheet() (+45 more)
+Cohesion: 0.08
+Nodes (61): Architektur, Kauf auf Rechnung (`src/domain/invoices.ts`, `components/InvoiceSheets.tsx`, `lib/ics.ts`, `lib/invoiceCalendar.ts`), ReceiptIcon(), InvoiceDetailSheet(), InvoiceFlow, InvoiceFlowDialogs(), InvoiceListSheet(), budgetAlerts() (+53 more)
 
 ### Community 4 - "package.json"
-Cohesion: 0.11
-Nodes (23): devDependencies, oxlint@^1.89.0, sharp@^0.35.5, @types/node@^24.19.2, @types/react@^19.3.0, @types/react-dom@^19.3.0, typescript@~7.0.2, vite@^8.3.5 (+15 more)
+Cohesion: 0.07
+Nodes (35): dependencies, react@^19.3.1, react-dom@^19.3.1, devDependencies, oxlint@^1.89.0, sharp@^0.35.5, @types/node@^24.19.2, @types/react@^19.3.0 (+27 more)
 
 ### Community 5 - "smoke.mjs"
-Cohesion: 0.08
+Cohesion: 0.09
 Nodes (9): { chromium, devices }, deks, errors, futter, futterText, json, rawNewContext, swipe() (+1 more)
 
 ### Community 6 - "recurringDetect.ts"
-Cohesion: 0.18
-Nodes (21): amountClusters(), coveredByRule(), dayOf(), detectRecurring(), effectiveDay(), hashKey(), INTERVALS, lastDayOfMonth() (+13 more)
+Cohesion: 0.19
+Nodes (20): amountClusters(), coveredByRule(), dayOf(), detectRecurring(), effectiveDay(), hashKey(), INTERVALS, lastDayOfMonth() (+12 more)
 
 ### Community 7 - "deploy.yml"
 Cohesion: 0.07
 Nodes (30): runs-on, steps, concurrency, cancel-in-progress, group, environment, needs, runs-on (+22 more)
 
 ### Community 8 - "gesture.ts"
-Cohesion: 0.06
-Nodes (82): Regeln, react-dom, App(), NavStack(), Phase, PILL_SPRING, Sheet(), SwipePane() (+74 more)
+Cohesion: 0.08
+Nodes (71): Kalender (5. Tab „Kalender“, Reihenfolge Start, Monat, Budgets, Kalender, Einstellungen), Regeln, react-dom, NavStack(), Phase, StackAnim, SwipePane(), SwipeRow() (+63 more)
 
-### Community 9 - "domain/types.ts"
-Cohesion: 0.05
-Nodes (108): react, AppContent(), FormState, Nav, SETTINGS_SUBS, START_SUBS, subOf(), SubView (+100 more)
+### Community 9 - "App.tsx"
+Cohesion: 0.15
+Nodes (30): App(), AppContent(), CALENDAR_SUBS, CalendarView, eventFormProps(), FormState, Nav, SETTINGS_SUBS (+22 more)
 
 ### Community 10 - "perf.mjs"
 Cohesion: 0.11
@@ -154,88 +163,92 @@ Cohesion: 0.33
 Nodes (5): plugins, rules, react/only-export-components, react/rules-of-hooks, $schema
 
 ### Community 15 - "vault.ts"
-Cohesion: 0.09
-Nodes (30): b64(), Bytes, canonical(), extractableDek(), unlockWithPasskey(), DATA_AAD, DEFAULT_AUTO_LOCK, derivePasskeyKek() (+22 more)
+Cohesion: 0.07
+Nodes (48): AUTO_LOCK_OPTIONS, b64(), Bytes, canonical(), createVault(), encryptData(), extractableDek(), info() (+40 more)
 
 ### Community 16 - "LockProvider.tsx"
-Cohesion: 0.14
-Nodes (22): Teil B: App-Sperre (Pflicht, Nutzerwunsch: die App öffnet sich nur mit Passwort bzw. Face ID), Greeting(), EncryptedRepository, vault, VaultSession, vaultBackupFileName(), greetingText(), Bytes (+14 more)
+Cohesion: 0.13
+Nodes (22): Monatliche Sicherung (iCloud) (`domain/backupReminder.ts`, `lib/backupReminder.ts`, `data/vaultBackup.ts`, `hooks/useVaultBackup.ts`, `components/BackupReminderCard.tsx`, `VaultBackupImportSheet.tsx`), Teil B: App-Sperre (Pflicht, Nutzerwunsch: die App öffnet sich nur mit Passwort bzw. Face ID), Greeting(), EncryptedRepository, vault, VaultSession, greetingText(), Bytes (+14 more)
 
 ### Community 17 - "FinanceApi"
-Cohesion: 0.07
-Nodes (7): RecurringSuggestion, Interval, ContractBookingInput, InvoiceInput, RecurringInput, TransferInput, FinanceApi
+Cohesion: 0.06
+Nodes (7): EventRecurrence, TransferDirection, ContractBookingInput, EventInput, InvoiceInput, TransferInput, FinanceApi
 
 ### Community 18 - "read.ts"
 Cohesion: 0.17
 Nodes (16): ImportSource, columnIndex(), decoder, openXlsx(), parseCell(), resolveTarget(), textOf(), XlsxFile (+8 more)
 
 ### Community 19 - "importRows.ts"
-Cohesion: 0.13
-Nodes (29): Excel & CSV (Einstellungen → „Excel & CSV“, `src/pages/settings/ExcelPage.tsx`, `components/ImportSheet.tsx`), CASH_WORDS, categoryKey(), cellToString(), duplicateKey(), excelSerialToISO(), EXPENSE_WORDS, findCategory() (+21 more)
+Cohesion: 0.11
+Nodes (29): Excel & CSV (Einstellungen → „Excel & CSV“, `src/pages/settings/ExcelPage.tsx`, `components/ImportSheet.tsx`), FALLBACK_NAME, resolveExportRange(), CASH_WORDS, categoryKey(), cellToString(), excelSerialToISO(), EXPENSE_WORDS (+21 more)
 
 ### Community 20 - "LockScreen.tsx"
-Cohesion: 0.27
-Nodes (9): LockIcon(), AppHeader(), errMsg(), FaceIdGlyph(), LockControls, LockScreen(), submit(), NewPasswordScreen() (+1 more)
+Cohesion: 0.19
+Nodes (15): LockIcon(), AppHeader(), errMsg(), FaceIdGlyph(), LockControls, LockScreen(), submit(), NewPasswordScreen() (+7 more)
 
 ### Community 21 - "crypto.ts"
-Cohesion: 0.11
-Nodes (41): Verschlüsselung (Teil A: Krypto-Kern + verschlüsselte Backups; Teil B: App-Sperre mit Passwort, Wiederherstellungsschlüssel und Face ID), createVault(), encryptData(), info(), loadData(), loadRaw(), replaceSlot(), saveData() (+33 more)
+Cohesion: 0.15
+Nodes (28): Verschlüsselung (Teil A: Krypto-Kern + verschlüsselte Backups; Teil B: App-Sperre mit Passwort, Wiederherstellungsschlüssel und Face ID), BackupImportSheet(), submit(), decodeBackupFile(), Bytes, decryptBytes(), decryptJSON(), deriveKeyFromPassword() (+20 more)
 
 ### Community 22 - "Transaction"
-Cohesion: 0.24
-Nodes (12): CategorySum, categorySums(), compareTransactionsDesc(), RangeTotals, summarizeRange(), MonthCategorySum, MonthPoint, monthSummary (+4 more)
+Cohesion: 0.30
+Nodes (11): CategorySum, categorySums(), compareTransactionsDesc(), RangeTotals, summarizeRange(), MonthCategorySum, MonthPoint, monthSummary (+3 more)
 
-### Community 23 - "todayISO"
-Cohesion: 0.27
-Nodes (15): BackupExportSheet(), submit(), BackupImportSheet(), submit(), exportPlain(), VaultBackupImportSheet(), submit(), exportJSON() (+7 more)
+### Community 23 - "ExcelPage.tsx"
+Cohesion: 0.14
+Nodes (27): BackupExportSheet(), submit(), errMsg(), LockSetupScreen(), addFaceId(), applyRestored(), create(), exportPlain() (+19 more)
 
 ### Community 24 - "dates.ts"
 Cohesion: 0.23
-Nodes (18): BalanceChart, monotonePath(), addDays(), addMonths(), addYears(), monthEnd(), MONTHS, MONTHS_SHORT (+10 more)
+Nodes (17): BalanceChart, monotonePath(), addMonths(), addYears(), monthEnd(), MONTHS, MONTHS_SHORT, monthShort() (+9 more)
 
-### Community 25 - "LargeTitleHeader.tsx"
-Cohesion: 0.15
-Nodes (20): HeaderAction, LargeTitleHeader(), barProgress(), clamp01(), GLOW_END_PX, GLOW_LAG, glowOffset(), HERO_SHIFT_DIV (+12 more)
+### Community 25 - "Icons.tsx"
+Cohesion: 0.06
+Nodes (60): ArchiveIcon(), base, BudgetIcon(), CalendarIcon(), CashIcon(), CheckIcon(), ChevronRight(), ClearIcon() (+52 more)
 
 ### Community 26 - "lib/backupReminder.ts"
-Cohesion: 0.18
-Nodes (20): BackupCardBody(), BackupReminderCard(), CloudUpIcon(), backupDue(), month(), useBackupSettings(), BACKUP_REMINDER_KEY, BACKUP_SNOOZE_KEY (+12 more)
+Cohesion: 0.17
+Nodes (21): BackupCardBody(), BackupReminderCard(), CloudUpIcon(), backupDue(), month(), useBackupSettings(), BACKUP_REMINDER_KEY, BACKUP_SNOOZE_KEY (+13 more)
 
 ### Community 27 - "ImportSheet.tsx"
-Cohesion: 0.19
-Nodes (17): ImportSheet(), changeSheet(), submit(), initialMapping(), plural(), ColumnMapping, detectHeader(), guessMapping() (+9 more)
+Cohesion: 0.17
+Nodes (19): ImportSheet(), changeSheet(), submit(), initialMapping(), plural(), ColumnMapping, detectHeader(), duplicateKey() (+11 more)
 
 ### Community 29 - "defaults.ts"
-Cohesion: 0.17
-Nodes (18): mutate(), sample(), tx(), withBudget(), builtInId(), createDefaultCategories(), createDefaultData(), EXPENSE_DEFAULTS (+10 more)
+Cohesion: 0.24
+Nodes (12): EV, mutate(), sample(), item(), tx(), withBudget(), bookDue(), addRecurring() (+4 more)
 
 ### Community 30 - "vault.test.ts"
 Cohesion: 0.20
 Nodes (16): Attempts, ATTEMPTS_KEY, BASE_WAIT_MS, FREE_ATTEMPTS, MAX_WAIT_MS, readAttempts(), recordFailure(), recordSuccess() (+8 more)
 
 ### Community 31 - "AppData"
-Cohesion: 0.15
-Nodes (15): fail(), isAccount(), isDirection(), isInterval(), isKind(), isObj(), MAX_NAME_LENGTH, validateAppData() (+7 more)
+Cohesion: 0.22
+Nodes (16): fail(), isAccount(), isDirection(), isInterval(), isKind(), isLocalDateTime(), isObj(), MAX_NAME_LENGTH (+8 more)
 
-### Community 32 - "Kind"
-Cohesion: 0.25
-Nodes (8): AddPreset, ContractBooking, ImportRow, LedgerOptions, Account, Kind, ImportBooking, TransactionInput
+### Community 32 - "ledger.ts"
+Cohesion: 0.16
+Nodes (14): ImportRow, amountText(), groupByMonth(), ledgerEntries(), LedgerEntry, LedgerMonth, LedgerOptions, matches() (+6 more)
 
 ### Community 33 - "vaultBackup.ts"
-Cohesion: 0.17
-Nodes (14): STORAGE_KEY, VAULT_KEY, buildVaultBackup(), ERR_BACKUP_BROKEN, ERR_BACKUP_SECRET, ERR_BACKUP_UNKNOWN, isObj(), parseEnvelope() (+6 more)
+Cohesion: 0.20
+Nodes (13): VAULT_KEY, buildVaultBackup(), ERR_BACKUP_BROKEN, ERR_BACKUP_SECRET, ERR_BACKUP_UNKNOWN, isObj(), parseEnvelope(), makeBackup() (+5 more)
+
+### Community 34 - "LockContext.ts"
+Cohesion: 0.18
+Nodes (3): AutoLockMinutes, LockApi, LockContext
 
 ### Community 35 - "csv.ts"
-Cohesion: 0.27
-Nodes (10): out(), pan(), svg(), DecodedText, decodeText(), decodeWindows1252(), Delimiter, detectDelimiter() (+2 more)
+Cohesion: 0.30
+Nodes (10): DecodedText, decodeText(), decodeWindows1252(), Delimiter, detectDelimiter(), parseCsv(), parseCsvText(), isOldExcel() (+2 more)
 
 ### Community 36 - "Prüfen"
 Cohesion: 0.31
 Nodes (8): Prüfen, ensureOpen(), keepAlive(), readStored(), reload(), runSetup(), storedWhen(), withVault()
 
 ### Community 37 - "AppLockSettings.tsx"
-Cohesion: 0.17
-Nodes (15): AppLockSettings(), addFaceId(), generateKey(), removeFaceId(), AUTO_LOCK_CHOICES, AUTO_LOCK_LABEL, ChangePasswordSheet(), submit() (+7 more)
+Cohesion: 0.15
+Nodes (21): react, AppLockSettings(), addFaceId(), generateKey(), removeFaceId(), AUTO_LOCK_CHOICES, AUTO_LOCK_LABEL, ChangePasswordSheet() (+13 more)
 
 ### Community 38 - "openStartPage"
 Cohesion: 0.25
@@ -245,73 +258,109 @@ Nodes (8): balance(), hubRow(), mustBalance(), openBookings(), openCash(), openC
 Cohesion: 0.29
 Nodes (8): bodyText(), countIn(), expectNoText(), expectText(), fixedCosts(), flatText(), mustFixed(), nbsp()
 
-### Community 40 - "exportSheet.ts"
+### Community 40 - "AppData"
 Cohesion: 0.16
-Nodes (24): ALL_TIME, bookingLines(), buildExportSheets(), countExportRows(), exportFileName(), ExportMode, ExportRange, Line (+16 more)
+Nodes (13): FinanceRepository, bookingLines(), buildExportSheets(), countExportRows(), ExportMode, ExportRange, money(), monthRows() (+5 more)
 
 ### Community 41 - "openSettings"
 Cohesion: 0.40
 Nodes (5): addTx(), openSettings(), seed(), settled(), tabOn()
 
 ### Community 42 - "zip.ts"
-Cohesion: 0.15
-Nodes (21): WriteSheet, buildXlsx(), cellXml(), centsToDecimal(), columnLetters(), encoder, escapeXml(), excelSerial() (+13 more)
+Cohesion: 0.24
+Nodes (12): CentralEntry, crc32(), CRC_TABLE, encoder, inflateRaw(), MAX_ENTRY_BYTES, readCentral(), readZip() (+4 more)
 
 ### Community 43 - "isValidISODate"
-Cohesion: 0.22
-Nodes (14): isValidISODate(), addInvoice(), cleanNote(), createRecurringFromSuggestion(), importTransactions(), ruleFields(), updateInvoice(), updateRecurring() (+6 more)
+Cohesion: 0.18
+Nodes (16): isLocalDateTime(), isValidISODate(), addInvoice(), cleanNote(), createRecurringFromSuggestion(), deleteOccurrence(), importTransactions(), ruleFields() (+8 more)
 
-### Community 44 - "LockSetupScreen.tsx"
-Cohesion: 0.29
-Nodes (8): Step, SUBTITLE, PasswordFields(), ERR_TOO_BIG, MAX_FILE_BYTES, MIN_PASSWORD_LENGTH, passwordStrength, STRENGTH_LABEL
+### Community 44 - "icsRead.ts"
+Cohesion: 0.12
+Nodes (28): BYDAY, cut(), ERR_NOT_ICS, formatters, get(), IcsTime, instantToLocal(), p2() (+20 more)
 
 ### Community 45 - "RecurringSuggestions.tsx"
-Cohesion: 0.36
-Nodes (8): CheckIcon(), RefreshIcon(), plural(), RecurringSuggestions(), never(), dismissKey(), getDismissedKeys(), RECURRING_DISMISSED_KEY
+Cohesion: 0.34
+Nodes (9): plural(), RecurringSuggestions(), create(), never(), recurrenceLabel(), dismissKey(), getDismissedKeys(), RECURRING_DISMISSED_KEY (+1 more)
 
-### Community 46 - "LockSetupScreen"
-Cohesion: 0.29
-Nodes (11): Monatliche Sicherung (iCloud) (`domain/backupReminder.ts`, `lib/backupReminder.ts`, `data/vaultBackup.ts`, `hooks/useVaultBackup.ts`, `components/BackupReminderCard.tsx`, `VaultBackupImportSheet.tsx`), errMsg(), LockSetupScreen(), addFaceId(), applyRestored(), create(), onRestoredJson(), onRestoreFile() (+3 more)
+### Community 46 - "calendar.ts"
+Cohesion: 0.12
+Nodes (22): EventSheetProps, dayLabel(), MONTH_NAMES, MonthGrid, plural(), daysInMonth(), FinanceEntryType, generateDates() (+14 more)
 
-### Community 47 - "vitest"
+### Community 47 - "domain/types.ts"
+Cohesion: 0.12
+Nodes (19): vitest, builtInId(), createDefaultCategories(), createDefaultData(), EXPENSE_DEFAULTS, INCOME_DEFAULTS, ALL_TIME, plain() (+11 more)
+
+### Community 48 - "CalendarPage.tsx"
+Cohesion: 0.23
+Nodes (19): DayList(), Fab(), PlusIcon(), dayMonthLabel(), DaySegment, financeEntries(), FinanceEntry, layoutDay() (+11 more)
+
+### Community 49 - "MonthPage.tsx"
 Cohesion: 0.20
-Nodes (6): vitest@^5.0.5, vitest, base(), isAppleTouchWebKit(), NavigatorInfo, USE_HISTORY
+Nodes (20): BudgetBar(), ChevronLeft(), BudgetItem, budgetStatus, BudgetTotal, monthBudgets, percentOf(), UnbudgetedSpending (+12 more)
 
-### Community 48 - "scripts"
-Cohesion: 0.25
-Nodes (8): scripts, build, dev, e2e, icons, lint, preview, test
+### Community 50 - "addDays"
+Cohesion: 0.22
+Nodes (22): EventSheet(), changeStart(), exportIcs(), submit(), toggleAllDay(), recurrenceFrom(), REPEAT_OPTIONS, RepeatChoice (+14 more)
 
-### Community 49 - "budget.ts"
-Cohesion: 0.29
-Nodes (7): BudgetItem, budgetStatus, BudgetTotal, monthBudgets, percentOf(), item(), UnbudgetedSpending
+### Community 51 - "write.ts"
+Cohesion: 0.26
+Nodes (12): Line, WriteCell, WriteSheet, buildXlsx(), cellXml(), centsToDecimal(), columnLetters(), encoder (+4 more)
 
-### Community 50 - "useVaultBackup.ts"
-Cohesion: 0.43
-Nodes (5): BackupOutcome, useVaultBackup(), recordBackup(), downloadFile(), useLock()
+### Community 52 - "CalendarImport.tsx"
+Cohesion: 0.27
+Nodes (11): CalendarImportSheet(), onFile(), EventImportPreview(), run(), plural(), readCalendar(), importKey(), recurrenceText() (+3 more)
 
-### Community 51 - "dependencies"
-Cohesion: 0.67
-Nodes (3): dependencies, react@^19.3.1, react-dom@^19.3.1
+### Community 53 - "FinanceContext.tsx"
+Cohesion: 0.27
+Nodes (9): AddPreset, ContractBooking, UNDO_MS, UndoToast(), Kind, TransactionInput, defaultRepo, FinanceContext (+1 more)
+
+### Community 54 - "ConfirmDialog"
+Cohesion: 0.38
+Nodes (8): CategoryManager(), CategorySection(), add(), saveRename(), errMsg(), ConfirmDialog(), countRecurringInCategory(), countTransactionsInCategory()
+
+### Community 55 - "LedgerList.tsx"
+Cohesion: 0.44
+Nodes (7): RepeatIcon(), SwapIcon(), TransferRow, TransactionList, TransactionRow, formatShortDay(), Category
+
+### Community 56 - "calendar.test.ts"
+Cohesion: 0.31
+Nodes (7): compareOccurrences(), daySegments(), makeOccurrence(), occurrencesInRange(), occurrencesOnDay(), spanDays(), dates()
+
+### Community 57 - "RecurringSuggestion"
+Cohesion: 0.33
+Nodes (3): RecurringSuggestion, Interval, RecurringInput
+
+### Community 58 - "bookNextNow"
+Cohesion: 0.47
+Nodes (6): bookNextNow(), bookOccurrence(), confirmOccurrence(), findRule(), requireOldestPending(), skipOccurrence()
+
+### Community 59 - "ref_node_fs"
+Cohesion: 0.60
+Nodes (3): out(), pan(), svg()
+
+### Community 60 - "platform.ts"
+Cohesion: 0.50
+Nodes (3): isAppleTouchWebKit(), NavigatorInfo, USE_HISTORY
 
 ## Knowledge Gaps
-- **1 isolated node(s):** `RFC-5545`
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 304 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **3 isolated node(s):** `RFC-5545`, `RFC-5545`, `RFC-5545`
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 334 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `vitest` connect `vitest` to `recurring.ts`, `actions.ts`, `StartPage.tsx`, `package.json`, `recurringDetect.ts`, `gesture.ts`, `domain/types.ts`, `LockProvider.tsx`, `importRows.ts`, `crypto.ts`, `Transaction`, `dates.ts`, `LargeTitleHeader.tsx`, `lib/backupReminder.ts`, `ImportSheet.tsx`, `defaults.ts`, `vault.test.ts`, `vaultBackup.ts`, `csv.ts`, `exportSheet.ts`, `zip.ts`, `RecurringSuggestions.tsx`?**
-  _High betweenness centrality (0.082) - this node is a cross-community bridge._
-- **Are the 3 inferred relationships involving `haptic()` (e.g. with `Monatliche Sicherung (iCloud) (`domain/backupReminder.ts`, `lib/backupReminder.ts`, `data/vaultBackup.ts`, `hooks/useVaultBackup.ts`, `components/BackupReminderCard.tsx`, `VaultBackupImportSheet.tsx`)` and `Regeln`) actually correct?**
-  _`haptic()` has 3 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `RFC-5545` to the rest of the system?**
-  _1 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `recurring.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.13277310924369748 - nodes in this community are weakly interconnected._
-- **Why does `react` connect `domain/types.ts` to `recurring.ts`, `StartPage.tsx`, `package.json`, `AppLockSettings.tsx`, `gesture.ts`, `exportSheet.ts`, `LockSetupScreen.tsx`, `RecurringSuggestions.tsx`, `LockProvider.tsx`, `useVaultBackup.ts`, `dependencies`, `LockScreen.tsx`, `todayISO`, `dates.ts`, `LargeTitleHeader.tsx`, `lib/backupReminder.ts`, `ImportSheet.tsx`?**
-  _High betweenness centrality (0.073) - this node is a cross-community bridge._
+- **Why does `vitest` connect `domain/types.ts` to `actions.ts`, `StartPage.tsx`, `package.json`, `recurringDetect.ts`, `gesture.ts`, `LockProvider.tsx`, `crypto.ts`, `Transaction`, `dates.ts`, `Icons.tsx`, `lib/backupReminder.ts`, `ImportSheet.tsx`, `defaults.ts`, `vault.test.ts`, `ledger.ts`, `vaultBackup.ts`, `csv.ts`, `AppLockSettings.tsx`, `zip.ts`, `icsRead.ts`, `RecurringSuggestions.tsx`, `MonthPage.tsx`, `write.ts`, `calendar.test.ts`, `platform.ts`?**
+  _High betweenness centrality (0.068) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `useFinance()` (e.g. with `Architektur` and `Regeln`) actually correct?**
   _`useFinance()` has 2 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `RFC-5545`, `RFC-5545`, `RFC-5545` to the rest of the system?**
+  _3 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `actions.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.13306451612903225 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.12903225806451613 - nodes in this community are weakly interconnected._
+- **Why does `AppData` connect `AppData` to `actions.ts`, `StartPage.tsx`, `recurringDetect.ts`, `gesture.ts`, `vault.ts`, `LockProvider.tsx`, `FinanceApi`, `crypto.ts`, `Transaction`, `ExcelPage.tsx`, `dates.ts`, `defaults.ts`, `vault.test.ts`, `AppData`, `ledger.ts`, `vaultBackup.ts`, `LockContext.ts`, `AppLockSettings.tsx`, `calendar.ts`, `domain/types.ts`, `MonthPage.tsx`, `FinanceContext.tsx`?**
+  _High betweenness centrality (0.066) - this node is a cross-community bridge._
+- **Are the 3 inferred relationships involving `haptic()` (e.g. with `Monatliche Sicherung (iCloud) (`domain/backupReminder.ts`, `lib/backupReminder.ts`, `data/vaultBackup.ts`, `hooks/useVaultBackup.ts`, `components/BackupReminderCard.tsx`, `VaultBackupImportSheet.tsx`)` and `Regeln`) actually correct?**
+  _`haptic()` has 3 INFERRED edges - model-reasoned connections that need verification._
+- **Should `Projektkontext: finanz-app („Finanzklar“)` be split into smaller, more focused modules?**
+  _Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected._

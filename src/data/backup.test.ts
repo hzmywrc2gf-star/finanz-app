@@ -35,6 +35,53 @@ const mutate = (fn: (d: any) => void) => {
   return JSON.stringify(d)
 }
 
+const EV = {
+  id: 'e1', createdAt: 5, title: 'Zahnarzt', allDay: false, start: '2026-11-16T09:30', end: '2026-11-16T10:30',
+  location: 'Praxis', recurrence: { freq: 'weekly', interval: 2, byWeekday: [1, 3], count: 10 }, exdates: ['2026-11-18'], importUid: 'abc@x',
+}
+
+describe('backup events', () => {
+  const withEvent = (patch: Record<string, unknown> = {}, extra: Record<string, unknown>[] = []) =>
+    mutate((d) => (d.events = [{ ...EV, ...patch }, ...extra]))
+  it('roundtrips events', () => {
+    const out = parseBackup(withEvent())
+    expect(out.events).toEqual([EV])
+    expect(parseBackup(exportJSON(out))).toEqual(out)
+  })
+  it('accepts an all-day multi-day event', () => {
+    const out = parseBackup(withEvent({ allDay: true, start: '2026-12-24', end: '2026-12-27', recurrence: undefined, exdates: undefined }))
+    expect(out.events[0].end).toBe('2026-12-27')
+  })
+  it('migrates v7 to v8 with no events', () => {
+    const v7 = { ...JSON.parse(exportJSON(sample())), version: 7 }
+    delete v7.events
+    expect(parseBackup(JSON.stringify(v7)).events).toEqual([])
+  })
+  it('rejects invalid events', () => {
+    expect(() => parseBackup(mutate((d) => delete d.events))).toThrow(/Termine/)
+    expect(() => parseBackup(withEvent({ title: '  ' }))).toThrow(/Titel/)
+    expect(() => parseBackup(withEvent({ title: 'x'.repeat(201) }))).toThrow(/Titel/)
+    expect(() => parseBackup(withEvent({ start: '2026-11-16' }))).toThrow(/Uhrzeit/)
+    expect(() => parseBackup(withEvent({ start: '2026-11-16T25:00' }))).toThrow(/Uhrzeit/)
+    expect(() => parseBackup(withEvent({ end: '2026-11-16T09:00' }))).toThrow(/endet vor/)
+    expect(() => parseBackup(withEvent({ end: '2026-11-16T09:30' }))).toThrow(/endet vor/)
+    expect(() => parseBackup(withEvent({ allDay: true, start: '2026-11-16T09:30' }))).toThrow(/Datum/)
+    expect(() => parseBackup(withEvent({ allDay: true, start: '2026-11-17', end: '2026-11-16' }))).toThrow(/endet vor/)
+    expect(() => parseBackup(withEvent({ location: 'x'.repeat(201) }))).toThrow(/Ort/)
+    expect(() => parseBackup(withEvent({ notes: 'x'.repeat(2001) }))).toThrow(/Notiz/)
+    expect(() => parseBackup(withEvent({ importUid: 'x'.repeat(301) }))).toThrow(/Import/)
+    expect(() => parseBackup(withEvent({ exdates: ['2026-02-30'] }))).toThrow(/Ausgenommene/)
+    expect(() => parseBackup(withEvent({}, [EV]))).toThrow(/Doppelte/)
+    expect(() => parseBackup(withEvent({ recurrence: { freq: 'hourly', interval: 1 } }))).toThrow(/Rhythmus/)
+    expect(() => parseBackup(withEvent({ recurrence: { freq: 'daily', interval: 0 } }))).toThrow(/Abstand/)
+    expect(() => parseBackup(withEvent({ recurrence: { freq: 'daily', interval: 100 } }))).toThrow(/Abstand/)
+    expect(() => parseBackup(withEvent({ recurrence: { freq: 'daily', interval: 1, count: 1001 } }))).toThrow(/Anzahl/)
+    expect(() => parseBackup(withEvent({ recurrence: { freq: 'daily', interval: 1, until: '2026-13-01' } }))).toThrow(/Ende/)
+    expect(() => parseBackup(withEvent({ recurrence: { freq: 'daily', interval: 1, byWeekday: [1] } }))).toThrow(/Wochentage/)
+    expect(() => parseBackup(withEvent({ recurrence: { freq: 'weekly', interval: 1, byWeekday: [7] } }))).toThrow(/Wochentage/)
+  })
+})
+
 describe('backup', () => {
   it('roundtrips', () => {
     const d = sample()
@@ -43,7 +90,7 @@ describe('backup', () => {
   it('rejects invalid input with German errors', () => {
     expect(() => parseBackup('nope')).toThrow(/JSON/)
     expect(() => parseBackup('[]')).toThrow(/Ungültige Sicherungsdatei/)
-    expect(() => parseBackup(mutate((d) => (d.version = 8)))).toThrow(/Version/)
+    expect(() => parseBackup(mutate((d) => (d.version = 9)))).toThrow(/Version/)
     expect(() => parseBackup(mutate((d) => (d.transactions = {})))).toThrow(/Buchungen/)
     expect(() => parseBackup(mutate((d) => (d.categories = null)))).toThrow(/Kategorien/)
     expect(() => parseBackup(mutate((d) => (d.settings.startBalanceCents = 1.5)))).toThrow()
@@ -58,7 +105,7 @@ describe('backup', () => {
   })
   it('exports version 6 with accounts, start cash and transfers', () => {
     const out = JSON.parse(exportJSON(sample()))
-    expect(out.version).toBe(7)
+    expect(out.version).toBe(8)
     expect(out.settings.startCashCents).toBe(2000)
     expect(out.transactions.map((t: any) => t.account)).toEqual(['konto', 'bargeld'])
     expect(out.transfers).toEqual([{ id: 't1', direction: 'withdrawal', amountCents: 20000, date: '2026-10-03', note: 'Automat', createdAt: 3 }])
@@ -87,11 +134,12 @@ describe('backup', () => {
     const out = parseBackup(JSON.stringify(v1))
     expect(out).toEqual({
       ...v1,
-      version: 7,
+      version: 8,
       settings: { startBalanceCents: 5, startCashCents: 0 },
       recurring: [],
       transfers: [],
       invoices: [],
+      events: [],
     })
   })
   it('validates recurring rules strictly', () => {
@@ -125,7 +173,7 @@ describe('backup', () => {
   it('migrates a v2 backup up to v7 (everything on the Konto)', () => {
     const v2 = { ...JSON.parse(exportJSON(sample())), version: 2 }
     const out = parseBackup(JSON.stringify(v2))
-    expect(out.version).toBe(7)
+    expect(out.version).toBe(8)
     expect(out.transactions.every((t) => t.account === 'konto')).toBe(true)
     expect(out.transfers).toEqual([])
     expect(out.settings.startCashCents).toBe(0)
@@ -137,7 +185,7 @@ describe('backup', () => {
     delete v3.settings.startCashCents
     for (const t of v3.transactions) delete t.account
     const out = parseBackup(JSON.stringify(v3))
-    expect(out.version).toBe(7)
+    expect(out.version).toBe(8)
     expect(out.settings).toEqual({ startBalanceCents: 0, startCashCents: 0 })
     expect(out.transfers).toEqual([])
     expect(out.transactions.map((t) => [t.id, t.account, t.amountCents])).toEqual([['a', 'konto', 250000], ['b', 'konto', 4550]])
@@ -148,7 +196,7 @@ describe('backup', () => {
     v4.version = 4
     for (const r of v4.recurring) delete r.autoBook
     const out = parseBackup(JSON.stringify(v4))
-    expect(out.version).toBe(7)
+    expect(out.version).toBe(8)
     expect(out.recurring.map((r) => [r.id, r.autoBook, r.bookedThrough])).toEqual([['r1', true, '2026-10-31']])
     expect(out).toEqual(sample())
   })
@@ -157,11 +205,11 @@ describe('backup', () => {
     v6.version = 6
     delete v6.invoices
     const out = parseBackup(JSON.stringify(v6))
-    expect(out.version).toBe(7)
+    expect(out.version).toBe(8)
     expect(out.invoices).toEqual([])
     expect(out).toEqual(sample())
   })
-  it('roundtrips invoices and exports version 7', () => {
+  it('roundtrips invoices and exports version 8', () => {
     const d = addInvoice(
       sample(),
       { amountCents: 13980, note: 'Otto', categoryId: 'expense-kleidung', purchaseDate: '2026-10-20', dueDate: '2026-11-03' },
@@ -169,7 +217,7 @@ describe('backup', () => {
       'inv1',
     )
     const withSnooze = { ...d, invoices: [{ ...d.invoices[0], snoozedUntil: '2026-10-31' }] }
-    expect(JSON.parse(exportJSON(withSnooze)).version).toBe(7)
+    expect(JSON.parse(exportJSON(withSnooze)).version).toBe(8)
     expect(parseBackup(exportJSON(withSnooze))).toEqual(withSnooze)
   })
   it('validates invoices strictly', () => {
@@ -201,7 +249,7 @@ describe('backup', () => {
     const v5 = JSON.parse(exportJSON(sample()))
     v5.version = 5
     const out = parseBackup(JSON.stringify(v5))
-    expect(out.version).toBe(7)
+    expect(out.version).toBe(8)
     expect(out).toEqual(sample())
     expect(out.settings.displayName).toBeUndefined()
   })

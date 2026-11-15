@@ -97,12 +97,52 @@ export interface Invoice {
   snoozedUntil?: string
 }
 
+export type EventFreq = 'daily' | 'weekly' | 'monthly' | 'yearly'
+
+/** Repeat rule of a calendar event (a subset of iCalendar RRULE). */
+export interface EventRecurrence {
+  freq: EventFreq
+  /** Every n-th day/week/month/year, 1–99. */
+  interval: number
+  /** Last day on which an occurrence may start (inclusive), 'YYYY-MM-DD'. */
+  until?: string
+  /** Total number of occurrences (1–1000); `until` and `count` can both be set, the earlier end wins. */
+  count?: number
+  /** Weekly only: weekdays with Monday = 0 … Sunday = 6; absent = the weekday of the start. */
+  byWeekday?: number[]
+}
+
+/**
+ * A calendar entry (Termin). Times are local wall-clock strings without a time zone, so an event stays at
+ * "09:00" when the device changes its zone: all-day events use 'YYYY-MM-DD' (`end` inclusive), timed events
+ * 'YYYY-MM-DDTHH:mm' (`end` after `start`). Never derived with `toISOString()`.
+ */
+export interface CalendarEvent {
+  id: string
+  createdAt: number
+  /** Trimmed, 1–200 characters. */
+  title: string
+  allDay: boolean
+  start: string
+  end: string
+  /** At most 200 characters; absent = none. */
+  location?: string
+  /** At most 2000 characters; absent = none. */
+  notes?: string
+  recurrence?: EventRecurrence
+  /** Start dates ('YYYY-MM-DD') of single occurrences of a repeating event that were deleted. */
+  exdates?: string[]
+  /** UID of an imported .ics event (at most 300 characters); used to skip it on a second import. */
+  importUid?: string
+}
+
 export interface AppData {
-  version: 7
+  version: 8
   settings: Settings
   categories: Category[]
   transactions: Transaction[]
   recurring: RecurringRule[]
   transfers: Transfer[]
   invoices: Invoice[]
+  events: CalendarEvent[]
 }
