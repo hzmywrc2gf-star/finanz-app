@@ -1,4 +1,4 @@
-import type { Account, AppData, Category, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
+import type { Account, AppData, CalendarEvent, Category, EventRecurrence, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { addDays, isValidISODate } from '../domain/dates'
 import { bookDue, nextOccurrence } from '../domain/recurring'
@@ -6,6 +6,8 @@ import { MIN_COUNT, coveredByRule } from '../domain/recurringDetect'
 import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { findCategory } from '../domain/importRows'
 import { snoozeDate } from '../domain/invoices'
+import { dateOf, isLocalDateTime, splitImportedEvents } from '../domain/calendar'
+import { validateEvents } from '../data/backup'
 
 export interface TransactionInput {
   kind: Kind
@@ -664,4 +666,119 @@ export function snoozeInvoice(data: AppData, id: string, today: string): AppData
   const inv = findInvoice(data, id)
   const snoozedUntil = snoozeDate(inv, today)
   return { ...data, invoices: data.invoices.map((i) => (i.id === id ? { ...inv, snoozedUntil } : i)) }
+}
+
+// ---------------------------------------------------------------------------------------------------- Kalender
+
+export interface EventInput {
+  title: string
+  allDay: boolean
+  /** all-day: 'YYYY-MM-DD'; timed: 'YYYY-MM-DDTHH:mm' */
+  start: string
+  end: string
+  location?: string
+  notes?: string
+  recurrence?: EventRecurrence
+}
+
+function cleanEventInput(input: EventInput): Omit<CalendarEvent, 'id' | 'createdAt'> {
+  const title = input.title.trim()
+  if (!title) throw new Error('Bitte einen Titel eingeben.')
+  if (title.length > 200) throw new Error('Der Titel ist zu lang (höchstens 200 Zeichen).')
+  const location = input.location?.trim()
+  if (location && location.length > 200) throw new Error('Der Ort ist zu lang (höchstens 200 Zeichen).')
+  const notes = input.notes?.trim()
+  if (notes && notes.length > 2000) throw new Error('Die Notiz ist zu lang (höchstens 2000 Zeichen).')
+  if (input.allDay) {
+    if (!isValidISODate(input.start) || !isValidISODate(input.end)) throw new Error('Ungültiges Datum.')
+    if (input.end < input.start) throw new Error('Das Ende darf nicht vor dem Beginn liegen.')
+  } else {
+    if (!isLocalDateTime(input.start) || !isLocalDateTime(input.end)) throw new Error('Ungültiges Datum oder ungültige Uhrzeit.')
+    if (input.end <= input.start) throw new Error('Das Ende muss nach dem Beginn liegen.')
+  }
+  const ev: Omit<CalendarEvent, 'id' | 'createdAt'> = { title, allDay: input.allDay, start: input.start, end: input.end }
+  if (location) ev.location = location
+  if (notes) ev.notes = notes
+  const r = input.recurrence
+  if (r) {
+    if (!['daily', 'weekly', 'monthly', 'yearly'].includes(r.freq)) throw new Error('Ungültige Wiederholung.')
+    if (!Number.isInteger(r.interval) || r.interval < 1 || r.interval > 99) throw new Error('Der Abstand der Wiederholung muss zwischen 1 und 99 liegen.')
+    if (r.until !== undefined && !isValidISODate(r.until)) throw new Error('Ungültiges Datum für das Ende der Wiederholung.')
+    if (r.until !== undefined && r.until < dateOf(input.start)) throw new Error('Die Wiederholung darf nicht vor dem Beginn enden.')
+    if (r.count !== undefined && (!Number.isInteger(r.count) || r.count < 1 || r.count > 1000)) throw new Error('Die Anzahl der Wiederholungen muss zwischen 1 und 1000 liegen.')
+    const rec: EventRecurrence = { freq: r.freq, interval: r.interval }
+    if (r.until !== undefined) rec.until = r.until
+    if (r.count !== undefined) rec.count = r.count
+    if (r.freq === 'weekly' && r.byWeekday?.length) rec.byWeekday = [...new Set(r.byWeekday)].sort((a, b) => a - b)
+    ev.recurrence = rec
+  }
+  return ev
+}
+
+export function addEvent(data: AppData, input: EventInput, meta: { id: string; createdAt: number } = { id: crypto.randomUUID(), createdAt: Date.now() }): AppData {
+  const ev: CalendarEvent = { id: meta.id, createdAt: meta.createdAt, ...cleanEventInput(input) }
+  return { ...data, events: [...data.events, ev] }
+}
+
+export function updateEvent(data: AppData, id: string, input: EventInput): AppData {
+  const existing = data.events.find((e) => e.id === id)
+  if (!existing) throw new Error('Der Termin wurde nicht gefunden.')
+  const clean = cleanEventInput(input)
+  const updated: CalendarEvent = { id, createdAt: existing.createdAt, ...clean }
+  // skipped dates only make sense while the series still starts on the same day
+  if (existing.exdates?.length && clean.recurrence && dateOf(clean.start) === dateOf(existing.start)) updated.exdates = existing.exdates
+  if (existing.importUid) updated.importUid = existing.importUid
+  return { ...data, events: data.events.map((e) => (e.id === id ? updated : e)) }
+}
+
+export function deleteEvent(data: AppData, id: string): AppData {
+  return { ...data, events: data.events.filter((e) => e.id !== id) }
+}
+
+/** Puts back exactly the deleted event (undo); throws if its id exists again. */
+export function restoreEvent(data: AppData, ev: CalendarEvent): AppData {
+  if (data.events.some((e) => e.id === ev.id)) throw new Error('Der Termin existiert schon.')
+  return { ...data, events: [...data.events, ev] }
+}
+
+/** "Nur diesen Termin" of a repeating event: skips the occurrence that starts on `date`. */
+export function deleteOccurrence(data: AppData, id: string, date: string): AppData {
+  const existing = data.events.find((e) => e.id === id)
+  if (!existing) throw new Error('Der Termin wurde nicht gefunden.')
+  if (!existing.recurrence) throw new Error('Dieser Termin wiederholt sich nicht.')
+  if (!isValidISODate(date)) throw new Error('Ungültiges Datum.')
+  const exdates = [...new Set([...(existing.exdates ?? []), date])].sort()
+  return { ...data, events: data.events.map((e) => (e.id === id ? { ...e, exdates } : e)) }
+}
+
+/** Undo of `deleteOccurrence`. */
+export function restoreOccurrence(data: AppData, id: string, date: string): AppData {
+  const existing = data.events.find((e) => e.id === id)
+  if (!existing) throw new Error('Der Termin wurde nicht gefunden.')
+  const exdates = (existing.exdates ?? []).filter((d) => d !== date)
+  const { exdates: _old, ...rest } = existing
+  return { ...data, events: data.events.map((e) => (e.id === id ? (exdates.length ? { ...rest, exdates } : rest) : e)) }
+}
+
+export interface ImportEventsResult {
+  data: AppData
+  eventIds: string[]
+}
+
+/** Adds imported events (all or nothing); ones already present (same importUid and start) are skipped. */
+export function importEvents(
+  data: AppData,
+  incoming: Omit<CalendarEvent, 'id' | 'createdAt'>[],
+  now: number = Date.now(),
+  newId: () => string = () => crypto.randomUUID(),
+): ImportEventsResult {
+  const { fresh } = splitImportedEvents(data.events, incoming)
+  const added: CalendarEvent[] = fresh.map((e, i) => ({ id: newId(), createdAt: now + i, ...e }))
+  const events = validateEvents([...data.events, ...added] as unknown[])
+  return { data: { ...data, events }, eventIds: added.map((e) => e.id) }
+}
+
+export function undoImportEvents(data: AppData, eventIds: string[]): AppData {
+  const removed = new Set(eventIds)
+  return { ...data, events: data.events.filter((e) => !removed.has(e.id)) }
 }

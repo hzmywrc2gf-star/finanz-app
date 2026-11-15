@@ -6,7 +6,7 @@ import {
   addTransfer, deleteTransfer, renameCategory, setCategoryBudget, setStartBalance, setStartCash, updateRecurring,
   restoreTransaction, restoreTransfer, setDisplayName, updateTransaction, updateTransfer, importTransactions, undoImport,
   createRecurringFromSuggestion, addInvoice, updateInvoice, deleteInvoice, restoreInvoice, payInvoice, undoPayInvoice,
-  changeInvoiceAmount, returnInvoice, snoozeInvoice,
+  changeInvoiceAmount, returnInvoice, snoozeInvoice, addEvent, updateEvent, deleteEvent, restoreEvent, deleteOccurrence, restoreOccurrence, importEvents, undoImportEvents,
 } from './actions'
 import { accountBalance } from '../domain/calc'
 import { monthSummary } from '../domain/month'
@@ -565,5 +565,55 @@ describe('invoices (Kauf auf Rechnung)', () => {
     expect(d.invoices[0].categoryId).toBe('expense-kleidung')
     const e = deleteCategory(addInvoice(addCategory(base(), 'expense', 'Technik', 'tech'), { ...inInput, categoryId: 'tech' }, 1, 'i2'), 'tech')
     expect(e.invoices[0].categoryId).toBe('expense-sonstiges')
+  })
+})
+
+describe('calendar actions', () => {
+  const base = { title: '  Zahnarzt ', allDay: false, start: '2026-11-16T09:00', end: '2026-11-16T10:00' }
+  const meta = { id: 'e1', createdAt: 1 }
+  it('adds, trims and validates', () => {
+    const d = addEvent(createDefaultData(), { ...base, location: ' Praxis ', notes: '  ', recurrence: { freq: 'weekly', interval: 1, byWeekday: [2, 0, 2] } }, meta)
+    expect(d.events).toEqual([{ ...meta, title: 'Zahnarzt', allDay: false, start: base.start, end: base.end, location: 'Praxis', recurrence: { freq: 'weekly', interval: 1, byWeekday: [0, 2] } }])
+    const d0 = createDefaultData()
+    expect(() => addEvent(d0, { ...base, title: ' ' })).toThrow('Bitte einen Titel eingeben.')
+    expect(() => addEvent(d0, { ...base, end: base.start })).toThrow('Das Ende muss nach dem Beginn liegen.')
+    expect(() => addEvent(d0, { ...base, start: '2026-11-16' })).toThrow('Ungültiges Datum oder ungültige Uhrzeit.')
+    expect(() => addEvent(d0, { ...base, allDay: true, start: '2026-11-17', end: '2026-11-16' })).toThrow('Das Ende darf nicht vor dem Beginn liegen.')
+    expect(() => addEvent(d0, { ...base, recurrence: { freq: 'daily', interval: 1, until: '2026-11-01' } })).toThrow('nicht vor dem Beginn enden')
+    expect(() => addEvent(d0, { ...base, recurrence: { freq: 'daily', interval: 0 } })).toThrow('Abstand')
+    expect(() => addEvent(d0, { ...base, notes: 'x'.repeat(2001) })).toThrow('Notiz')
+  })
+  it('updates, keeps skipped dates only for the same start day, and restores', () => {
+    let d = addEvent(createDefaultData(), { ...base, recurrence: { freq: 'daily', interval: 1 } }, meta)
+    d = deleteOccurrence(d, 'e1', '2026-11-17')
+    expect(updateEvent(d, 'e1', { ...base, title: 'Neu', recurrence: { freq: 'daily', interval: 1 } }).events[0].exdates).toEqual(['2026-11-17'])
+    expect(updateEvent(d, 'e1', { ...base, start: '2026-11-18T09:00', end: '2026-11-18T10:00', recurrence: { freq: 'daily', interval: 1 } }).events[0].exdates).toBeUndefined()
+    expect(() => updateEvent(d, 'zz', base)).toThrow('Der Termin wurde nicht gefunden.')
+    const gone = deleteEvent(d, 'e1')
+    expect(gone.events).toEqual([])
+    expect(restoreEvent(gone, d.events[0])).toEqual(d)
+    expect(() => restoreEvent(d, d.events[0])).toThrow('existiert schon')
+  })
+  it('deletes a single occurrence and undoes it', () => {
+    const d = addEvent(createDefaultData(), { ...base, recurrence: { freq: 'daily', interval: 1 } }, meta)
+    const one = deleteOccurrence(d, 'e1', '2026-11-17')
+    expect(one.events[0].exdates).toEqual(['2026-11-17'])
+    expect(restoreOccurrence(one, 'e1', '2026-11-17')).toEqual(d)
+    expect(() => deleteOccurrence(addEvent(createDefaultData(), base, meta), 'e1', '2026-11-16')).toThrow('wiederholt sich nicht')
+  })
+  it('imports, skips duplicates and undoes the batch', () => {
+    const incoming = [
+      { title: 'A', allDay: false, start: '2026-11-16T09:00', end: '2026-11-16T10:00', importUid: 'u1' },
+      { title: 'B', allDay: true, start: '2026-11-17', end: '2026-11-17' },
+    ]
+    let n = 0
+    const first = importEvents(createDefaultData(), incoming, 100, () => `id${++n}`)
+    expect(first.eventIds).toEqual(['id1', 'id2'])
+    expect(first.data.events.map((e) => e.createdAt)).toEqual([100, 101])
+    const again = importEvents(first.data, incoming, 200, () => `id${++n}`)
+    // the event with a UID is skipped, the one without is not recognisable and comes again
+    expect(again.eventIds).toEqual(['id3'])
+    expect(undoImportEvents(again.data, again.eventIds)).toEqual(first.data)
+    expect(undoImportEvents(first.data, first.eventIds).events).toEqual([])
   })
 })

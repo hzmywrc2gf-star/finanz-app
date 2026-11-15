@@ -56,7 +56,7 @@ function validateRecurrence(r: unknown): EventRecurrence {
   return out
 }
 
-function validateEvents(list: unknown[]): CalendarEvent[] {
+export function validateEvents(list: unknown[]): CalendarEvent[] {
   const events: CalendarEvent[] = []
   const ids = new Set<string>()
   for (const e of list) {

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AppData, Invoice, Kind } from '../domain/types'
+import type { AppData, CalendarEvent, Invoice, Kind } from '../domain/types'
 import type { FinanceRepository } from '../data/repository'
 import { LocalStorageRepository } from '../data/localStorageRepo'
 import { todayISO } from '../domain/dates'
@@ -9,7 +9,7 @@ import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { haptic } from '../lib/haptics'
 import { UndoToast } from '../components/UndoToast'
 import * as A from './actions'
-import type { ContractBookingInput, InvoiceInput, RecurringInput, TransactionInput, TransferInput } from './actions'
+import type { ContractBookingInput, EventInput, InvoiceInput, RecurringInput, TransactionInput, TransferInput } from './actions'
 
 export interface FinanceApi {
   data: AppData
@@ -53,6 +53,15 @@ export interface FinanceApi {
   returnInvoice(id: string): void
   /** "Später": hides the reminder for two days (at most to "Zahlen bis"). */
   snoozeInvoice(id: string): void
+  /** Calendar events (Termine). */
+  addEvent(input: EventInput): void
+  updateEvent(id: string, input: EventInput): void
+  /** Deletes the whole event (a repeating one with all its dates); "Rückgängig" in the toast restores it. */
+  deleteEvent(id: string): void
+  /** "Nur diesen Termin": skips one date of a repeating event; undoable. */
+  deleteOccurrence(id: string, date: string): void
+  /** Imports parsed .ics events (duplicates are skipped); "Rückgängig" removes the batch. Returns the number added. */
+  importEvents(events: Omit<CalendarEvent, 'id' | 'createdAt'>[]): number
   replaceAll(data: AppData): void
   /** File import: adds the bookings (new categories are created); "Rückgängig" in the toast removes the whole batch. Returns the new ids. */
   importTransactions(bookings: A.ImportBooking[]): string[]
@@ -207,6 +216,24 @@ export function FinanceProvider({
         const value = ref.current?.invoices.find((i) => i.id === id)
         apply((d) => A.returnInvoice(d, id))
         if (value) setUndo({ id: ++undoSeq.current, message: 'Rechnung entfernt', revert: (d) => A.restoreInvoice(d, value) })
+      },
+      addEvent: (i) => apply((d) => A.addEvent(d, i)),
+      updateEvent: (id, i) => apply((d) => A.updateEvent(d, id, i)),
+      deleteEvent: (id) => {
+        const value = ref.current?.events.find((e) => e.id === id)
+        apply((d) => A.deleteEvent(d, id))
+        if (value) setUndo({ id: ++undoSeq.current, message: 'Termin gelöscht', revert: (d) => A.restoreEvent(d, value) })
+      },
+      deleteOccurrence: (id, date) => {
+        apply((d) => A.deleteOccurrence(d, id, date))
+        setUndo({ id: ++undoSeq.current, message: 'Termin gelöscht', revert: (d) => A.restoreOccurrence(d, id, date) })
+      },
+      importEvents: (events) => {
+        let result: A.ImportEventsResult | undefined
+        apply((d) => (result = A.importEvents(d, events)).data)
+        const ids = (result as A.ImportEventsResult).eventIds
+        if (ids.length > 0) setUndo({ id: ++undoSeq.current, message: ids.length === 1 ? '1 Termin importiert' : `${ids.length} Termine importiert`, revert: (d) => A.undoImportEvents(d, ids) })
+        return ids.length
       },
       snoozeInvoice: (id) => apply((d) => A.snoozeInvoice(d, id, todayISO())),
       // an older backup may already have occurrences due

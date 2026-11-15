@@ -1,5 +1,5 @@
 import type { AppData, CalendarEvent, EventRecurrence, Kind } from './types'
-import { addDays, addMonths, isValidISODate, monthStart, parseISODate, toISODate } from './dates'
+import { addDays, isValidISODate, monthStart, parseISODate, toISODate } from './dates'
 import { occurrencesBetween, recurringTitle } from './recurring'
 import { invoiceTitle } from './invoices'
 
@@ -392,6 +392,27 @@ export function isLocalDateTime(v: string): boolean {
   return isValidISODate(v.slice(0, 10)) && Number(v.slice(11, 13)) < 24 && Number(v.slice(14, 16)) < 60
 }
 
+/** Key under which an imported event is remembered: its file UID plus start (a changed single occurrence has its own UID#day). */
+const importKey = (e: Pick<CalendarEvent, 'importUid' | 'start'>) => `${e.importUid}|${e.start}`
+
+/** Splits imported events into new ones and ones that already exist (same importUid and start; events without UID are always new). */
+export function splitImportedEvents<T extends Omit<CalendarEvent, 'id' | 'createdAt'>>(
+  existing: readonly Pick<CalendarEvent, 'importUid' | 'start'>[],
+  incoming: readonly T[],
+): { fresh: T[]; duplicates: T[] } {
+  const seen = new Set(existing.filter((e) => e.importUid).map(importKey))
+  const fresh: T[] = []
+  const duplicates: T[] = []
+  for (const e of incoming) {
+    if (e.importUid && seen.has(importKey(e))) duplicates.push(e)
+    else {
+      fresh.push(e)
+      if (e.importUid) seen.add(importKey(e))
+    }
+  }
+  return { fresh, duplicates }
+}
+
 /** Short German text of the repeat rule, for lists: "Wöchentlich", "Alle 2 Wochen", "Täglich". */
 export function recurrenceText(r: EventRecurrence | undefined): string {
   if (!r) return 'Nie'
@@ -400,12 +421,6 @@ export function recurrenceText(r: EventRecurrence | undefined): string {
   if (r.interval === 1) return single
   return `Alle ${r.interval} ${plural}`
 }
-
-/** Month shown for a day, as a month start: '2026-11-15' -> '2026-11-01'. Re-exported helper for the pages. */
-export const monthOf = (iso: string): string => monthStart(iso)
-
-/** Moves a month start by months (re-export so the calendar page needs only this module for navigation). */
-export const shiftMonth = (iso: string, n: number): string => addMonths(iso, n)
 
 /** A day inside another month: same day number if possible, else the last day ('2026-10-31' + 1 month = '2026-11-30'). */
 export function sameDayInMonth(iso: string, month: string): string {

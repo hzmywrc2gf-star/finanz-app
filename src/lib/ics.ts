@@ -1,4 +1,7 @@
-/** Minimal iCalendar (RFC 5545) writer for a single reminder event. Pure; the download itself lives in `download.ts`. */
+import type { CalendarEvent } from '../domain/types'
+import { addDays } from '../domain/dates'
+
+/** Minimal iCalendar (RFC 5545) writer for a single reminder event or calendar entry. Pure; the download itself lives in `download.ts`. */
 
 export interface IcsReminder {
   /** Stable id, so adding the same entry twice replaces instead of duplicating (e.g. the invoice id). */
@@ -84,5 +87,52 @@ export function buildIcs(r: IcsReminder): string {
     'END:VEVENT',
     'END:VCALENDAR',
   ]
+  return lines.map(foldIcsLine).join('\r\n') + '\r\n'
+}
+
+/** '2026-10-28' -> '20261028' */
+const dateStamp = (iso: string) => iso.replace(/-/g, '')
+
+/** '2026-10-28T09:30' -> '20261028T093000' (floating local time) */
+const dateTimeStamp = (iso: string) => `${dateStamp(iso.slice(0, 10))}T${iso.slice(11, 13)}${iso.slice(14, 16)}00`
+
+const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
+const FREQ_CODES = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY', yearly: 'YEARLY' } as const
+
+/**
+ * A calendar file with one event of the app (`CalendarEvent`), including its repeat rule, skipped dates and an optional alert.
+ * All-day events use DATE values (DTEND exclusive), timed events floating local times, so they stay at the same wall-clock time.
+ */
+export function buildEventIcs(e: CalendarEvent, opts: { now?: Date; alarmMinutes?: number | null } = {}): string {
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Finanzklar//Termin//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT']
+  lines.push(`UID:${escapeIcsText(e.importUid ?? `${e.id}@finanzklar`)}`)
+  lines.push(`DTSTAMP:${utcStamp(opts.now ?? new Date())}`)
+  if (e.allDay) {
+    lines.push(`DTSTART;VALUE=DATE:${dateStamp(e.start)}`)
+    lines.push(`DTEND;VALUE=DATE:${dateStamp(addDays(e.end, 1))}`)
+  } else {
+    lines.push(`DTSTART:${dateTimeStamp(e.start)}`)
+    lines.push(`DTEND:${dateTimeStamp(e.end)}`)
+  }
+  const r = e.recurrence
+  if (r) {
+    const parts = [`FREQ=${FREQ_CODES[r.freq]}`]
+    if (r.interval > 1) parts.push(`INTERVAL=${r.interval}`)
+    if (r.count !== undefined) parts.push(`COUNT=${r.count}`)
+    if (r.until) parts.push(`UNTIL=${e.allDay ? dateStamp(r.until) : `${dateStamp(r.until)}T235959`}`)
+    if (r.freq === 'weekly' && r.byWeekday?.length) parts.push(`BYDAY=${r.byWeekday.map((d) => WEEKDAY_CODES[d]).join(',')}`)
+    lines.push(`RRULE:${parts.join(';')}`)
+    for (const d of e.exdates ?? []) {
+      lines.push(e.allDay ? `EXDATE;VALUE=DATE:${dateStamp(d)}` : `EXDATE:${dateStamp(d)}T${e.start.slice(11, 13)}${e.start.slice(14, 16)}00`)
+    }
+  }
+  lines.push(`SUMMARY:${escapeIcsText(e.title)}`)
+  if (e.location) lines.push(`LOCATION:${escapeIcsText(e.location)}`)
+  if (e.notes) lines.push(`DESCRIPTION:${escapeIcsText(e.notes)}`)
+  const alarm = opts.alarmMinutes === undefined ? (e.allDay ? null : 15) : opts.alarmMinutes
+  if (alarm !== null) {
+    lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escapeIcsText(e.title)}`, `TRIGGER:-PT${alarm}M`, 'END:VALARM')
+  }
+  lines.push('END:VEVENT', 'END:VCALENDAR')
   return lines.map(foldIcsLine).join('\r\n') + '\r\n'
 }
