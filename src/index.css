@@ -2517,14 +2517,19 @@ html[data-privacy] #privacy-cover {
   gap: 8px;
 }
 .field-pair input[type='date'] {
-  flex: 1.5 1 0;
+  flex: 1 1 auto;
 }
 .field-pair input[type='time'] {
-  flex: 1 1 0;
+  flex: 0 0 116px;
+  width: 116px;
   color: var(--text);
+}
+.ev-labels .field label {
+  width: 100px;
 }
 .field-pair input {
   min-width: 0;
+  font-size: 16px;
 }
 .field.field-notes {
   align-items: flex-start;
@@ -2819,9 +2824,9 @@ html[data-privacy] #privacy-cover {
   position: absolute;
   margin-left: 2px;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: 4px 8px 8px 4px;
   background: var(--tint-lav);
-  box-shadow: inset 3px 0 0 var(--line);
+  border-left: 3px solid var(--line);
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -2910,7 +2915,8 @@ html[data-privacy] #privacy-cover {
 }
 .cal-prev-when {
   flex: none;
-  width: 104px;
+  width: 126px;
+  white-space: nowrap;
   font-size: 13px;
   color: var(--text-2);
 }
@@ -2956,8 +2962,14 @@ html[data-privacy] #privacy-cover {
   .cal-grid {
     padding: 10px 10px 12px;
   }
+  .cal-grid {
+    overflow: hidden;
+  }
+  .cal-day-btn h2 {
+    font-size: 18px;
+  }
   .cal-cell {
-    min-height: 104px;
+    min-height: max(104px, calc((100dvh - 330px) / 6));
     align-items: stretch;
     padding: 4px 4px 4px;
     border-radius: 10px;
@@ -2979,16 +2991,16 @@ html[data-privacy] #privacy-cover {
     font-size: 12px;
     line-height: 16px;
     padding: 0 5px;
-    border-radius: 5px;
+    border-radius: 3px;
     background: var(--tint-lav);
-    box-shadow: inset 2px 0 0 var(--line);
+    border-left: 2px solid var(--line);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .cal-title.more {
     background: transparent;
-    box-shadow: none;
+    border-left-color: transparent;
     color: var(--text-2);
   }
   .cal-cell + .cal-cell {

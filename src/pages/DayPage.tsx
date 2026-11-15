@@ -118,7 +118,7 @@ export const DayPage = memo(function DayPage({
                   top,
                   height,
                   left: `calc(var(--tl-gutter) + (100% - var(--tl-gutter)) * ${p.column / p.columns})`,
-                  width: `calc((100% - var(--tl-gutter)) / ${p.columns} - 3px)`,
+                  width: `calc((100% - var(--tl-gutter)) / ${p.columns} - 6px)`,
                 }}
                 onClick={() => onEditEvent(seg)}
               >

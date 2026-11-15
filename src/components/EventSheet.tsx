@@ -159,7 +159,7 @@ export function EventSheet({ event, occurrenceDate, day, hour, onClose }: EventS
             <input id="ev-loc" placeholder="Optional" value={location} maxLength={200} autoComplete="off" onChange={(e) => setLocation(e.target.value)} />
           </div>
         </div>
-        <div className="card wide-labels" style={{ marginTop: 16 }}>
+        <div className="card ev-labels" style={{ marginTop: 16 }}>
           <div className="field switch-row">
             <label htmlFor="ev-allday">Ganztägig</label>
             <Switch id="ev-allday" checked={allDay} onChange={toggleAllDay} />
