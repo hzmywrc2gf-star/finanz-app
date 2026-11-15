@@ -681,7 +681,8 @@ export interface EventInput {
   recurrence?: EventRecurrence
 }
 
-function cleanEventInput(input: EventInput): Omit<CalendarEvent, 'id' | 'createdAt'> {
+/** Trims and validates the form values of an event (German errors); the result lacks only id and createdAt. */
+export function normalizeEventInput(input: EventInput): Omit<CalendarEvent, 'id' | 'createdAt'> {
   const title = input.title.trim()
   if (!title) throw new Error('Bitte einen Titel eingeben.')
   if (title.length > 200) throw new Error('Der Titel ist zu lang (höchstens 200 Zeichen).')
@@ -716,14 +717,14 @@ function cleanEventInput(input: EventInput): Omit<CalendarEvent, 'id' | 'created
 }
 
 export function addEvent(data: AppData, input: EventInput, meta: { id: string; createdAt: number } = { id: crypto.randomUUID(), createdAt: Date.now() }): AppData {
-  const ev: CalendarEvent = { id: meta.id, createdAt: meta.createdAt, ...cleanEventInput(input) }
+  const ev: CalendarEvent = { id: meta.id, createdAt: meta.createdAt, ...normalizeEventInput(input) }
   return { ...data, events: [...data.events, ev] }
 }
 
 export function updateEvent(data: AppData, id: string, input: EventInput): AppData {
   const existing = data.events.find((e) => e.id === id)
   if (!existing) throw new Error('Der Termin wurde nicht gefunden.')
-  const clean = cleanEventInput(input)
+  const clean = normalizeEventInput(input)
   const updated: CalendarEvent = { id, createdAt: existing.createdAt, ...clean }
   // skipped dates only make sense while the series still starts on the same day
   if (existing.exdates?.length && clean.recurrence && dateOf(clean.start) === dateOf(existing.start)) updated.exdates = existing.exdates

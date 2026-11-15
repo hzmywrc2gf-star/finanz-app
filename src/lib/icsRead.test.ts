@@ -30,7 +30,7 @@ describe('text handling', () => {
     expect(unfold('A:1\r\n 23\r\n\t4\r\nB:2')).toEqual(['A:1234', 'B:2'])
   })
   it('unescapes text', () => {
-    expect(unescapeIcsText('a\\, b\; c\\nd \\\\ e')).toBe('a, b; c\nd \\ e')
+    expect(unescapeIcsText('a\\, b\; c\\nd \\\\ e')).toBe('a, b\; c\nd \\ e')
   })
 })
 

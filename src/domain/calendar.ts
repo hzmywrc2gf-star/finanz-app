@@ -429,3 +429,37 @@ export function sameDayInMonth(iso: string, month: string): string {
   const last = daysInMonth(Number(first.slice(0, 4)), Number(first.slice(5, 7)) - 1)
   return toISODate(new Date(Number(first.slice(0, 4)), Number(first.slice(5, 7)) - 1, Math.min(d, last)))
 }
+
+const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
+
+/** "Montag, 16. November" */
+export function longDayLabel(iso: string): string {
+  return `${WEEKDAY_LONG[weekdayOf(iso)]}, ${Number(iso.slice(8, 10))}. ${MONTH_NAMES[Number(iso.slice(5, 7)) - 1]}`
+}
+
+/** "16. November" */
+export function dayMonthLabel(iso: string): string {
+  return `${Number(iso.slice(8, 10))}. ${MONTH_NAMES[Number(iso.slice(5, 7)) - 1]}`
+}
+
+/** The time column of a list row: "ganztägig", "09:00 – 10:30", "ab 22:00", "bis 07:00". */
+export function timeText(seg: DaySegment): string {
+  if (seg.allDay || (seg.fromBefore && seg.toAfter)) return 'ganztägig'
+  if (seg.fromBefore) return `bis ${timeFromMinutes(seg.endMin)}`
+  if (seg.toAfter) return `ab ${timeFromMinutes(seg.startMin)}`
+  return `${timeFromMinutes(seg.startMin)} – ${timeFromMinutes(seg.endMin)}`
+}
+
+/** Occurrences grouped by each day they touch (limited to from..to): the month grid reads titles and dots from it. */
+export function occurrencesByDay(occs: readonly Occurrence[], from: string, to: string): Map<string, Occurrence[]> {
+  const map = new Map<string, Occurrence[]>()
+  for (const o of occs) {
+    const last = lastDay(o)
+    for (let d = o.date < from ? from : o.date; d <= last && d <= to; d = addDays(d, 1)) {
+      const list = map.get(d)
+      if (list) list.push(o)
+      else map.set(d, [o])
+    }
+  }
+  return map
+}
