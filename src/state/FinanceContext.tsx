@@ -63,6 +63,8 @@ export interface FinanceApi {
   /** Imports parsed .ics events (duplicates are skipped); "Rückgängig" removes the batch. Returns the number added. */
   importEvents(events: Omit<CalendarEvent, 'id' | 'createdAt'>[]): number
   replaceAll(data: AppData): void
+  /** "Alle Daten löschen": fresh start (only the name stays); "Rückgängig" in the toast brings everything back for 5 s. */
+  resetAll(): void
   /** File import: adds the bookings (new categories are created); "Rückgängig" in the toast removes the whole batch. Returns the new ids. */
   importTransactions(bookings: A.ImportBooking[]): string[]
   /** Turns a found pattern into a Vertrag (links its bookings, handles the past); throws German errors. */
@@ -240,6 +242,11 @@ export function FinanceProvider({
       replaceAll: (nd) => {
         apply(() => bookDue(nd, todayISO()))
         setUndo(null)
+      },
+      resetAll: () => {
+        const before = ref.current
+        apply((d) => A.resetData(d))
+        if (before) setUndo({ id: ++undoSeq.current, message: 'Alle Daten gelöscht', revert: () => before })
       },
       importTransactions: (bookings) => {
         let result: A.ImportResult | undefined

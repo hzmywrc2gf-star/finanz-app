@@ -1,5 +1,5 @@
 import type { Account, AppData, CalendarEvent, Category, EventRecurrence, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
-import { FALLBACK_NAME } from '../domain/defaults'
+import { FALLBACK_NAME, createDefaultData } from '../domain/defaults'
 import { addDays, isValidISODate } from '../domain/dates'
 import { bookDue, nextOccurrence } from '../domain/recurring'
 import { MIN_COUNT, coveredByRule } from '../domain/recurringDetect'
@@ -104,6 +104,17 @@ export function setDisplayName(data: AppData, name: string): AppData {
   if (trimmed.length > 40) throw new Error('Der Name darf höchstens 40 Zeichen haben.')
   const settings = { startBalanceCents: data.settings.startBalanceCents, startCashCents: data.settings.startCashCents }
   return { ...data, settings: trimmed ? { ...settings, displayName: trimmed } : settings }
+}
+
+/**
+ * "Alle Daten löschen": a fresh start like a new installation (no bookings, transfers, contracts, invoices or events, the
+ * default categories without budgets, start balances 0). Only the name stays. Lock, theme and other device settings are
+ * not part of AppData and stay untouched as well.
+ */
+export function resetData(data: AppData): AppData {
+  const fresh = createDefaultData()
+  const name = data.settings.displayName
+  return name ? { ...fresh, settings: { ...fresh.settings, displayName: name } } : fresh
 }
 
 export interface TransferInput {

@@ -4971,6 +4971,115 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
 }
 
+// ---------- Alle Daten löschen (Einstellungen → Datensicherung → „Neu anfangen“; frischer Kontext, Heute = Mo 16.11.2026) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`Alle Daten löschen – ${what}: erwartet ${JSON.stringify(expected)}, war ${JSON.stringify(actual)}`) }
+  const cats = [
+    ...['Lebensmittel', 'Fixkosten', 'Mobilität', 'Freizeit', 'Kleidung', 'Gesundheit', 'Sonstiges'].map((name) => ({ id: `expense-${name.toLowerCase()}`, name, kind: 'expense', builtIn: name === 'Sonstiges', ...(name === 'Lebensmittel' ? { monthlyBudgetCents: 30000 } : {}) })),
+    { id: 'cat-haustier', name: 'Haustier', kind: 'expense', builtIn: false, monthlyBudgetCents: 5000 },
+    ...['Gehalt', 'Nebeneinkünfte', 'Sonstiges'].map((name) => ({ id: `income-${name.toLowerCase()}`, name, kind: 'income', builtIn: name === 'Sonstiges' })),
+  ]
+  const seed = {
+    version: 8,
+    settings: { startBalanceCents: 100000, startCashCents: 5000, displayName: 'Felix' },
+    categories: cats,
+    transactions: [
+      { id: 't1', kind: 'expense', amountCents: 2345, date: '2026-11-10', categoryId: 'expense-lebensmittel', note: 'Testeinkauf', account: 'konto', createdAt: 1 },
+      { id: 't2', kind: 'expense', amountCents: 1999, date: '2026-11-12', categoryId: 'cat-haustier', note: 'Futter', account: 'bargeld', createdAt: 2 },
+    ],
+    transfers: [{ id: 'x1', direction: 'withdrawal', amountCents: 5000, date: '2026-11-05', createdAt: 3 }],
+    recurring: [{ id: 'r1', kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', note: 'Miete', interval: 'monthly', dayOfMonth: 1, startDate: '2026-12-01', bookedThrough: '2026-11-16', autoBook: true }],
+    invoices: [{ id: 'i1', createdAt: 4, note: 'Otto', categoryId: 'expense-kleidung', amountCents: 4999, purchaseDate: '2026-11-10', dueDate: '2026-11-24' }],
+    events: [{ id: 'e1', createdAt: 5, title: 'Zahnarzt', allDay: false, start: '2026-11-18T09:30', end: '2026-11-18T10:30' }],
+  }
+  const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block' })
+  await c.addInitScript((s) => { if (!localStorage.getItem('finanz-app:vault') && !sessionStorage.getItem('seeded')) { localStorage.setItem('finanz-app:v1', s); sessionStorage.setItem('seeded', '1') } }, JSON.stringify(seed))
+  const p = await c.newPage()
+  p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  p.on('pageerror', (e) => errors.push(e.message))
+  await p.clock.install({ time: new Date('2026-11-16T10:00:00+01:00') })
+  await keepAlive(p)
+  await p.addInitScript(() => { window.__vibes = []; Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true }) })
+  await p.goto(URL); await ensureOpen(p)
+  const counts = (d) => [d.transactions.length, d.transfers.length, d.recurring.length, d.invoices.length, d.events.length, d.categories.length]
+  await storedWhen(p, (d) => counts(d).join() === '2,1,1,1,1,11')
+  must(await p.getByTestId('balance').innerText().then(nbsp), '926,55 €', 'Kontostand vorher')
+
+  await openSettings(p, 'Datensicherung')
+  const resetBtn = p.getByRole('button', { name: 'Alle Daten löschen', exact: true })
+  await resetBtn.scrollIntoViewIfNeeded()
+  must(await resetBtn.evaluate((b) => getComputedStyle(b).color), await p.evaluate(() => { const d = document.createElement('div'); d.style.color = 'var(--danger-text)'; document.body.append(d); const col = getComputedStyle(d).color; d.remove(); return col }), 'Knopf im Gefahren-Stil (orange)')
+  await p.getByText('Es bleiben: dein Name, Passwort, Face ID').waitFor()
+  await p.screenshot({ path: `${SHOTS}/r1-neu-anfangen.png` })
+  // Abbrechen ändert nichts
+  await p.evaluate(() => { window.__vibes.length = 0 })
+  await resetBtn.click()
+  const dlg = p.getByRole('alertdialog', { name: 'Alle Daten löschen?' })
+  await dlg.waitFor()
+  const msg = nbsp(await dlg.innerText())
+  for (const t of ['Buchungen, Verträge, Rechnungen, Termine und Kategorien werden gelöscht', 'Passwort, Face ID und dein Name bleiben', 'Mach vorher eine Sicherung, falls du etwas behalten willst.']) if (!msg.includes(t)) throw new Error('Alle Daten löschen – Dialogtext fehlt: ' + t)
+  must(await dlg.getByRole('button', { name: 'Alles löschen' }).evaluate((b) => b.classList.contains('danger')), true, 'Bestätigen-Knopf im Gefahren-Stil')
+  await p.screenshot({ path: `${SHOTS}/r2-rueckfrage.png` })
+  await dlg.getByRole('button', { name: 'Abbrechen' }).click()
+  await dlg.waitFor({ state: 'detached' })
+  await sleep(300)
+  must(counts(await readStored(p)), [2, 1, 1, 1, 1, 11], 'Abbrechen ändert nichts')
+  must(await p.evaluate(() => window.__vibes.length), 0, 'kein Tick beim Abbrechen')
+  ok('Alle Daten löschen: Abschnitt „Neu anfangen“ unten in der Datensicherung mit orangem Knopf und Fußnote; die Rückfrage „Alle Daten löschen?“ nennt, was gelöscht wird und was bleibt („Mach vorher eine Sicherung …“), „Abbrechen“ ändert nichts')
+
+  // Bestätigen: alles leer, Standard-Kategorien ohne Budgets, Startguthaben 0, Name bleibt; Rückgängig bringt alles zurück
+  await resetBtn.click()
+  await dlg.getByRole('button', { name: 'Alles löschen' }).click()
+  await dlg.waitFor({ state: 'detached' })
+  const toast = p.getByRole('status').filter({ hasText: 'Alle Daten gelöscht' }).filter({ has: p.getByRole('button', { name: 'Rückgängig' }) })
+  await toast.waitFor()
+  await p.getByText('Alle Daten gelöscht. Du startest jetzt neu.').waitFor()
+  must(await p.evaluate(() => window.__vibes.length), 1, 'ein Haptik-Tick beim Löschen')
+  const emptyDefaults = (d) => counts(d).join() === '0,0,0,0,0,10'
+  let d = await storedWhen(p, emptyDefaults)
+  must(d.settings, { startBalanceCents: 0, startCashCents: 0, displayName: 'Felix' }, 'Startguthaben 0, Name bleibt')
+  must(d.categories.map((x) => `${x.kind}:${x.name}${x.monthlyBudgetCents ? '+Budget' : ''}`), ['expense:Lebensmittel', 'expense:Fixkosten', 'expense:Mobilität', 'expense:Freizeit', 'expense:Kleidung', 'expense:Gesundheit', 'expense:Sonstiges', 'income:Gehalt', 'income:Nebeneinkünfte', 'income:Sonstiges'], 'Standard-Kategorien ohne Budgets')
+  await toast.getByRole('button', { name: 'Rückgängig' }).click()
+  d = await storedWhen(p, (x) => counts(x).join() === '2,1,1,1,1,11')
+  must([d.settings.startBalanceCents, d.categories.find((x) => x.name === 'Haustier')?.monthlyBudgetCents], [100000, 5000], 'Rückgängig stellt alles wieder her')
+  must(await p.getByText('Alle Daten gelöscht. Du startest jetzt neu.').count(), 0, 'Erfolgszeile nach Rückgängig weg')
+  ok('„Alles löschen“: Haptik, Toast „Alle Daten gelöscht“ + Erfolgszeile; gespeichert sind keine Buchungen/Umbuchungen/Verträge/Rechnungen/Termine, die 10 Standard-Kategorien ohne Budgets, Startguthaben 0, der Name „Felix“ bleibt; „Rückgängig“ stellt alles wieder her (auch eigene Kategorie mit Budget)')
+
+  // endgültig löschen und die App prüfen
+  await resetBtn.click()
+  await dlg.getByRole('button', { name: 'Alles löschen' }).click()
+  await dlg.waitFor({ state: 'detached' })
+  await storedWhen(p, emptyDefaults)
+  await p.screenshot({ path: `${SHOTS}/r3-geloescht.png` })
+  await tabOn(p, 'Start').click()
+  await p.getByTestId('balance').waitFor()
+  must([nbsp(await p.getByTestId('balance').innerText()), nbsp(await p.getByTestId('balance-sub').innerText()).replace(/\s+/g, ' ')], ['0,00 €', 'Bargeld 0,00 € Gesamt 0,00 €'], 'Kontostand 0')
+  must([await p.getByTestId('open-invoices').count(), await p.getByRole('region', { name: 'Offene Rechnungen' }).count()], [0, 0], 'keine Rechnungen')
+  if (!/^Alle Buchungen\s*0\b/.test(nbsp(await p.getByRole('button', { name: /^Alle Buchungen/ }).innerText()).replace(/\s+/g, ' '))) throw new Error('Alle Daten löschen – Kachel „Alle Buchungen“ nicht 0')
+  await p.screenshot({ path: `${SHOTS}/r4-start-leer.png` })
+  await tabOn(p, 'Kalender').click()
+  await p.locator('.cal-grid').waitFor()
+  must(await p.locator('.cal-cell[data-date="2026-11-18"] .cal-dot').count(), 0, 'kein Termin am 18.11.')
+  await openSettings(p, 'Kategorien')
+  must(await p.getByText('Haustier').count(), 0, 'eigene Kategorie weg')
+  ok('Danach: Kontostand 0,00 € (Bargeld 0,00 €, Gesamt 0,00 €), keine offenen Rechnungen, „Alle Buchungen 0“, kein Termin im Kalender, eigene Kategorie „Haustier“ gelöscht')
+
+  // Tresor bleibt: nach Neuladen Sperrbildschirm, Entsperren mit demselben Passwort, Daten weiter leer, Name da
+  await p.reload()
+  await p.locator(LOCKED).waitFor({ timeout: 20000 })
+  must(await p.evaluate(() => [!!localStorage.getItem('finanz-app:vault'), localStorage.getItem('finanz-app:v1')]), [true, null], 'Tresor statt Klartext')
+  await p.fill('#lock-secret', TEST_PW)
+  await p.getByRole('button', { name: 'Mit Passwort entsperren' }).click()
+  await p.locator(APPNAV).waitFor({ timeout: 60000 })
+  d = await readStored(p)
+  must([emptyDefaults(d), d.settings.displayName], [true, 'Felix'], 'nach Neuladen leer, Name da')
+  await tabOn(p, 'Einstellungen').click()
+  if (!nbsp(await p.locator('button.menu-row').filter({ hasText: /^Profil/ }).innerText()).includes('Felix')) throw new Error('Alle Daten löschen – Name fehlt in der Profil-Zeile')
+  ok('Tresor bleibt: nach dem Neuladen erscheint der Sperrbildschirm, Entsperren mit demselben Passwort, kein Klartext-Speicher, die gespeicherten Daten sind leer, der Name „Felix“ steht weiter in der Profil-Zeile')
+  await c.close()
+}
+
 await browser.close()
 if (errors.length) { console.error('Konsolenfehler:\n' + errors.join('\n')); process.exit(1) }
 console.log(`\nAlle ${step} Prüfungen bestanden, keine Konsolenfehler.`)

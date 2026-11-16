@@ -2512,6 +2512,10 @@ html[data-privacy] #privacy-cover {
 .btn.backup-now {
   margin: 12px 0 8px;
 }
+/* "Neu anfangen": the destructive button stands on its own (no card around it), like a delete button in a sheet */
+.btn.reset-all {
+  margin-top: 0;
+}
 .backup-monthly .switch-row {
   padding-left: 0;
   padding-right: 0;
