@@ -30,7 +30,8 @@ export type DragOptions = {
  * Pointer-event drag recogniser. Nothing happens until the movement is clearly along `axis`, so taps and
  * vertical scrolling stay untouched; only then the pointer is captured. Callbacks always see the latest options.
  * Only `pointerdown` is listened to permanently (hundreds of list rows each use this hook); the move/up/cancel listeners
- * exist just for the length of one touch. Nothing in here reads layout.
+ * exist just for the length of one touch. Nothing in here reads layout. A second finger (anywhere) cancels the drag, so a
+ * pinch can take over cleanly.
  */
 export function useDragGesture(ref: RefObject<HTMLElement | null>, options: DragOptions) {
   const latest = useRef(options)
@@ -107,6 +108,9 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
     }
     const end = (e: PointerEvent, cancelled: boolean) => {
       if (state === 'idle' || e.pointerId !== id) return
+      stop(e.timeStamp, cancelled)
+    }
+    const stop = (timeStamp: number, cancelled: boolean) => {
       const wasDrag = state === 'drag'
       state = 'idle'
       listen(false)
@@ -118,7 +122,11 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
       } catch {
         // already released
       }
-      latest.current.onEnd({ delta, velocity: cancelled ? 0 : releaseVelocity(samples, e.timeStamp), cancelled })
+      latest.current.onEnd({ delta, velocity: cancelled ? 0 : releaseVelocity(samples, timeStamp), cancelled })
+    }
+    // a second finger turns the touch into a pinch: the one-finger drag ends as cancelled (springs back), wherever it lands
+    const other = (e: PointerEvent) => {
+      if (state !== 'idle' && e.pointerId !== id && e.pointerType !== 'mouse') stop(e.timeStamp, true)
     }
     const up = (e: PointerEvent) => end(e, false)
     const cancel = (e: PointerEvent) => end(e, true)
@@ -132,6 +140,8 @@ export function useDragGesture(ref: RefObject<HTMLElement | null>, options: Drag
       toggle('pointerup', up as EventListener)
       toggle('pointercancel', cancel as EventListener)
       toggle('lostpointercapture', lost as EventListener)
+      if (on) window.addEventListener('pointerdown', other, { capture: true, passive: true })
+      else window.removeEventListener('pointerdown', other, { capture: true })
     }
 
     el.addEventListener('pointerdown', down, { passive: true })

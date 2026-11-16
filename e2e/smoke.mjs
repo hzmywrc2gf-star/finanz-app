@@ -4497,7 +4497,8 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const { c: cK, p: pK } = await mkK()
   const navK = (name) => tabOn(pK, name)
   const cell = (d) => pK.locator(`.cal-cell[data-date="${d}"]`)
-  const h1K = async () => (await pK.locator('h1').first().innerText()).trim()
+  // die Überschrift samt Jahr für Screenreader (sichtbar steht im aktuellen Jahr nur der Monat, siehe unten)
+  const h1K = async () => (await pK.locator('h1').first().innerText()).replace(/\s+/g, ' ').trim()
   const waitH1K = async (t) => { for (let i = 0; i < 30; i++) { if ((await h1K()) === t) return; await sleep(100) } throw new Error(`Kalender – Überschrift erwartet "${t}", war "${await h1K()}"`) }
   const listK = async () => (await pK.getByTestId('cal-event').allInnerTexts()).map((t) => nbsp(t).replace(/\s*\n\s*/g, ' | '))
   const cssK = (l, prop) => l.evaluate((e, p) => getComputedStyle(e)[p], prop)
@@ -4624,6 +4625,106 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await pK.getByRole('button', { name: 'Heute', exact: true }).click(); await waitH1K('November 2026')
   must(await cell('2026-11-15').getAttribute('aria-selected'), 'true', 'Heute springt zurück')
   ok('Monat wischen: links = Dezember (gleicher Tag 15.12. ausgewählt), rechts = zurück; Monatspfeil und „Heute“ funktionieren')
+
+  // --- Titel nur mit Monat (aktuelles Jahr), Jahr nur bei anderem Jahr; Screenreader hören das Jahr ---
+  const shownTitle = () => pK.locator('h1').first().evaluate((h) => [...h.childNodes].filter((n) => !(n instanceof Element && n.classList.contains('sr-only'))).map((n) => n.textContent).join('').trim())
+  const barTitle = () => pK.locator('.navbar-title').first().getAttribute('data-title')
+  must([await shownTitle(), await barTitle()], ['November', 'November'], 'Titel ohne Jahr (aktuelles Jahr)')
+  await pK.getByRole('heading', { level: 1, name: 'November 2026' }).waitFor()
+  await pK.getByRole('button', { name: 'Nächster Monat' }).click(); await waitH1K('Dezember 2026')
+  await pK.getByRole('button', { name: 'Nächster Monat' }).click(); await waitH1K('Januar 2027')
+  must([await shownTitle(), await barTitle(), await pK.locator('h1 .sr-only').count()], ['Januar 2027', 'Januar 2027', 0], 'Titel mit Jahr (anderes Jahr)')
+  await pK.getByRole('button', { name: 'Heute', exact: true }).click(); await waitH1K('November 2026')
+  ok('Kalender-Titel: großer Titel und kompakte Leiste zeigen nur „November“ (aktuelles Jahr), die Überschrift heißt für Screenreader „November 2026“; im Januar 2027 steht das Jahr sichtbar dabei')
+
+  // --- Auswahl-Ring gleitet (Feder), beim Monatswechsel steht er sofort am neuen Ort ---
+  const ringTrack = (sel) => pK.evaluate(async (s) => {
+    const ring = document.querySelector('.cal-ring')
+    const xs = []
+    document.querySelector(s).click()
+    const t0 = performance.now()
+    await new Promise((r) => { const f = () => { xs.push(ring.style.transform); if (performance.now() - t0 < 700) requestAnimationFrame(f); else r() }; requestAnimationFrame(f) })
+    const n = document.querySelector('.cal-cell[data-selected="true"] .cal-num').getBoundingClientRect()
+    const g = ring.getBoundingClientRect()
+    return { distinct: new Set(xs).size, first: xs[0], last: xs[xs.length - 1], dx: Math.abs(n.x - g.x), dy: Math.abs(n.y - g.y), w: Math.round(g.width) }
+  }, sel)
+  const r1 = await ringTrack('.cal-cell[data-date="2026-11-19"]')
+  if (!(r1.distinct >= 5 && r1.first !== r1.last && r1.dx < 1 && r1.dy < 1 && r1.w === 32)) throw new Error('Kalender – Ring gleitet nicht zur Zelle: ' + JSON.stringify(r1))
+  const r2 = await ringTrack('button[aria-label="Nächster Monat"]')
+  if (!(r2.distinct === 1 && r2.dx < 1 && r2.dy < 1)) throw new Error('Kalender – Ring gleitet beim Monatswechsel: ' + JSON.stringify(r2))
+  await waitH1K('Dezember 2026')
+  await pK.getByRole('button', { name: 'Heute', exact: true }).click(); await waitH1K('November 2026')
+  ok('Auswahl-Ring: eine eigene Ebene gleitet beim Antippen eines Tages per Feder zur neuen Zelle (mehrere Zwischenstände, endet exakt auf der Zahl); beim Monatswechsel steht er sofort am neuen Ort')
+
+  // --- Zwei Finger: Aufziehen auf dem Raster öffnet die Tagesansicht, Zusammenziehen führt zurück ---
+  const pinchK = async (p, { cx, cy, d0, d1, steps = 8, ms = 30, release = true, cdp: given }) => {
+    const cdp = given ?? await p.context().newCDPSession(p)
+    const pts = (d) => [{ x: cx - d / 2, y: cy, id: 1 }, { x: cx + d / 2, y: cy, id: 2 }]
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pts(d0)[0]] })
+    await sleep(20)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(d0) })
+    for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(d0 + ((d1 - d0) * i) / steps) }); await sleep(ms) }
+    if (release) await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    if (!given) await cdp.detach()
+  }
+  await pK.evaluate(() => { window.__vibes = []; Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true }) })
+  const vibesK = () => pK.evaluate(() => window.__vibes.length)
+  const center = async (d) => { const b = await cell(d).boundingBox(); return { cx: b.x + b.width / 2, cy: b.y + b.height / 2 } }
+  // kleiner, langsamer Pinch: federt zurück, keine Navigation, kein Tick
+  let c0 = await center('2026-11-18')
+  await pinchK(pK, { ...c0, d0: 80, d1: 92, steps: 6, ms: 60 })
+  await pK.waitForFunction(() => document.querySelector('.cal-zoom').style.transform === '')
+  await sleep(150)
+  must([await h1K(), await pK.locator('.stack[data-phase="idle"]').count(), await vibesK()], ['November 2026', 1, 0], 'kleiner Pinch federt zurück')
+  ok('Kleiner Pinch (Faktor 1,15, langsam) auf dem Raster: das Raster federt zurück (kein Transform übrig), keine Navigation, kein Haptik-Tick')
+
+  // ohne Auswahl (heute) → Tagesansicht von heute; die Zelle wächst in die Tagesansicht (Zoom-Phase)
+  c0 = await center('2026-11-18')
+  const phases = pK.evaluate(() => new Promise((r) => { const seen = new Set(); const t0 = performance.now(); const f = () => { const s = document.querySelector('.stack'); if (s) seen.add(s.dataset.phase); if (performance.now() - t0 < 1500) requestAnimationFrame(f); else r([...seen]) }; requestAnimationFrame(f) }))
+  await pinchK(pK, { ...c0, d0: 60, d1: 120 })
+  await settled(pK); await waitH1K('15. November')
+  const seenPhases = await phases
+  must(seenPhases.includes('zoomIn'), true, 'Zoom-Phase beim Öffnen: ' + JSON.stringify(seenPhases))
+  must(await pK.locator('.day-chip[data-selected="true"] .dn').innerText(), '15', 'Tagesansicht von heute')
+  must(await vibesK(), 1, 'ein Tick beim Überschreiten der Schwelle')
+  must(await pK.evaluate(() => document.querySelector('.stack-sub').style.transform), '', 'nach dem Zoom keine Reste')
+  ok('Pinch (Aufziehen 60 → 120 px) ohne angetippten Tag öffnet die Tagesansicht von heute (15. November) mit Zoom aus der Zelle (Phase zoomIn); genau ein Haptik-Tick an der Schwelle')
+
+  // Zusammenziehen in der Tagesansicht → zurück zum Monat (Zoom in die Zelle)
+  const phases2 = pK.evaluate(() => new Promise((r) => { const seen = new Set(); const t0 = performance.now(); const f = () => { const s = document.querySelector('.stack'); if (s) seen.add(s.dataset.phase); if (performance.now() - t0 < 1500) requestAnimationFrame(f); else r([...seen]) }; requestAnimationFrame(f) }))
+  await pinchK(pK, { cx: 195, cy: 420, d0: 200, d1: 90 })
+  await settled(pK); await waitH1K('November 2026')
+  must((await phases2).includes('zoomOut'), true, 'Zoom-Phase beim Zurück')
+  must(await vibesK(), 2, 'Tick beim Zusammenziehen')
+  must(await pK.locator('.stack-sub').count(), 0, 'Tagesansicht weg')
+  ok('Pinch-zu (200 → 90 px) in der Tagesansicht führt zurück zum Monat (Phase zoomOut), Tick an der Schwelle, keine Tagesansicht mehr im DOM')
+
+  // angetippter Tag → dessen Tagesansicht; Zurück-Knopf und Kanten-Wischen funktionieren danach wie immer
+  await cell('2026-11-16').click()
+  c0 = await center('2026-11-16')
+  await pinchK(pK, { ...c0, d0: 50, d1: 130, steps: 6 })
+  await settled(pK); await waitH1K('16. November')
+  must(await pK.getByTestId('tl-event').count(), 1, 'Zahnarzt am 16.11.')
+  await swipeK(pK, { x0: 8, y0: 400, x1: 330, y1: 405 })
+  await settled(pK); await waitH1K('November 2026')
+  must(await cell('2026-11-16').getAttribute('aria-selected'), 'true', '16.11. bleibt ausgewählt')
+  ok('Pinch auf dem Raster nach Antippen des 16.11. öffnet „16. November“ (Zahnarzt); Kanten-Wischen führt danach normal zurück, der 16.11. bleibt ausgewählt')
+
+  // zweiter Finger während eines Ein-Finger-Monatswischens: Wischen bricht ab (federt zurück), kein Monatswechsel
+  {
+    const cdp = await pK.context().newCDPSession(pK)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 300, y: 330, id: 1 }] })
+    for (let i = 1; i <= 6; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 300 - i * 15, y: 331, id: 1 }] }); await sleep(25) }
+    const moved = await pK.evaluate(() => document.querySelector('.swipe-pane').style.transform)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 210, y: 331, id: 1 }, { x: 150, y: 331, id: 2 }] })
+    for (let i = 1; i <= 4; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 210 - i * 30, y: 331, id: 1 }, { x: 150 - i * 2, y: 331, id: 2 }] }); await sleep(25) }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+    await paneIdleK(); await sleep(200)
+    must([moved !== '', await h1K(), await pK.locator('.stack[data-phase="idle"]').count()], [true, 'November 2026', 1], 'zweiter Finger bricht das Monatswischen ab')
+  }
+  ok('Zweiter Finger während eines Ein-Finger-Monatswischens: das Wischen bricht sauber ab und federt zurück, der Monat bleibt November')
+  await navK('Kalender').click(); await waitH1K('November 2026')
 
   // --- Zahlungen im Kalender (Vertrag, Rechnung), Beträge rot/grün ---
   must(await cell('2026-11-20').locator('.cal-dot.hollow').count(), 1, 'hohler Punkt am 20.11. (Rechnung)')
@@ -4787,6 +4888,28 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   ok('Backup: Export hat Version 8 mit allen Terminen samt Wiederholung; ein Termin, der vor seinem Beginn endet, wird beim Import abgelehnt')
   await cK.close()
 
+  // --- Bewegung reduzieren: Pinch funktioniert, aber ohne Zoom-Folgen und ohne Zoom-Übergang (nur Überblendung) ---
+  {
+    const { c, p } = await mkK({ reducedMotion: 'reduce' })
+    await tabOn(p, 'Kalender').click()
+    await p.locator('.cal-cell[data-date="2026-11-18"]').click()
+    const b = await p.locator('.cal-cell[data-date="2026-11-18"]').boundingBox()
+    const cdp = await p.context().newCDPSession(p)
+    const pts = (d) => [{ x: b.x + b.width / 2 - d / 2, y: b.y + b.height / 2, id: 1 }, { x: b.x + b.width / 2 + d / 2, y: b.y + b.height / 2, id: 2 }]
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pts(60)[0]] })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(60) })
+    for (let i = 1; i <= 8; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(60 + i * 10) }); await sleep(30) }
+    const followed = await p.evaluate(() => document.querySelector('.cal-zoom').style.transform)
+    const scales = p.evaluate(() => new Promise((r) => { const seen = new Set(); const t0 = performance.now(); const f = () => { const s = document.querySelector('.stack-sub'); if (s && s.style.transform) seen.add(s.style.transform); if (performance.now() - t0 < 600) requestAnimationFrame(f); else r([...seen]) }; requestAnimationFrame(f) }))
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+    await settled(p)
+    await p.getByRole('heading', { level: 1, name: '18. November' }).waitFor()
+    must([followed, (await scales).length], ['', 0], 'reduzierte Bewegung: kein Zoom-Folgen, kein Zoom-Transform')
+    await c.close()
+    ok('Bewegung reduzieren: Pinch auf dem Raster öffnet trotzdem „18. November“, das Raster folgt den Fingern nicht und die Tagesansicht blendet nur über (kein Zoom-Transform)')
+  }
+
   // --- iPad: Raster links, Tagesliste rechts, Titel in den Zellen ---
   {
     const { c, p } = await mkK({ ...devices['iPad Pro 11'], acceptDownloads: true, locale: 'de-DE', timezoneId: 'Europe/Berlin' })
@@ -4795,12 +4918,12 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.getByRole('dialog', { name: 'Kalender importieren' }).locator('input[type=file]').setInputFiles(FIX)
     await p.getByRole('dialog', { name: 'Termine importieren' }).getByRole('button', { name: /^Importieren/ }).click(); await p.getByRole('dialog').waitFor({ state: 'detached' })
     await p.locator('.cal-cell[data-date="2026-11-16"]').click()
-    const layout = async () => p.evaluate(() => { const l = document.querySelector('.cal-left').getBoundingClientRect(), r = document.querySelector('.cal-right').getBoundingClientRect(); return { lx: l.x, lw: l.width, rx: r.x, rw: r.width, lt: l.top, rt: r.top, fab: getComputedStyle(document.querySelector('.cal-fab')).display, newBtn: getComputedStyle(document.querySelector('.cal-new-wide')).display } })
+    const layout = async () => p.evaluate(() => { const l = document.querySelector('.cal-left').getBoundingClientRect(), r = document.querySelector('.cal-right').getBoundingClientRect(); return { lx: l.x, lw: l.width, rx: r.x, rw: r.width, lt: l.top, rt: r.top, fab: !!document.querySelector('.cal-fab'), newBtn: getComputedStyle(document.querySelector('.cal-new')).display } })
     for (const [w, h, name] of [[834, 1194, 'hoch'], [1194, 834, 'quer']]) {
       await p.setViewportSize({ width: w, height: h })
       await sleep(200)
       const l = await layout()
-      if (!(l.rx >= l.lx + l.lw - 1 && Math.abs(l.rt - l.lt) < 40 && l.lw > l.rw && l.fab === 'none' && l.newBtn !== 'none')) throw new Error(`Kalender – iPad ${name}: Raster und Liste nicht nebeneinander: ` + JSON.stringify(l))
+      if (!(l.rx >= l.lx + l.lw - 1 && Math.abs(l.rt - l.lt) < 40 && l.lw > l.rw && !l.fab && l.newBtn !== 'none')) throw new Error(`Kalender – iPad ${name}: Raster und Liste nicht nebeneinander: ` + JSON.stringify(l))
       const t = await p.locator('.cal-cell[data-date="2026-11-16"] .cal-title').allInnerTexts()
       must(t.includes('Team-Meeting (verschoben)'), true, `iPad ${name}: Titel in der Zelle`)
       const noOver = await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
@@ -4810,8 +4933,8 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.setViewportSize({ width: 390, height: 664 })
     await sleep(200)
     const narrow = await layout()
-    must(narrow.rx <= narrow.lx + 1 && narrow.fab !== 'none', true, 'schmal: eine Spalte, Plus-Knopf da')
-    ok('iPad (834×1194 hoch, 1194×834 quer): Monatsraster links (breiter), Tagesliste rechts auf gleicher Höhe, bis zu 2 Titel in den Zellen, „+“ in der Liste statt schwebendem Knopf, kein Überlauf; schmal wieder eine Spalte')
+    must(narrow.rx <= narrow.lx + 1 && !narrow.fab && narrow.newBtn !== 'none', true, 'schmal: eine Spalte, „+“ neben dem Tagestitel, kein schwebender Knopf')
+    ok('iPad (834×1194 hoch, 1194×834 quer): Monatsraster links (breiter), Tagesliste rechts auf gleicher Höhe, bis zu 2 Titel in den Zellen, „+“ neben dem Tagestitel (kein schwebender Knopf), kein Überlauf; schmal wieder eine Spalte, „+“ ebenfalls neben dem Tagestitel')
     await c.close()
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Transaction } from './domain/types'
 import { todayISO } from './domain/dates'
 import type { DaySegment, FinanceEntry } from './domain/calendar'
@@ -78,9 +78,9 @@ function AppContent() {
   // Each opened sub-page is one history entry, so the system back button (Android, desktop) returns to the hub.
   // Not on iPhone/iPad: iOS would run its own back-swipe animation on top of ours (double animation), so
   // there the view is the only state and our own gesture and back button are the only ways back.
-  const openSub = useCallback((view: SubView) => {
+  const openSub = useCallback((view: SubView, anim: StackAnim = 'animate') => {
     if (USE_HISTORY) history.pushState({ sub: view }, '')
-    setNav({ view, anim: 'animate' })
+    setNav({ view, anim })
   }, [])
   const goBack = useCallback((anim: StackAnim) => {
     if (USE_HISTORY && subOf(history.state) !== 'hub') {
@@ -114,10 +114,12 @@ function AppContent() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  // every navigation starts at the top of the new page
-  useEffect(() => {
+  // every navigation starts at the top of the new page (in the commit, so a page that scrolls itself, the day view, comes after);
+  // an animated pop leaves the sub-page where it is while it leaves, NavStack scrolls the hub to the top afterwards
+  useLayoutEffect(() => {
+    if (nav.view === 'hub' && (nav.anim === 'animate' || nav.anim === 'zoom')) return
     window.scrollTo(0, 0)
-  }, [tab, nav.view])
+  }, [tab, nav.view, nav.anim])
 
   // stable, so the memoized pages and their rows are skipped when only the sheet opens or closes
   const edit = useCallback((transaction: Transaction) => setForm({ transaction }), [])
@@ -125,7 +127,10 @@ function AppContent() {
   const addNew = useCallback(() => setForm({}), [])
   const addOn = useCallback((defaultDate: string) => setForm({ defaultDate }), [])
   const openBudgets = useCallback(() => changeTab('budgets'), [changeTab])
-  const openDay = useCallback(() => openSub('day'), [openSub])
+  const openDay = useCallback((how?: 'zoom') => openSub('day', how === 'zoom' ? 'zoom' : 'animate'), [openSub])
+  const zoomBack = useCallback(() => goBack('zoom'), [goBack])
+  /** The day cell the day view zooms out of / back into. */
+  const dayCell = useCallback((hub: HTMLElement) => hub.querySelector<HTMLElement>('.cal-cell[data-selected="true"]'), [])
   const newEvent = useCallback((day: string, hour?: number) => setEventForm({ key: `new-${day}-${hour}`, day, hour, onClose: () => setEventForm(null) }), [])
   const editEvent = useCallback(
     (seg: DaySegment) => setEventForm({ key: seg.occ.key, event: seg.occ.event, occurrenceDate: seg.occ.date, onClose: () => setEventForm(null) }),
@@ -176,6 +181,7 @@ function AppContent() {
             view={nav.view as CalendarView}
             anim={nav.anim}
             onBack={goBack}
+            zoomAnchor={dayCell}
             hub={
               <main className="app app-cal">
                 <CalendarPage
@@ -190,7 +196,7 @@ function AppContent() {
             }
             renderSub={() => (
               <main className="app app-cal">
-                <DayPage day={calDay} onDay={setCalDay} onBack={back} onNewEvent={newEvent} onEditEvent={editEvent} onOpenFinance={setFinanceEntry} />
+                <DayPage day={calDay} onDay={setCalDay} onBack={back} onPinchBack={zoomBack} onNewEvent={newEvent} onEditEvent={editEvent} onOpenFinance={setFinanceEntry} />
               </main>
             )}
           />

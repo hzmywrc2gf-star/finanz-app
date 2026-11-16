@@ -160,3 +160,59 @@ export function releaseCurve(distance: number, velocity: number, ms: number): st
   const y1 = Math.min(1, Math.max(0.2, 0.2 * slope))
   return `cubic-bezier(0.2, ${Number(y1.toFixed(2))}, 0.2, 1)`
 }
+
+/* ---------- Pinch (two fingers): month grid -> day view and back ---------- */
+
+/** Spreading the fingers to this factor of their start distance opens the day (month grid) ... */
+export const PINCH_OPEN_FACTOR = 1.25
+/** ... pinching them together to this factor returns to the month (day view). */
+export const PINCH_CLOSE_FACTOR = 0.8
+/** A quick pinch commits early: speed of ln(factor) in 1/ms (1.2 per second) ... */
+export const PINCH_FLICK_VELOCITY = 0.0012
+/** ... once the fingers travelled at least this far (ln 1.08). */
+export const PINCH_FLICK_MIN = Math.log(1.08)
+/** Fingers closer than this (px) at the start give no usable ratio. */
+export const PINCH_MIN_DISTANCE = 16
+/** How far (in ln scale) the content may follow towards the commit direction (rubber band) ... */
+const PINCH_FOLLOW_LIMIT = 0.3
+/** ... and against it (only a hint that it is the wrong way). */
+const PINCH_AGAINST_LIMIT = 0.05
+
+/** `open` = spread the fingers (month -> day), `close` = pinch them together (day -> month). */
+export type PinchDirection = 'open' | 'close'
+export type Point = { x: number; y: number }
+
+export const pinchDistance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y)
+
+/** Current finger distance relative to the start (1 = unchanged, > 1 = apart); 1 when the start is unusable. */
+export function pinchFactor(start: number, now: number): number {
+  if (!(start >= PINCH_MIN_DISTANCE) || !(now > 0)) return 1
+  return now / start
+}
+
+/** Has the pinch crossed the line where letting go navigates (the haptic tick tells the user, in both directions)? */
+export function pinchPast(factor: number, dir: PinchDirection): boolean {
+  return dir === 'open' ? factor >= PINCH_OPEN_FACTOR : factor <= PINCH_CLOSE_FACTOR
+}
+
+/**
+ * Navigate on release? Past the threshold, or a quick pinch in the right direction that already travelled a little.
+ * `velocity` is the speed of ln(factor) in 1/ms (positive = fingers moving apart).
+ */
+export function pinchDecision({ factor, velocity, dir }: { factor: number; velocity: number; dir: PinchDirection }): boolean {
+  if (pinchPast(factor, dir)) return true
+  const sign = dir === 'open' ? 1 : -1
+  const travel = Math.log(Math.max(factor, 1e-6)) * sign
+  return velocity * sign > PINCH_FLICK_VELOCITY && travel > PINCH_FLICK_MIN
+}
+
+/**
+ * The scale painted while pinching: follows the fingers with a rubber band towards the commit direction (at most
+ * e^0.3 ≈ 1.35 resp. 1/1.35) and resists strongly the other way. 1 at the start, monotonic in the factor.
+ */
+export function pinchScale(factor: number, dir: PinchDirection): number {
+  const sign = dir === 'open' ? 1 : -1
+  const toward = Math.log(Math.max(factor, 1e-6)) * sign
+  const shown = toward >= 0 ? rubberBand(toward, PINCH_FOLLOW_LIMIT) : -rubberBand(-toward, PINCH_AGAINST_LIMIT)
+  return Math.exp(shown * sign)
+}
