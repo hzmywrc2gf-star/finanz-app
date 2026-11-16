@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
-import { PINCH_MIN_DISTANCE, pinchDistance, pinchFactor, releaseVelocity } from '../domain/gesture'
+import { PINCH_MIN_DISTANCE, pinchDistance, pinchFactor, pinchVelocity } from '../domain/gesture'
 import type { Point, Sample } from '../domain/gesture'
 
 export type PinchEnd = { factor: number; velocity: number; cancelled: boolean }
@@ -64,7 +64,7 @@ export function usePinch(ref: RefObject<HTMLElement | null>, options: PinchOptio
       pair = null
       cancelAnimationFrame(frame)
       frame = 0
-      latest.current.onEnd({ factor, velocity: cancelled ? 0 : releaseVelocity(samples, e.timeStamp), cancelled })
+      latest.current.onEnd({ factor, velocity: cancelled ? 0 : pinchVelocity(samples, e.timeStamp), cancelled })
     }
 
     const firstDown = (e: PointerEvent) => {

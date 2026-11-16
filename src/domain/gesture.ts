@@ -178,6 +178,26 @@ const PINCH_FOLLOW_LIMIT = 0.3
 /** ... and against it (only a hint that it is the wrong way). */
 const PINCH_AGAINST_LIMIT = 0.05
 
+/** Pinch speed is measured over at least this span (ms), so two finger events that arrive bunched never look like a flick ... */
+export const PINCH_VELOCITY_MIN_SPAN_MS = 50
+/** ... looking back at most this far (ms). */
+const PINCH_VELOCITY_LOOKBACK_MS = 200
+
+/**
+ * Speed of ln(factor) in 1/ms at release: from the newest sample back to the newest one that is at least
+ * `PINCH_VELOCITY_MIN_SPAN_MS` older (within `PINCH_VELOCITY_LOOKBACK_MS` of the release); 0 without such a pair.
+ */
+export function pinchVelocity(samples: Sample[], endTime: number): number {
+  const recent = samples.filter((s) => endTime - s.t <= PINCH_VELOCITY_LOOKBACK_MS)
+  if (recent.length < 2) return 0
+  const last = recent[recent.length - 1]
+  for (let i = recent.length - 2; i >= 0; i--) {
+    const s = recent[i]
+    if (last.t - s.t >= PINCH_VELOCITY_MIN_SPAN_MS) return (last.v - s.v) / (last.t - s.t)
+  }
+  return 0
+}
+
 /** `open` = spread the fingers (month -> day), `close` = pinch them together (day -> month). */
 export type PinchDirection = 'open' | 'close'
 export type Point = { x: number; y: number }

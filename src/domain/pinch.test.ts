@@ -4,6 +4,7 @@ import {
   PINCH_MIN_DISTANCE,
   PINCH_OPEN_FACTOR,
   pinchDecision,
+  pinchVelocity,
   pinchDistance,
   pinchFactor,
   pinchPast,
@@ -76,5 +77,31 @@ describe('monthTitle', () => {
     expect(monthTitle('2026-01-01', '2026-11-16')).toBe('Januar')
     expect(monthTitle('2027-01-01', '2026-11-16')).toBe('Januar 2027')
     expect(monthTitle('2025-12-01', '2026-01-02')).toBe('Dezember 2025')
+  })
+})
+
+describe('pinchVelocity', () => {
+  it('bunched events right before the release do not look like a flick', () => {
+    // slow pinch to 1.15 over 360 ms, but the last two moves arrive 2 ms apart (busy main thread)
+    const samples = [
+      { t: 0, v: 0 },
+      { t: 60, v: Math.log(1.02) },
+      { t: 120, v: Math.log(1.05) },
+      { t: 180, v: Math.log(1.07) },
+      { t: 240, v: Math.log(1.1) },
+      { t: 358, v: Math.log(1.12) },
+      { t: 360, v: Math.log(1.15) },
+    ]
+    const v = pinchVelocity(samples, 360)
+    expect(v).toBeLessThan(0.0012)
+    expect(pinchDecision({ factor: 1.15, velocity: v, dir: 'open' })).toBe(false)
+  })
+  it('a real quick spread still counts', () => {
+    const samples = [0, 16, 32, 48, 64].map((t) => ({ t, v: Math.log(1 + t / 400) }))
+    expect(pinchVelocity(samples, 64)).toBeGreaterThan(0.0012)
+  })
+  it('0 without a pair far enough apart', () => {
+    expect(pinchVelocity([{ t: 0, v: 0 }, { t: 10, v: 0.1 }], 10)).toBe(0)
+    expect(pinchVelocity([], 0)).toBe(0)
   })
 })
