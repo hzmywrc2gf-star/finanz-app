@@ -19,11 +19,14 @@ export type HeaderAction = { label: string; icon: ReactNode; onClick: () => void
  */
 export function LargeTitleHeader({
   title,
+  srSuffix,
   onBack,
   parent = 'Start',
   action,
 }: {
   title: string
+  /** Read by screen readers after the title but not shown (calendar: the year behind "November"). */
+  srSuffix?: string
   /** Sub-pages: the back button (labelled with the parent page) lives in the bar. */
   onBack?: () => void
   parent?: string
@@ -53,7 +56,12 @@ export function LargeTitleHeader({
     glow.style.transform = calm.current ? '' : `translate3d(0, ${glowOffset(s)}px, 0)`
   })
 
-  const heading = <h1 ref={titleRef} className={`page-title ${onBack ? 'sub-title' : ''}`}>{title}</h1>
+  const heading = (
+    <h1 ref={titleRef} className={`page-title ${onBack ? 'sub-title' : ''}`}>
+      {title}
+      {srSuffix && <span className="sr-only">{` ${srSuffix}`}</span>}
+    </h1>
+  )
   return (
     <>
       <div ref={glowRef} className="navbar-glow" aria-hidden="true" />

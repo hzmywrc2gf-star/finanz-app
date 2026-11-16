@@ -7,10 +7,24 @@ import { SPRING_CALM } from '../domain/spring'
 import { haptic } from '../lib/haptics'
 import { EASE_IOS, EASE_NAV, afterTransition, animateSpring, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
 
-/** How a view change reaches the screen: `animate` = push/pop, `instant` = no motion, `done` = a swipe already finished it. */
-export type StackAnim = 'animate' | 'instant' | 'done'
-/** idle = at rest; push/pop = button transition; drag = finger on the edge swipe (and the settle after release). */
-type Phase = 'idle' | 'push' | 'pop' | 'drag'
+/**
+ * How a view change reaches the screen: `animate` = push/pop, `instant` = no motion, `done` = a swipe already finished it,
+ * `zoom` = the sub-page grows out of (or shrinks back into) the hub's anchor element (calendar: the day cell after a pinch).
+ */
+export type StackAnim = 'animate' | 'instant' | 'done' | 'zoom'
+/** idle = at rest; push/pop = button transition; drag = finger on the edge swipe (and the settle after release); zoomIn/zoomOut = zoom transition. */
+type Phase = 'idle' | 'push' | 'pop' | 'drag' | 'zoomIn' | 'zoomOut'
+
+/** Measured once when a zoom starts: the anchor in viewport px and the sub-page box (left in viewport px, top in page px). */
+type ZoomGeometry = { anchor: DOMRect; vw: number; vh: number; left: number; top: number; width: number; height: number }
+/** Corner radius of the sub-page while it is as small as the anchor (px on screen). */
+const ZOOM_RADIUS = 14
+/** The hub grows by this much (around the anchor) while the sub-page zooms open, and fades. */
+const ZOOM_HUB_SCALE = 0.5
+/** The spring runs over progress × this (its rest thresholds are in px). */
+const ZOOM_UNITS = 1000
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 /** Duration of a button/row push and the Zurück-button pop (ms); tune here. Swipe-back uses the finger speed instead. */
 const PUSH_MS = 450
@@ -26,6 +40,7 @@ export function NavStack<V extends string>({
   hub,
   renderSub,
   onBack,
+  zoomAnchor,
 }: {
   view: V | 'hub'
   anim: StackAnim
@@ -33,6 +48,8 @@ export function NavStack<V extends string>({
   renderSub: (view: V) => ReactNode
   /** Called when an edge swipe has finished; the owner updates the history and sets `view` to the hub. */
   onBack: (anim: StackAnim) => void
+  /** For `zoom`: the element of the hub the sub-page grows out of (missing = a normal push/pop). */
+  zoomAnchor?: (hub: HTMLElement) => HTMLElement | null
 }) {
   // the sub-page stays mounted while it slides out
   const [sub, setSub] = useState<V | null>(view === 'hub' ? null : view)
@@ -42,9 +59,9 @@ export function NavStack<V extends string>({
     setPrevView(view)
     if (view !== 'hub') {
       setSub(view)
-      setPhase(anim === 'animate' ? 'push' : 'idle')
-    } else if (anim === 'animate' && sub) {
-      setPhase('pop')
+      setPhase(anim === 'animate' ? 'push' : anim === 'zoom' ? 'zoomIn' : 'idle')
+    } else if ((anim === 'animate' || anim === 'zoom') && sub) {
+      setPhase(anim === 'zoom' ? 'zoomOut' : 'pop')
     } else {
       setSub(null)
       setPhase('idle')
@@ -66,6 +83,11 @@ export function NavStack<V extends string>({
   const paintedDx = useRef(0)
   const stopSpring = useRef<(() => void) | null>(null)
   useEffect(() => () => stopSpring.current?.(), [])
+  const zoomGeo = useRef<ZoomGeometry | null>(null)
+  const anchorOf = useRef(zoomAnchor)
+  useLayoutEffect(() => {
+    anchorOf.current = zoomAnchor
+  })
 
   // where the hub was scrolled when a sub-page opens, so it can slide away from exactly there
   useLayoutEffect(() => {
@@ -97,8 +119,11 @@ export function NavStack<V extends string>({
         el.style.transition = ''
         el.style.opacity = ''
         el.style.willChange = ''
+        el.style.transformOrigin = ''
+        el.style.clipPath = ''
       }
     }
+    zoomGeo.current = null
     hubRef.current?.style.removeProperty('--hub-scroll')
   }
   /** Animates from the current state to `progress` and resolves false if something newer took over. */
@@ -144,6 +169,81 @@ export function NavStack<V extends string>({
     })
   }
 
+  /**
+   * Zoom transition, `z` 0 = the sub-page sits in the anchor's rectangle (rounded, transparent), 1 = full screen. The visible
+   * part of the sub-page (the viewport, read per frame because the day view sets its scroll before the first frame) is
+   * scaled uniformly and clipped to a rectangle that grows from the anchor to the screen; the hub grows around the anchor
+   * and fades. Transform, clip-path and opacity only.
+   */
+  const paintZoom = (zRaw: number) => {
+    const g = zoomGeo.current
+    const subEl = subRef.current
+    if (!g || !subEl) return
+    const z = Math.min(1, Math.max(0, zRaw))
+    const sy = window.scrollY
+    const w = lerp(g.anchor.width, g.vw, z)
+    const h = lerp(g.anchor.height, g.vh, z)
+    const cx = lerp(g.anchor.left + g.anchor.width / 2, g.vw / 2, z)
+    const cy = lerp(g.anchor.top + g.anchor.height / 2, g.vh / 2, z)
+    const s = w / g.width
+    // the sub-page point that ends up in the middle of the screen: the middle of what is scrolled into view
+    const ex = g.vw / 2 - g.left
+    const ey = sy + g.vh / 2 - g.top
+    const tx = cx - g.left - s * ex
+    const ty = cy - (g.top - sy) - s * ey
+    const clipH = h / s
+    const top = Math.max(0, ey - clipH / 2)
+    const bottom = Math.max(0, g.height - (ey + clipH / 2))
+    subEl.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s})`
+    subEl.style.clipPath = `inset(${top}px 0px ${bottom}px 0px round ${lerp(ZOOM_RADIUS, 0, z) / s}px)`
+    subEl.style.opacity = String(Math.min(1, z * 2.5))
+    const hubEl = hubRef.current
+    if (hubEl) {
+      hubEl.style.transform = `scale(${1 + ZOOM_HUB_SCALE * z})`
+      hubEl.style.opacity = String(1 - 0.7 * z)
+    }
+    if (dimRef.current) dimRef.current.style.opacity = '0'
+  }
+
+  /** Measures the anchor and the sub-page for a zoom; false when there is nothing to zoom from (then a plain push/pop runs). */
+  const prepareZoom = () => {
+    const hubEl = hubRef.current
+    const subEl = subRef.current
+    const anchor = hubEl && anchorOf.current?.(hubEl)
+    if (!hubEl || !subEl || !anchor) return false
+    const a = anchor.getBoundingClientRect()
+    const r = subEl.getBoundingClientRect()
+    if (a.width <= 0 || a.height <= 0 || r.width <= 0) return false
+    zoomGeo.current = { anchor: a, vw: window.innerWidth, vh: window.innerHeight, left: r.left, top: r.top + window.scrollY, width: r.width, height: subEl.offsetHeight }
+    subEl.style.transformOrigin = '0 0'
+    hubEl.style.transformOrigin = `${a.left + a.width / 2}px ${a.top + a.height / 2}px`
+    for (const el of [subEl, hubEl]) el.style.willChange = 'transform, opacity'
+    return true
+  }
+
+  /** Runs the zoom from `from` to `to` (0 = anchor, 1 = full) on the calm spring; resolves false if something newer took over. */
+  const zoomSettle = (from: number, to: number) => {
+    const token = ++run.current
+    stopSpring.current?.()
+    return new Promise<boolean>((resolve) => {
+      const stop = animateSpring({
+        from: from * ZOOM_UNITS,
+        to: to * ZOOM_UNITS,
+        params: SPRING_CALM,
+        restOffset: 2,
+        onUpdate: (v) => {
+          if (token !== run.current) {
+            stop()
+            return resolve(false)
+          }
+          paintZoom(v / ZOOM_UNITS)
+        },
+        onDone: () => resolve(token === run.current),
+      })
+      stopSpring.current = stop
+    })
+  }
+
   // push / pop started by the Zurück button or a row; the CSS keeps the sub-page above the hub while `data-phase` is not idle
   useLayoutEffect(() => {
     if (phase === 'idle') {
@@ -155,10 +255,20 @@ export function NavStack<V extends string>({
     if (phase === 'drag') return
     const fade = reducedMotion()
     const ms = animationMs(PUSH_MS, fade)
-    const pushing = phase === 'push'
+    const pushing = phase === 'push' || phase === 'zoomIn'
     if (pushing) {
       hubRef.current?.style.setProperty('--hub-scroll', `${hubScroll.current}px`)
       window.scrollTo(0, 0)
+    }
+    // zoom (after a pinch); reduced motion or no anchor: the plain push/pop below (a quick fade with reduced motion)
+    if ((phase === 'zoomIn' || phase === 'zoomOut') && !fade && prepareZoom()) {
+      paintZoom(pushing ? 0 : 1)
+      void zoomSettle(pushing ? 0 : 1, pushing ? 1 : 0).then((current) => {
+        if (!current) return
+        if (!pushing) setSub(null)
+        setPhase('idle')
+      })
+      return
     }
     paint(pushing ? 1 : 0, fade)
     void settle(pushing ? 0 : 1, ms, fade, EASE_NAV).then((current) => {

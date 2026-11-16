@@ -88,3 +88,9 @@ export function monthShort(iso: string): string {
   const m = Number(iso.split('-')[1])
   return MONTHS_SHORT[m - 1]
 }
+
+/** Calendar title: "November" in the current year, "Januar 2027" otherwise (`today` decides the year). */
+export function monthTitle(iso: string, today: string): string {
+  const [y, m] = iso.split('-').map(Number)
+  return y === Number(today.slice(0, 4)) ? MONTHS[m - 1] : `${MONTHS[m - 1]} ${y}`
+}
