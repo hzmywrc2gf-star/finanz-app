@@ -45,6 +45,7 @@ export const DayPage = memo(function DayPage({
   onDay,
   onBack,
   onPinchBack,
+  onPinch,
   onNewEvent,
   onEditEvent,
   onOpenFinance,
@@ -54,6 +55,8 @@ export const DayPage = memo(function DayPage({
   onBack: () => void
   /** Back to the month after a pinch (zooms into the cell). */
   onPinchBack: () => void
+  /** Two fingers are down (true) / let go without leaving (false): the month is rendered ahead of time meanwhile. */
+  onPinch?: (active: boolean) => void
 } & CalendarHandlers) {
   const { data } = useFinance()
   const today = todayISO()
@@ -103,6 +106,7 @@ export const DayPage = memo(function DayPage({
       // shrinks around the middle of what is on screen
       el.style.transformOrigin = `50% ${window.scrollY + window.innerHeight / 2 - pageTop(el)}px`
       el.style.willChange = 'transform'
+      onPinch?.(true)
     },
     onMove: (factor) => {
       const el = zoomRef.current
@@ -123,6 +127,7 @@ export const DayPage = memo(function DayPage({
         onPinchBack()
         return
       }
+      onPinch?.(false)
       const reset = () => {
         el.style.transform = ''
         el.style.transformOrigin = ''

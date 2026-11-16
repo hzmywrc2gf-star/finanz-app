@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Activity, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { BACK_FRACTION, animationMs, isEdgeStart, parallaxPercent, swipeDecision } from '../domain/gesture'
 import { useDragGesture } from '../hooks/useDragGesture'
 import { SPRING_CALM } from '../domain/spring'
+import { affineCss, springProgress, zoomFrame } from '../domain/zoom'
+import type { ZoomGeometry } from '../domain/zoom'
 import { haptic } from '../lib/haptics'
 import { EASE_IOS, EASE_NAV, afterTransition, animateSpring, isFormField, modalOpen, reducedMotion, releaseMotion } from '../lib/motion'
 
@@ -15,16 +17,9 @@ export type StackAnim = 'animate' | 'instant' | 'done' | 'zoom'
 /** idle = at rest; push/pop = button transition; drag = finger on the edge swipe (and the settle after release); zoomIn/zoomOut = zoom transition. */
 type Phase = 'idle' | 'push' | 'pop' | 'drag' | 'zoomIn' | 'zoomOut'
 
-/** Measured once when a zoom starts: the anchor in viewport px and the sub-page box (left in viewport px, top in page px). */
-type ZoomGeometry = { anchor: DOMRect; vw: number; vh: number; left: number; top: number; width: number; height: number }
-/** Corner radius of the sub-page while it is as small as the anchor (px on screen). */
-const ZOOM_RADIUS = 14
-/** The hub grows by this much (around the anchor) while the sub-page zooms open, and fades. */
-const ZOOM_HUB_SCALE = 0.5
-/** The spring runs over progress × this (its rest thresholds are in px). */
-const ZOOM_UNITS = 1000
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+/** The zoom's calm spring as progress samples (60 per second), computed once; played as keyframes by the browser. */
+let zoomCurve: number[] | null = null
+const zoomProgress = () => (zoomCurve ??= springProgress(SPRING_CALM))
 
 /** Duration of a button/row push and the Zurück-button pop (ms); tune here. Swipe-back uses the finger speed instead. */
 const PUSH_MS = 450
@@ -41,6 +36,7 @@ export function NavStack<V extends string>({
   renderSub,
   onBack,
   zoomAnchor,
+  prerender,
 }: {
   view: V | 'hub'
   anim: StackAnim
@@ -50,6 +46,11 @@ export function NavStack<V extends string>({
   onBack: (anim: StackAnim) => void
   /** For `zoom`: the element of the hub the sub-page grows out of (missing = a normal push/pop). */
   zoomAnchor?: (hub: HTMLElement) => HTMLElement | null
+  /**
+   * A view (or the hub) that is likely to come next, rendered ahead of time while hidden (React `Activity`: no effects, no
+   * layout, rendered at low priority), so the zoom that follows only has to show it instead of building it in its first frame.
+   */
+  prerender?: V | 'hub' | null
 }) {
   // the sub-page stays mounted while it slides out
   const [sub, setSub] = useState<V | null>(view === 'hub' ? null : view)
@@ -69,10 +70,15 @@ export function NavStack<V extends string>({
   }
   const shownSub = view !== 'hub' ? view : sub
   const showHub = view === 'hub' || phase !== 'idle'
+  // hidden ahead-of-time renders keep their slot (and React state) when they become the real hub/sub-page
+  const preSub = !shownSub && prerender && prerender !== 'hub' ? prerender : null
+  const subView = shownSub ?? preSub
+  const preHub = !showHub && prerender === 'hub'
 
   const stackRef = useRef<HTMLDivElement>(null)
   const hubRef = useRef<HTMLDivElement>(null)
   const subRef = useRef<HTMLDivElement>(null)
+  const pageRef = useRef<HTMLDivElement>(null)
   const dimRef = useRef<HTMLDivElement>(null)
   const hubScroll = useRef(0)
   const run = useRef(0)
@@ -84,6 +90,8 @@ export function NavStack<V extends string>({
   const stopSpring = useRef<(() => void) | null>(null)
   useEffect(() => () => stopSpring.current?.(), [])
   const zoomGeo = useRef<ZoomGeometry | null>(null)
+  const zoomAnims = useRef<Animation[]>([])
+  const zoomFrameId = useRef(0)
   const anchorOf = useRef(zoomAnchor)
   useLayoutEffect(() => {
     anchorOf.current = zoomAnchor
@@ -112,20 +120,29 @@ export function NavStack<V extends string>({
     if (hubEl) hubEl.style.transform = fade ? '' : `translate3d(${parallaxPercent(progress)}%, 0, 0)`
     if (dimEl) dimEl.style.opacity = fade ? '0' : String(1 - progress)
   }
+  const stopZoom = () => {
+    cancelAnimationFrame(zoomFrameId.current)
+    for (const a of zoomAnims.current) a.cancel()
+    zoomAnims.current = []
+  }
   const clearStyles = () => {
-    for (const el of [subRef.current, hubRef.current, dimRef.current]) {
+    stopZoom()
+    for (const el of [subRef.current, pageRef.current, hubRef.current, dimRef.current]) {
       if (el) {
         el.style.transform = ''
         el.style.transition = ''
         el.style.opacity = ''
         el.style.willChange = ''
         el.style.transformOrigin = ''
-        el.style.clipPath = ''
+        el.style.height = ''
+        el.style.borderRadius = ''
       }
     }
+    stackRef.current?.style.removeProperty('min-height')
     zoomGeo.current = null
     hubRef.current?.style.removeProperty('--hub-scroll')
   }
+  useEffect(() => () => stopZoom(), [])
   /** Animates from the current state to `progress` and resolves false if something newer took over. */
   const settle = async (progress: number, ms: number, fade: boolean, easing = EASE_IOS) => {
     const token = ++run.current
@@ -170,78 +187,89 @@ export function NavStack<V extends string>({
   }
 
   /**
-   * Zoom transition, `z` 0 = the sub-page sits in the anchor's rectangle (rounded, transparent), 1 = full screen. The visible
-   * part of the sub-page (the viewport, read per frame because the day view sets its scroll before the first frame) is
-   * scaled uniformly and clipped to a rectangle that grows from the anchor to the screen; the hub grows around the anchor
-   * and fades. Transform, clip-path and opacity only.
+   * Measures the anchor and the sub-page for a zoom and turns the sub-page into the zoom window: as tall as the viewport,
+   * `overflow: clip` with rounded corners (CSS, `data-phase^=zoom`), the page overflowing inside it; the stack keeps the
+   * page's height so the window scroll stays where it is. False when there is nothing to zoom from (then a plain push/pop runs).
    */
-  const paintZoom = (zRaw: number) => {
-    const g = zoomGeo.current
-    const subEl = subRef.current
-    if (!g || !subEl) return
-    const z = Math.min(1, Math.max(0, zRaw))
-    const sy = window.scrollY
-    const w = lerp(g.anchor.width, g.vw, z)
-    const h = lerp(g.anchor.height, g.vh, z)
-    const cx = lerp(g.anchor.left + g.anchor.width / 2, g.vw / 2, z)
-    const cy = lerp(g.anchor.top + g.anchor.height / 2, g.vh / 2, z)
-    const s = w / g.width
-    // the sub-page point that ends up in the middle of the screen: the middle of what is scrolled into view
-    const ex = g.vw / 2 - g.left
-    const ey = sy + g.vh / 2 - g.top
-    const tx = cx - g.left - s * ex
-    const ty = cy - (g.top - sy) - s * ey
-    const clipH = h / s
-    const top = Math.max(0, ey - clipH / 2)
-    const bottom = Math.max(0, g.height - (ey + clipH / 2))
-    subEl.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s})`
-    subEl.style.clipPath = `inset(${top}px 0px ${bottom}px 0px round ${lerp(ZOOM_RADIUS, 0, z) / s}px)`
-    subEl.style.opacity = String(Math.min(1, z * 2.5))
-    const hubEl = hubRef.current
-    if (hubEl) {
-      hubEl.style.transform = `scale(${1 + ZOOM_HUB_SCALE * z})`
-      hubEl.style.opacity = String(1 - 0.7 * z)
-    }
-    if (dimRef.current) dimRef.current.style.opacity = '0'
-  }
-
-  /** Measures the anchor and the sub-page for a zoom; false when there is nothing to zoom from (then a plain push/pop runs). */
-  const prepareZoom = () => {
+  const prepareZoom = (opening: boolean) => {
     const hubEl = hubRef.current
     const subEl = subRef.current
+    const pageEl = pageRef.current
     const anchor = hubEl && anchorOf.current?.(hubEl)
-    if (!hubEl || !subEl || !anchor) return false
+    if (!hubEl || !subEl || !pageEl || !anchor) return false
     const a = anchor.getBoundingClientRect()
     const r = subEl.getBoundingClientRect()
     if (a.width <= 0 || a.height <= 0 || r.width <= 0) return false
-    zoomGeo.current = { anchor: a, vw: window.innerWidth, vh: window.innerHeight, left: r.left, top: r.top + window.scrollY, width: r.width, height: subEl.offsetHeight }
+    const vh = window.innerHeight
+    zoomGeo.current = {
+      anchor: { left: a.left, top: a.top, width: a.width, height: a.height },
+      vw: window.innerWidth,
+      vh,
+      left: r.left,
+      top: r.top + window.scrollY,
+      width: r.width,
+    }
+    stackRef.current?.style.setProperty('min-height', `${pageEl.offsetHeight}px`)
+    subEl.style.height = `${vh}px`
     subEl.style.transformOrigin = '0 0'
+    pageEl.style.transformOrigin = '0 0'
     hubEl.style.transformOrigin = `${a.left + a.width / 2}px ${a.top + a.height / 2}px`
-    for (const el of [subEl, hubEl]) el.style.willChange = 'transform, opacity'
+    for (const el of [subEl, pageEl, hubEl]) el.style.willChange = 'transform, opacity'
+    if (dimRef.current) dimRef.current.style.opacity = '0'
+    paintZoom(opening ? 0 : 1)
     return true
   }
 
-  /** Runs the zoom from `from` to `to` (0 = anchor, 1 = full) on the calm spring; resolves false if something newer took over. */
+  /** One zoom state as inline styles (the first frame, before the keyframes take over). */
+  const paintZoom = (z: number) => {
+    const g = zoomGeo.current
+    if (!g) return
+    const f = zoomFrame(g, z, window.scrollY)
+    const subEl = subRef.current
+    const pageEl = pageRef.current
+    const hubEl = hubRef.current
+    if (subEl) {
+      subEl.style.transform = affineCss(f.win)
+      subEl.style.opacity = String(f.win.opacity)
+      subEl.style.borderRadius = `${f.win.radiusX}px / ${f.win.radiusY}px`
+    }
+    if (pageEl) pageEl.style.transform = affineCss(f.page)
+    if (hubEl) {
+      hubEl.style.transform = `scale(${f.hub.scale})`
+      hubEl.style.opacity = String(f.hub.opacity)
+    }
+  }
+
+  /**
+   * Plays the zoom from `from` to `to` (0 = anchor, 1 = full) on the calm spring as keyframes (Web Animations): transform and
+   * opacity run on the compositor, so a busy main thread (the page that just mounted) cannot make the motion stutter; only the
+   * corner radius is a separate (main-thread) effect. Resolves false if something newer took over.
+   */
   const zoomSettle = (from: number, to: number) => {
     const token = ++run.current
     stopSpring.current?.()
-    return new Promise<boolean>((resolve) => {
-      const stop = animateSpring({
-        from: from * ZOOM_UNITS,
-        to: to * ZOOM_UNITS,
-        params: SPRING_CALM,
-        restOffset: 2,
-        onUpdate: (v) => {
-          if (token !== run.current) {
-            stop()
-            return resolve(false)
-          }
-          paintZoom(v / ZOOM_UNITS)
-        },
-        onDone: () => resolve(token === run.current),
-      })
-      stopSpring.current = stop
-    })
+    stopZoom()
+    const g = zoomGeo.current
+    const subEl = subRef.current
+    const pageEl = pageRef.current
+    const hubEl = hubRef.current
+    if (!g || !subEl || !pageEl || !hubEl) return Promise.resolve(token === run.current)
+    const scrollY = window.scrollY // fixed for the whole zoom (the day view scrolled itself before this frame)
+    const progress = zoomProgress()
+    const frames = progress.map((p) => zoomFrame(g, from + (to - from) * p, scrollY))
+    const duration = ((progress.length - 1) * 1000) / 60
+    const timing: KeyframeAnimationOptions = { duration, easing: 'linear', fill: 'forwards' }
+    const anims = [
+      subEl.animate(frames.map((f) => ({ transform: affineCss(f.win), opacity: f.win.opacity })), timing),
+      subEl.animate(frames.map((f) => ({ borderRadius: `${f.win.radiusX}px / ${f.win.radiusY}px` })), timing),
+      pageEl.animate(frames.map((f) => ({ transform: affineCss(f.page) })), timing),
+      hubEl.animate(frames.map((f) => ({ transform: `scale(${f.hub.scale})`, opacity: f.hub.opacity })), timing),
+    ]
+    zoomAnims.current = anims
+    return anims[0].finished.then(
+      () => token === run.current,
+      () => false,
+    )
   }
 
   // push / pop started by the Zurück button or a row; the CSS keeps the sub-page above the hub while `data-phase` is not idle
@@ -260,14 +288,18 @@ export function NavStack<V extends string>({
       hubRef.current?.style.setProperty('--hub-scroll', `${hubScroll.current}px`)
       window.scrollTo(0, 0)
     }
+    stopZoom() // a push/pop that interrupts a zoom starts from a clean sub-page
     // zoom (after a pinch); reduced motion or no anchor: the plain push/pop below (a quick fade with reduced motion)
-    if ((phase === 'zoomIn' || phase === 'zoomOut') && !fade && prepareZoom()) {
-      paintZoom(pushing ? 0 : 1)
-      void zoomSettle(pushing ? 0 : 1, pushing ? 1 : 0).then((current) => {
-        if (!current) return
-        if (!pushing) setSub(null)
-        setPhase('idle')
-      })
+    if ((phase === 'zoomIn' || phase === 'zoomOut') && !fade && prepareZoom(pushing)) {
+      const start = () =>
+        void zoomSettle(pushing ? 0 : 1, pushing ? 1 : 0).then((current) => {
+          if (!current) return
+          if (!pushing) setSub(null)
+          setPhase('idle')
+        })
+      // opening: one frame later, after the new page has scrolled itself (day view: to the hour) in its own frame callback
+      if (pushing) zoomFrameId.current = requestAnimationFrame(start)
+      else start()
       return
     }
     paint(pushing ? 1 : 0, fade)
@@ -329,16 +361,23 @@ export function NavStack<V extends string>({
 
   return (
     <div ref={stackRef} className="stack" data-phase={phase} data-moving={phase !== 'idle' ? '' : undefined}>
-      {showHub && (
-        <div key="hub" ref={hubRef} className="stack-hub">
-          {hub}
-        </div>
+      {(showHub || preHub) && (
+        <Activity mode={showHub ? 'visible' : 'hidden'}>
+          <div ref={hubRef} className="stack-hub">
+            {hub}
+          </div>
+        </Activity>
       )}
       {phase !== 'idle' && <div key="dim" ref={dimRef} className="stack-dim" />}
-      {shownSub && (
-        <div key="sub" ref={subRef} className="stack-sub">
-          {renderSub(shownSub)}
-        </div>
+      {subView && (
+        <Activity mode={shownSub ? 'visible' : 'hidden'}>
+          <div ref={subRef} className="stack-sub">
+            {/* the page itself: the zoom scales it inside the sub-page's clipping window */}
+            <div ref={pageRef} className="stack-page">
+              {renderSub(subView)}
+            </div>
+          </div>
+        </Activity>
       )}
     </div>
   )

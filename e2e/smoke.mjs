@@ -4680,24 +4680,56 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 
   // ohne Auswahl (heute) → Tagesansicht von heute; die Zelle wächst in die Tagesansicht (Zoom-Phase)
   c0 = await center('2026-11-18')
-  const phases = pK.evaluate(() => new Promise((r) => { const seen = new Set(); const t0 = performance.now(); const f = () => { const s = document.querySelector('.stack'); if (s) seen.add(s.dataset.phase); if (performance.now() - t0 < 1500) requestAnimationFrame(f); else r([...seen]) }; requestAnimationFrame(f) }))
-  await pinchK(pK, { ...c0, d0: 60, d1: 120 })
+  // während der Zoom läuft: nur Web Animations auf transform/opacity (Kompositor) + Eckradius, kein clip-path
+  const zoomSeen = (phase) => pK.evaluate((phase) => new Promise((r) => {
+    const seen = new Set(); const props = new Set(); let clip = false; const t0 = performance.now()
+    const f = () => {
+      const s = document.querySelector('.stack'); if (s) seen.add(s.dataset.phase)
+      const sub = document.querySelector('.stack-sub')
+      if (s?.dataset.phase === phase && sub) {
+        for (const el of [sub, document.querySelector('.stack-page'), document.querySelector('.stack-hub')]) for (const a of el?.getAnimations() ?? []) for (const k of a.effect.getKeyframes()) for (const p of Object.keys(k)) if (!['offset', 'easing', 'composite', 'computedOffset'].includes(p)) props.add(p)
+        if (getComputedStyle(sub).clipPath !== 'none') clip = true
+      }
+      if (performance.now() - t0 < 1500) requestAnimationFrame(f); else r({ phases: [...seen], props: [...props].sort(), clip })
+    }
+    requestAnimationFrame(f)
+  }), phase)
+  const phases = zoomSeen('zoomIn')
+  {
+    // Finger noch auf dem Glas: die Tagesansicht ist schon vorbereitet (versteckt gerendert), aber nicht sichtbar
+    const cdp = await pK.context().newCDPSession(pK)
+    await pinchK(pK, { ...c0, d0: 60, d1: 120, release: false, cdp })
+    await pK.waitForFunction(() => document.querySelector('.stack-sub .tl'))
+    must(await pK.evaluate(() => [getComputedStyle(document.querySelector('.stack-sub')).display, document.querySelector('.stack').dataset.phase]), ['none', 'idle'], 'Tagesansicht vorab versteckt gerendert')
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
   await settled(pK); await waitH1K('15. November')
   const seenPhases = await phases
-  must(seenPhases.includes('zoomIn'), true, 'Zoom-Phase beim Öffnen: ' + JSON.stringify(seenPhases))
+  must(seenPhases.phases.includes('zoomIn'), true, 'Zoom-Phase beim Öffnen: ' + JSON.stringify(seenPhases))
+  must([seenPhases.props, seenPhases.clip], [['borderRadius', 'opacity', 'transform'], false], 'Zoom nur mit transform/opacity (+ Eckradius), ohne clip-path')
   must(await pK.locator('.day-chip[data-selected="true"] .dn').innerText(), '15', 'Tagesansicht von heute')
   must(await vibesK(), 1, 'ein Tick beim Überschreiten der Schwelle')
   must(await pK.evaluate(() => document.querySelector('.stack-sub').style.transform), '', 'nach dem Zoom keine Reste')
-  ok('Pinch (Aufziehen 60 → 120 px) ohne angetippten Tag öffnet die Tagesansicht von heute (15. November) mit Zoom aus der Zelle (Phase zoomIn); genau ein Haptik-Tick an der Schwelle')
+  must(await pK.evaluate(() => document.querySelector('.stack-sub').getAnimations().length + document.querySelector('.stack-page').getAnimations().length), 0, 'keine Animationen übrig')
+  ok('Pinch (Aufziehen 60 → 120 px) ohne angetippten Tag öffnet die Tagesansicht von heute (15. November) mit Zoom aus der Zelle (Phase zoomIn, nur Web Animations auf transform/opacity und Eckradius, kein clip-path); die Tagesansicht ist schon während des Pinchs versteckt vorgerendert; genau ein Haptik-Tick an der Schwelle')
 
   // Zusammenziehen in der Tagesansicht → zurück zum Monat (Zoom in die Zelle)
-  const phases2 = pK.evaluate(() => new Promise((r) => { const seen = new Set(); const t0 = performance.now(); const f = () => { const s = document.querySelector('.stack'); if (s) seen.add(s.dataset.phase); if (performance.now() - t0 < 1500) requestAnimationFrame(f); else r([...seen]) }; requestAnimationFrame(f) }))
-  await pinchK(pK, { cx: 195, cy: 420, d0: 200, d1: 90 })
+  const phases2 = zoomSeen('zoomOut')
+  {
+    const cdp = await pK.context().newCDPSession(pK)
+    await pinchK(pK, { cx: 195, cy: 420, d0: 200, d1: 90, release: false, cdp })
+    await pK.waitForFunction(() => document.querySelector('.stack-hub .cal-grid'))
+    must(await pK.evaluate(() => getComputedStyle(document.querySelector('.stack-hub')).display), 'none', 'Monat vorab versteckt gerendert')
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
   await settled(pK); await waitH1K('November 2026')
-  must((await phases2).includes('zoomOut'), true, 'Zoom-Phase beim Zurück')
+  const z2 = await phases2
+  must([z2.phases.includes('zoomOut'), z2.props, z2.clip], [true, ['borderRadius', 'opacity', 'transform'], false], 'Zoom-Phase beim Zurück')
   must(await vibesK(), 2, 'Tick beim Zusammenziehen')
   must(await pK.locator('.stack-sub').count(), 0, 'Tagesansicht weg')
-  ok('Pinch-zu (200 → 90 px) in der Tagesansicht führt zurück zum Monat (Phase zoomOut), Tick an der Schwelle, keine Tagesansicht mehr im DOM')
+  ok('Pinch-zu (200 → 90 px) in der Tagesansicht führt zurück zum Monat (Phase zoomOut, Monat während des Pinchs versteckt vorgerendert, Zoom ohne clip-path), Tick an der Schwelle, keine Tagesansicht mehr im DOM')
 
   // angetippter Tag → dessen Tagesansicht; Zurück-Knopf und Kanten-Wischen funktionieren danach wie immer
   await cell('2026-11-16').click()
@@ -4900,7 +4932,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(60) })
     for (let i = 1; i <= 8; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(60 + i * 10) }); await sleep(30) }
     const followed = await p.evaluate(() => document.querySelector('.cal-zoom').style.transform)
-    const scales = p.evaluate(() => new Promise((r) => { const seen = new Set(); const t0 = performance.now(); const f = () => { const s = document.querySelector('.stack-sub'); if (s && s.style.transform) seen.add(s.style.transform); if (performance.now() - t0 < 600) requestAnimationFrame(f); else r([...seen]) }; requestAnimationFrame(f) }))
+    const scales = p.evaluate(() => new Promise((r) => { const seen = new Set(); const t0 = performance.now(); const f = () => { const s = document.querySelector('.stack-sub'); if (s && s.style.transform) seen.add(s.style.transform); for (const a of s?.getAnimations() ?? []) if (!(a instanceof CSSTransition)) seen.add('anim'); if (performance.now() - t0 < 600) requestAnimationFrame(f); else r([...seen]) }; requestAnimationFrame(f) }))
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await cdp.detach()
     await settled(p)
