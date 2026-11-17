@@ -407,9 +407,20 @@ button.row:is(:active, [data-pressed]),
   background: var(--bg);
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
 }
-/* zoom (pinch in the calendar): the day view grows out of its cell, no side shadow */
+/*
+ * zoom (pinch in the calendar): the day view grows out of its cell. The sub-page is a viewport-tall window (height inline)
+ * that clips with rounded corners; `clip`, not `hidden`, so it is no scroll container and the sticky bar inside keeps
+ * working. NavStack.tsx animates only its transform/opacity (plus the radius), the page inside carries the background.
+ */
 .stack[data-phase^='zoom'] .stack-sub {
   box-shadow: none;
+  overflow: clip;
+  background: transparent;
+  min-height: 0;
+}
+.stack[data-phase^='zoom'] .stack-page {
+  background: var(--bg);
+  min-height: 100dvh;
 }
 /* a position: fixed child of a moving page would be placed relative to that page */
 .stack[data-moving] .fab {
@@ -2500,6 +2511,10 @@ html[data-privacy] #privacy-cover {
 }
 .btn.backup-now {
   margin: 12px 0 8px;
+}
+/* "Neu anfangen": the destructive button stands on its own (no card around it), like a delete button in a sheet */
+.btn.reset-all {
+  margin-top: 0;
 }
 .backup-monthly .switch-row {
   padding-left: 0;

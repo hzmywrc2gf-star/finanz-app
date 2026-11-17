@@ -1,7 +1,7 @@
 // Performance-Messung der Gesten und Taps (kein Teil von smoke.mjs).
 // Lokal: `npm run build && npm run preview`, dann `NODE_PATH=$(npm root -g) node e2e/perf.mjs`
 // Umgebung: APP_URL (Standard http://localhost:4173/), REPS (Wiederholungen, Standard 3), OUT (JSON-Datei für Vergleiche)
-// iPhone-13-Kontext, CPU 4× gedrosselt, ~300 Buchungen über 12 Monate, 6 Verträge, Budgets. Echte Touch-Events per CDP;
+// iPhone-13-Kontext, CPU 4× gedrosselt, ~300 Buchungen über 12 Monate, 6 Verträge, Budgets, ~25 Termine (Kalender-Pinch). Echte Touch-Events per CDP;
 // im Seitenkontext zählt eine rAF-Schleife die Frames, ein PerformanceObserver die Long Tasks.
 import { createRequire } from 'node:module'
 const { chromium, devices } = createRequire(import.meta.url)('playwright')
@@ -10,6 +10,8 @@ import fs from 'node:fs'
 const URL = process.env.APP_URL ?? 'http://localhost:4173/'
 const REPS = Number(process.env.REPS ?? 3)
 const THROTTLE = Number(process.env.THROTTLE ?? 4)
+// ONLY=pinch misst nur die Kalender-Pinch-Szenarien (schneller beim Nachjustieren); TRACE=<datei.json> schreibt dazu einen Chromium-Trace
+const PINCH_ONLY = process.env.ONLY === 'pinch'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // Frames über dem 60-Hz-Takt (16,7 ms); 1 ms Toleranz für die Zeitstempel-Quantisierung
 const JANK_MS = 17.7
@@ -59,7 +61,22 @@ await page.evaluate(() => {
     rule(0, 'Miete', 'expense-fixkosten', 85000, 'monthly'), rule(1, 'Strom', 'expense-fixkosten', 7500, 'monthly'), rule(2, 'Handy', 'expense-fixkosten', 2999, 'monthly'),
     rule(3, 'Versicherung', 'expense-fixkosten', 24000, 'quarterly'), rule(4, 'Streaming', 'expense-freizeit', 1299, 'monthly'), rule(5, 'Haftpflicht', 'expense-fixkosten', 6500, 'yearly'),
   ]
-  const data = { version: 6, settings: { startBalanceCents: 150000, startCashCents: 20000 }, categories, transactions, recurring, transfers }
+  // Kalender: Termine heute (überlappend), eine Wochenserie, ein Ganztägiger, über den Monat verteilte Einzeltermine
+  const at = (back, h, m, dur) => {
+    const d = day(back)
+    const p2 = (n) => String(n).padStart(2, '0')
+    const e = h * 60 + m + dur
+    return { start: `${d}T${p2(h)}:${p2(m)}`, end: `${d}T${p2(Math.floor(e / 60))}:${p2(e % 60)}` }
+  }
+  const events = [
+    { id: 'e0', createdAt: 1, title: 'Zahnarzt', allDay: false, ...at(0, 9, 30, 60), location: 'Praxis' },
+    { id: 'e1', createdAt: 1, title: 'Besprechung', allDay: false, ...at(0, 10, 0, 60) },
+    { id: 'e2', createdAt: 1, title: 'Mittag', allDay: false, ...at(0, 12, 30, 45) },
+    { id: 'e3', createdAt: 1, title: 'Yoga', allDay: false, ...at(14, 18, 0, 60), recurrence: { freq: 'weekly', interval: 1 } },
+    { id: 'e4', createdAt: 1, title: 'Urlaub', allDay: true, start: day(-3), end: day(-5) },
+    ...Array.from({ length: 20 }, (_, i) => ({ id: `ev${i}`, createdAt: 1, title: `Termin ${i}`, allDay: false, ...at(15 - (i % 31), 8 + (i % 10), 0, 30) })),
+  ]
+  const data = { version: 8, settings: { startBalanceCents: 150000, startCashCents: 20000 }, categories, transactions, recurring, transfers, invoices: [], events }
   localStorage.setItem('finanz-app:v1', JSON.stringify(data))
 })
 await page.reload()
@@ -97,6 +114,18 @@ await page.evaluate(() => {
     start() { frames.length = 0; longs.length = 0; last = 0; on = true },
     stop() { on = false; return { frames: [...frames], longs: [...longs] } },
   }
+  // Pinch: Zeit ab dem Loslassen (erstes pointerup) bis `window.__rel.cond()` erfüllt und zwei Frames gemalt sind
+  window.__rel = { t0: 0, ms: null, cond: null }
+  document.addEventListener('pointerup', (e) => {
+    const rel = window.__rel
+    if (!rel.cond || rel.t0) return
+    rel.t0 = e.timeStamp
+    const poll = () => {
+      if (rel.cond()) requestAnimationFrame(() => requestAnimationFrame((t) => (rel.ms = t - rel.t0)))
+      else requestAnimationFrame(poll)
+    }
+    requestAnimationFrame(poll)
+  }, true)
   // Tippen: Zeit ab pointerdown bis der Zustand `window.__tap.cond()` nach zwei Frames (≈ gemalt) erfüllt ist
   window.__tap = { t0: 0, ms: null, cond: null }
   document.addEventListener('pointerdown', (e) => {
@@ -180,9 +209,49 @@ const gesture = async (name, run) => {
   acc.longCount += raw.longs.length
   acc.longMs += raw.longs.reduce((s, d) => s + d, 0)
 }
-const times = { openList: [], tapSheet: [], saveClosed: [], tab: [] }
+const times = { openList: [], tapSheet: [], saveClosed: [], tab: [], pinchOpen: [], pinchClose: [] }
+
+/** Zwei Finger per CDP (wie `pinchK` in smoke.mjs): erster Finger, dann der zweite, `steps` Bewegungen, Loslassen. */
+async function pinch({ cx, cy, d0, d1, steps = 8, ms = 30 }) {
+  const pts = (d) => [{ x: cx - d / 2, y: cy, id: 1 }, { x: cx + d / 2, y: cy, id: 2 }]
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pts(d0)[0]] })
+  await sleep(20)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(d0) })
+  for (let i = 1; i <= steps; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(d0 + ((d1 - d0) * i) / steps) })
+    await sleep(ms)
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+}
+/** Misst einen Pinch: Frames/Long Tasks über Geste + Übergang und die Zeit vom Loslassen bis `cond` (Übergang fertig, gemalt). */
+async function pinchRun(name, list, cond, args) {
+  await page.evaluate((c) => { window.__rel = { ...window.__rel, t0: 0, ms: null, cond: new Function(`return (${c})()`) } }, cond)
+  const before = await metrics()
+  await gesture(name, () => record(async () => {
+    await pinch(args)
+    await page.waitForFunction(() => window.__rel.ms !== null, null, { timeout: 15000 })
+  }))
+  const after = await metrics()
+  const acc = (mainThread[name] ??= {})
+  for (const k of Object.keys(after)) acc[k] = (acc[k] ?? 0) + after[k] - before[k]
+  list.push(await page.evaluate(() => { const v = window.__rel.ms; window.__rel.cond = null; return v }))
+}
+/** Hauptthread-Zähler von Chromium (Sekunden → ms); Layout/Style-Arbeit und Gesamtlast einer Geste. */
+const mainThread = {}
+let traced = false
+async function metrics() {
+  const { metrics: m } = await cdp.send('Performance.getMetrics')
+  const v = Object.fromEntries(m.map((x) => [x.name, x.value]))
+  return { taskMs: v.TaskDuration * 1000, scriptMs: v.ScriptDuration * 1000, layoutMs: v.LayoutDuration * 1000, styleMs: v.RecalcStyleDuration * 1000, layouts: v.LayoutCount, styles: v.RecalcStyleCount }
+}
+await cdp.send('Performance.enable')
 
 for (let rep = 0; rep < REPS; rep++) {
+  if (!PINCH_ONLY) await mainScenarios(rep)
+  await pinchScenarios()
+}
+
+async function mainScenarios(rep) {
   // (a) Kanten-Wischen zurück auf „Alle Buchungen“ (300 Zeilen)
   await openBookings(true)
   await gesture('a Kanten-Wischen zurück', async () => {
@@ -275,8 +344,34 @@ for (let rep = 0; rep < REPS; rep++) {
   }
 }
 
+
+async function pinchScenarios() {
+  const trace = process.env.TRACE && !traced
+  if (trace) await browser.startTracing(page, { path: process.env.TRACE, categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.frame', 'disabled-by-default-v8.cpu_profiler'] })
+  // (i) Kalender: Aufziehen auf dem Raster (heute ausgewählt) → Tagesansicht wächst aus der Zelle; (j) Zusammenziehen → zurück
+  await tab('Kalender').click()
+  await page.locator('.cal-grid').waitFor()
+  await settled()
+  await sleep(600)
+  const cellBox = await page.locator('.cal-cell[data-selected="true"]').boundingBox()
+  await pinchRun('i Pinch auf (Monat → Tag)', times.pinchOpen,
+    `() => document.querySelector('.stack')?.dataset.phase === 'idle' && !!document.querySelector('.stack-sub .tl') && !document.querySelector('.stack-hub')`,
+    { cx: cellBox.x + cellBox.width / 2, cy: cellBox.y + cellBox.height / 2, d0: 60, d1: 140 })
+  must((await page.locator('.stack-sub .tl').count()) === 1, 'Pinch auf hat die Tagesansicht nicht geöffnet')
+  await sleep(600)
+  await pinchRun('j Pinch zu (Tag → Monat)', times.pinchClose,
+    `() => document.querySelector('.stack')?.dataset.phase === 'idle' && !document.querySelector('.stack-sub') && !!document.querySelector('.cal-grid')`,
+    { cx: 195, cy: 420, d0: 220, d1: 90 })
+  must((await page.locator('.stack-sub').count()) === 0, 'Pinch zu hat nicht zum Monat geführt')
+  if (trace) {
+    await browser.stopTracing()
+    traced = true
+  }
+  await sleep(400)
+}
+
 // ---------- Ausgabe ----------
-const f1 = (n) => n.toFixed(1)
+const f1 = (n) => (n == null ? '–' : n.toFixed(1))
 const rows = Object.entries(results).sort(([a], [b]) => a.localeCompare(b)).map(([name, r]) => ({ name, ...r }))
 console.log(`\nPerf (${URL}, iPhone 13, CPU ${THROTTLE}× gedrosselt, ${REPS} Wiederholungen je Szenario)\n`)
 console.log('| Szenario | Frames | > 16,7 ms | > 33 ms | max Frame ms | Long Tasks (Anzahl / ms) |')
@@ -287,11 +382,17 @@ const summary = {
   'e Tippen → Sheet sichtbar (Median ms)': median(times.tapSheet),
   'e Sichern → Sheet weg + Liste neu (Median ms)': median(times.saveClosed),
   'f Tab-Wechsel (Median ms)': median(times.tab),
+  'i Pinch auf: Loslassen → Tagesansicht steht (Median ms)': median(times.pinchOpen),
+  'j Pinch zu: Loslassen → Monat steht (Median ms)': median(times.pinchClose),
+}
+if (Object.keys(mainThread).length) {
+  console.log('\n| Hauptthread (Summe aller Wiederholungen) | Task ms | Script ms | Layout ms (Anzahl) | Style ms (Anzahl) |\n|---|---|---|---|---|')
+  for (const [k, m] of Object.entries(mainThread)) console.log(`| ${k} | ${f1(m.taskMs)} | ${f1(m.scriptMs)} | ${f1(m.layoutMs)} (${m.layouts}) | ${f1(m.styleMs)} (${m.styles}) |`)
 }
 console.log('\n| Zeit | ms |\n|---|---|')
 for (const [k, v] of Object.entries(summary)) console.log(`| ${k} | ${f1(v)} |`)
-console.log(`\nEinzelwerte: Öffnen ${times.openList.map(f1)} · Tippen→Sheet ${times.tapSheet.map(f1)} · Sichern ${times.saveClosed.map(f1)} · Tab ${times.tab.map(f1)}`)
+console.log(`\nEinzelwerte: Öffnen ${times.openList.map(f1)} · Tippen→Sheet ${times.tapSheet.map(f1)} · Sichern ${times.saveClosed.map(f1)} · Tab ${times.tab.map(f1)} · Pinch auf ${times.pinchOpen.map(f1)} · Pinch zu ${times.pinchClose.map(f1)}`)
 if (warnings.length) console.log('\nUngültige Messungen (nicht abgebrochen):', warnings)
 if (errors.length) console.log('\nSeitenfehler:', errors)
-if (process.env.OUT) fs.writeFileSync(process.env.OUT, JSON.stringify({ rows, summary, times }, null, 2))
+if (process.env.OUT) fs.writeFileSync(process.env.OUT, JSON.stringify({ rows, summary, times, mainThread }, null, 2))
 await browser.close()

@@ -36,6 +36,7 @@ export const CalendarPage = memo(function CalendarPage({
   day,
   onDay,
   onOpenDay,
+  onPinch,
   onNewEvent,
   onEditEvent,
   onOpenFinance,
@@ -44,6 +45,8 @@ export const CalendarPage = memo(function CalendarPage({
   onDay: (day: string) => void
   /** `zoom`: opened by a pinch, the day view grows out of the selected cell. */
   onOpenDay: (how?: 'zoom') => void
+  /** Two fingers are down (true) / let go without opening the day (false): the day view is rendered ahead of time meanwhile. */
+  onPinch?: (active: boolean) => void
 } & CalendarHandlers) {
   const { data } = useFinance()
   const [importing, setImporting] = useState(false)
@@ -92,6 +95,7 @@ export const CalendarPage = memo(function CalendarPage({
       const scale = el.style.transform ? g.width / el.offsetWidth : 1
       el.style.transformOrigin = `${(c.left + c.width / 2 - g.left) / scale}px ${(c.top + c.height / 2 - g.top) / scale}px`
       el.style.willChange = 'transform'
+      onPinch?.(true)
     },
     onMove: (factor) => {
       const el = zoomRef.current
@@ -121,6 +125,7 @@ export const CalendarPage = memo(function CalendarPage({
         }, 2000)
         return
       }
+      onPinch?.(false)
       const reset = () => {
         el.style.transform = ''
         el.style.transformOrigin = ''

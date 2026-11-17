@@ -14,6 +14,7 @@ import { budgetAlerts } from '../domain/budget'
 import { detectRecurring } from '../domain/recurringDetect'
 import type { RecurringSuggestion } from '../domain/recurringDetect'
 import type { RecurringInput } from './actions'
+import * as A from './actions'
 
 const base = () => createDefaultData()
 const meta = { id: 'x1', createdAt: 5 }
@@ -615,5 +616,48 @@ describe('calendar actions', () => {
     expect(again.eventIds).toEqual(['id3'])
     expect(undoImportEvents(again.data, again.eventIds)).toEqual(first.data)
     expect(undoImportEvents(first.data, first.eventIds).events).toEqual([])
+  })
+})
+
+describe('resetData', () => {
+  const full = (): ReturnType<typeof createDefaultData> => {
+    let d = createDefaultData()
+    d = A.setDisplayName(d, 'Felix')
+    d = A.setStartBalance(d, 150000)
+    d = A.setStartCash(d, 2000)
+    d = A.addCategory(d, 'expense', 'Haustier', 'cat-pet')
+    d = A.setCategoryBudget(d, 'expense-lebensmittel', 30000)
+    d = A.addTransaction(d, { kind: 'expense', amountCents: 1234, date: '2026-11-02', categoryId: 'expense-lebensmittel', account: 'konto' }, { id: 't1', createdAt: 1 })
+    d = A.addTransfer(d, { direction: 'withdrawal', amountCents: 5000, date: '2026-11-03' }, { id: 'x1', createdAt: 2 })
+    d = A.addRecurring(d, { kind: 'expense', amountCents: 80000, categoryId: 'expense-fixkosten', interval: 'monthly', dayOfMonth: 1, startDate: '2026-11-01', autoBook: true }, { today: '2026-11-16', catchUp: true })
+    d = A.addInvoice(d, { categoryId: 'expense-kleidung', amountCents: 4999, purchaseDate: '2026-11-10', dueDate: '2026-11-24', note: 'Otto' }, 3, 'i1')
+    d = A.addEvent(d, { title: 'Zahnarzt', allDay: false, start: '2026-11-16T09:30', end: '2026-11-16T10:30' }, { id: 'e1', createdAt: 4 })
+    return d
+  }
+
+  it('empties everything, restores the default categories and keeps only the name', () => {
+    const before = full()
+    expect(before.transactions.length).toBeGreaterThan(1)
+    expect(before.recurring).toHaveLength(1)
+    expect(before.invoices).toHaveLength(1)
+    expect(before.events).toHaveLength(1)
+    const after = A.resetData(before)
+    expect(after).toEqual({ ...createDefaultData(), settings: { startBalanceCents: 0, startCashCents: 0, displayName: 'Felix' } })
+    expect(after.categories.some((c) => c.monthlyBudgetCents !== undefined)).toBe(false)
+    expect(after.categories.find((c) => c.name === 'Haustier')).toBeUndefined()
+    expect(accountBalance(after, 'konto')).toBe(0)
+    expect(accountBalance(after, 'bargeld')).toBe(0)
+    // pure: the old data is untouched (the undo toast hands it back)
+    expect(before.events).toHaveLength(1)
+  })
+
+  it('without a name the settings have no name either', () => {
+    expect(A.resetData(createDefaultData()).settings).toEqual({ startBalanceCents: 0, startCashCents: 0 })
+  })
+
+  it('returns new arrays (no sharing with the defaults of a later reset)', () => {
+    const a = A.resetData(createDefaultData())
+    const b = A.resetData(createDefaultData())
+    expect(a.categories).not.toBe(b.categories)
   })
 })

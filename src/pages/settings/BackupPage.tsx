@@ -22,18 +22,22 @@ import { Switch } from '../../components/Switch'
 
 /** Settings > Datensicherung: export (encrypted or plain) and import of backup files. */
 export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => void }) {
-  const { data, replaceAll, saveError } = useFinance()
+  const { data, replaceAll, resetAll, saveError } = useFinance()
   const [pending, setPending] = useState<AppData | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [exporting, setExporting] = useState(false)
   const [confirmPlain, setConfirmPlain] = useState(false)
   const [encryptedFile, setEncryptedFile] = useState<string | null>(null)
   const [vaultFile, setVaultFile] = useState<string | null>(null)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetMsg, setResetMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const { last, enabled } = useBackupSettings()
   const monthly = useVaultBackup((outcome) =>
     setBackupMsg({ ok: true, text: outcome === 'shared' ? 'Sicherung erstellt.' : 'Sicherung wurde als Datei geladen.' }),
   )
+
+  const isEmpty = data.transactions.length + data.transfers.length + data.recurring.length + data.invoices.length + data.events.length === 0
 
   function exportPlain() {
     downloadTextFile(`finanz-backup-${todayISO()}.json`, exportJSON(data))
@@ -78,6 +82,17 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
       setBackupMsg({ ok: false, text: err instanceof Error ? err.message : 'Import fehlgeschlagen.' })
     }
     setEncryptedFile(null)
+  }
+
+  function confirmResetAll() {
+    setConfirmReset(false)
+    try {
+      resetAll()
+      haptic()
+      setResetMsg({ ok: true, text: 'Alle Daten gelöscht. Du startest jetzt neu.' })
+    } catch (err) {
+      setResetMsg({ ok: false, text: err instanceof Error ? err.message : 'Löschen fehlgeschlagen.' })
+    }
   }
 
   function confirmImport() {
@@ -138,6 +153,22 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
       )}
       <div className="footnote">Alle Daten liegen nur auf diesem Gerät. Exportiere sie regelmäßig als Sicherung, am besten mit Passwort.</div>
 
+      <div className="section-title">Neu anfangen</div>
+      <button className="btn danger reset-all" type="button" onClick={() => setConfirmReset(true)}>
+        Alle Daten löschen
+      </button>
+      {/* the success line goes away once "Rückgängig" brought the data back */}
+      {resetMsg && (!resetMsg.ok || isEmpty) && (
+        <div className={resetMsg.ok ? 'success' : 'error'} role={resetMsg.ok ? 'status' : 'alert'}>
+          {resetMsg.text}
+        </div>
+      )}
+      <div className="footnote">
+        Löscht Buchungen, Umbuchungen, Verträge, Rechnungen und Termine, setzt die Kategorien (samt Budgets) zurück und das
+        Startguthaben auf 0. Es bleiben: dein Name, Passwort, Face ID, Wiederherstellungsschlüssel und die Einstellungen
+        dieses Geräts.
+      </div>
+
       {exporting && (
         <BackupExportSheet
           data={data}
@@ -161,6 +192,16 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
       )}
       {encryptedFile && (
         <BackupImportSheet fileText={encryptedFile} onClose={() => setEncryptedFile(null)} onDecrypted={onDecrypted} />
+      )}
+      {confirmReset && (
+        <ConfirmDialog
+          title="Alle Daten löschen?"
+          message="Buchungen, Verträge, Rechnungen, Termine und Kategorien werden gelöscht. Passwort, Face ID und dein Name bleiben. Mach vorher eine Sicherung, falls du etwas behalten willst."
+          confirmLabel="Alles löschen"
+          danger
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={confirmResetAll}
+        />
       )}
       {pending && (
         <ConfirmDialog

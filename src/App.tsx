@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Transaction } from './domain/types'
 import { todayISO } from './domain/dates'
 import type { DaySegment, FinanceEntry } from './domain/calendar'
@@ -71,6 +71,8 @@ function AppContent() {
   const [calDay, setCalDay] = useState(() => todayISO())
   const [eventForm, setEventForm] = useState<(EventSheetProps & { key: string }) | null>(null)
   const [financeEntry, setFinanceEntry] = useState<FinanceEntry | null>(null)
+  // calendar: while two fingers pinch, the page they lead to is rendered ahead of time (hidden), so the zoom only shows it
+  const [calPrerender, setCalPrerender] = useState<'day' | 'hub' | null>(null)
   const closeForm = useCallback(() => setForm(null), [])
   // how the next popstate reaches the screen (our own back = animated, system back = the OS already animated)
   const pendingAnim = useRef<StackAnim>('instant')
@@ -92,6 +94,7 @@ function AppContent() {
   }, [])
   const changeTab = useCallback((next: TabId) => {
     setTab(next)
+    setCalPrerender(null)
     if (next === 'calendar') setCalDay(todayISO())
     setNav({ view: 'hub', anim: 'instant' })
     if (USE_HISTORY && subOf(history.state) !== 'hub') {
@@ -127,8 +130,20 @@ function AppContent() {
   const addNew = useCallback(() => setForm({}), [])
   const addOn = useCallback((defaultDate: string) => setForm({ defaultDate }), [])
   const openBudgets = useCallback(() => changeTab('budgets'), [changeTab])
-  const openDay = useCallback((how?: 'zoom') => openSub('day', how === 'zoom' ? 'zoom' : 'animate'), [openSub])
-  const zoomBack = useCallback(() => goBack('zoom'), [goBack])
+  const openDay = useCallback(
+    (how?: 'zoom') => {
+      setCalPrerender(null)
+      openSub('day', how === 'zoom' ? 'zoom' : 'animate')
+    },
+    [openSub],
+  )
+  const zoomBack = useCallback(() => {
+    setCalPrerender(null)
+    goBack('zoom')
+  }, [goBack])
+  // low priority: the hidden page renders in slices between the frames of the pinch
+  const prerenderDay = useCallback((on: boolean) => startTransition(() => setCalPrerender(on ? 'day' : null)), [])
+  const prerenderMonth = useCallback((on: boolean) => startTransition(() => setCalPrerender(on ? 'hub' : null)), [])
   /** The day cell the day view zooms out of / back into. */
   const dayCell = useCallback((hub: HTMLElement) => hub.querySelector<HTMLElement>('.cal-cell[data-selected="true"]'), [])
   const newEvent = useCallback((day: string, hour?: number) => setEventForm({ key: `new-${day}-${hour}`, day, hour, onClose: () => setEventForm(null) }), [])
@@ -182,12 +197,14 @@ function AppContent() {
             anim={nav.anim}
             onBack={goBack}
             zoomAnchor={dayCell}
+            prerender={calPrerender}
             hub={
               <main className="app app-cal">
                 <CalendarPage
                   day={calDay}
                   onDay={setCalDay}
                   onOpenDay={openDay}
+                  onPinch={prerenderDay}
                   onNewEvent={newEvent}
                   onEditEvent={editEvent}
                   onOpenFinance={setFinanceEntry}
@@ -196,7 +213,7 @@ function AppContent() {
             }
             renderSub={() => (
               <main className="app app-cal">
-                <DayPage day={calDay} onDay={setCalDay} onBack={back} onPinchBack={zoomBack} onNewEvent={newEvent} onEditEvent={editEvent} onOpenFinance={setFinanceEntry} />
+                <DayPage day={calDay} onDay={setCalDay} onBack={back} onPinchBack={zoomBack} onPinch={prerenderMonth} onNewEvent={newEvent} onEditEvent={editEvent} onOpenFinance={setFinanceEntry} />
               </main>
             )}
           />
