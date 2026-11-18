@@ -3264,6 +3264,9 @@ button.todo-main:is(:active, [data-pressed]):not(:disabled) {
   display: inline-flex;
   gap: 6px;
 }
+.todo-meta-item + .todo-meta-item > .todo-meta-icons {
+  margin-left: 8px;
+}
 .todo-meta-icon {
   display: inline-flex;
 }

@@ -140,7 +140,7 @@ export function TodoMeta({ todo, today, list, hideMyDay }: { todo: Todo; today: 
       {items.map((it, i) => (
         <span key={it.key} className={it.cls ? `todo-meta-item ${it.cls}` : 'todo-meta-item'}>
           {it.node}
-          {i < items.length - 1 && <span className="todo-sep" aria-hidden="true">·</span>}
+          {i < items.length - 1 && items[i + 1].key !== 'icons' && <span className="todo-sep" aria-hidden="true">·</span>}
         </span>
       ))}
     </span>

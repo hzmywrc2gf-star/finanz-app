@@ -29,7 +29,7 @@ export function TodayTodosCard({ data, today, onOpenTodo, onOpenMyDay }: { data:
       </div>
       <ul className="todo-today-list">
         {shown.map((t) => {
-          const sub = t.dueDate && t.dueDate <= today ? dueLabel(t.dueDate, today) : 'Mein Tag'
+          const sub = t.dueDate === today ? 'Heute fällig' : t.dueDate && t.dueDate < today ? dueLabel(t.dueDate, today) : 'Mein Tag'
           return (
             <li key={t.id} className="todo-today-item">
               <TodoCheck done={false} title={t.title} onToggle={() => toggleTodo(t.id)} />
