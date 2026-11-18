@@ -136,8 +136,68 @@ export interface CalendarEvent {
   importUid?: string
 }
 
+/** Colour key of an own to-do list (a fixed palette of calm tones; never red or green, those belong to amounts). */
+export type TodoColor = 'lav' | 'sky' | 'mist' | 'sand' | 'slate' | 'amber' | 'violet'
+
+/** Symbol key of an own to-do list (own SVG icons in Icons.tsx). */
+export type TodoIcon = 'list' | 'cart' | 'home' | 'work' | 'heart' | 'gift' | 'travel' | 'book'
+
+/** An own to-do list ("Meine Listen"). Tasks without a list belong to the built-in list „Aufgaben“. */
+export interface TodoList {
+  id: string
+  createdAt: number
+  /** Trimmed, 1–60 characters. */
+  name: string
+  color: TodoColor
+  icon: TodoIcon
+  /** Sort key of the overview (ascending). */
+  order: number
+}
+
+/** Repeat rule of a task: completing it creates the next open copy (see `domain/todos.ts`). */
+export interface TodoRecurrence {
+  freq: EventFreq
+  /** Every n-th day/week/month/year, 1–99. */
+  interval: number
+  /** Weekly only: weekdays with Monday = 0 … Sunday = 6; absent = the weekday of the due date. */
+  byWeekday?: number[]
+}
+
+export interface TodoStep {
+  id: string
+  /** Trimmed, 1–255 characters. */
+  title: string
+  done: boolean
+}
+
+/** A task of the to-do list. Dates are local 'YYYY-MM-DD' strings, never derived with `toISOString()`. */
+export interface Todo {
+  id: string
+  createdAt: number
+  /** Own list, or null = the built-in list „Aufgaben“. */
+  listId: string | null
+  /** Trimmed, 1–255 characters. */
+  title: string
+  done: boolean
+  /** Epoch ms of the completion (only while done). */
+  completedAt?: number
+  important: boolean
+  /** „Mein Tag“: the task belongs to the day planner only on this date. */
+  myDay?: string
+  dueDate?: string
+  /** Local 'YYYY-MM-DDTHH:mm'; only used for the calendar file (.ics) with an alert. */
+  reminder?: string
+  recurrence?: TodoRecurrence
+  /** At most 100. */
+  steps: TodoStep[]
+  /** At most 5000 characters; absent = none. */
+  note?: string
+  /** Sort key within its list (ascending; new tasks get the smallest). */
+  order: number
+}
+
 export interface AppData {
-  version: 8
+  version: 9
   settings: Settings
   categories: Category[]
   transactions: Transaction[]
@@ -145,4 +205,6 @@ export interface AppData {
   transfers: Transfer[]
   invoices: Invoice[]
   events: CalendarEvent[]
+  todoLists: TodoList[]
+  todos: Todo[]
 }

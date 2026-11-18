@@ -2,7 +2,7 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
- * Brings stored/imported raw data to the current version (8). Pure; unknown shapes
+ * Brings stored/imported raw data to the current version (9). Pure; unknown shapes
  * are returned unchanged so validation can reject them with a proper message.
  */
 export function migrate(raw: unknown): unknown {
@@ -48,6 +48,10 @@ export function migrate(raw: unknown): unknown {
   if (isObj(data) && data.version === 7) {
     // v7 -> v8: calendar events were added, none yet
     data = { ...data, version: 8, events: [] }
+  }
+  if (isObj(data) && data.version === 8) {
+    // v8 -> v9: the to-do list was added (own lists and tasks), none yet
+    data = { ...data, version: 9, todoLists: [], todos: [] }
   }
   return data
 }

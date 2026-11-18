@@ -14,6 +14,8 @@ export interface IcsReminder {
   description?: string
   /** Creation instant for DTSTAMP (UTC). Default now. */
   now?: Date
+  /** Last part of PRODID (what kind of entry). Default „Rechnung“. */
+  product?: string
 }
 
 const pad = (n: number, width = 2) => String(n).padStart(width, '0')
@@ -69,7 +71,7 @@ export function buildIcs(r: IcsReminder): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Finanzklar//Rechnung//DE',
+    `PRODID:-//Finanzklar//${r.product ?? 'Rechnung'}//DE`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
