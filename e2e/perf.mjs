@@ -76,7 +76,14 @@ await page.evaluate(() => {
     { id: 'e4', createdAt: 1, title: 'Urlaub', allDay: true, start: day(-3), end: day(-5) },
     ...Array.from({ length: 20 }, (_, i) => ({ id: `ev${i}`, createdAt: 1, title: `Termin ${i}`, allDay: false, ...at(15 - (i % 31), 8 + (i % 10), 0, 30) })),
   ]
-  const data = { version: 8, settings: { startBalanceCents: 150000, startCashCents: 20000 }, categories, transactions, recurring, transfers, invoices: [], events }
+  // To-do: eine Liste mit 100 offenen Aufgaben (Metadaten gemischt), 20 erledigte
+  const todoLists = [{ id: 'tl1', createdAt: 1, name: 'Perf-Liste', color: 'sky', icon: 'list', order: 1 }]
+  const todos = Array.from({ length: 120 }, (_, i) => ({
+    id: `td${i}`, createdAt: 1 + i, listId: 'tl1', title: `Aufgabe ${i}`, done: i >= 100, ...(i >= 100 ? { completedAt: 1000 + i } : {}),
+    important: i % 7 === 0, ...(i % 3 === 0 ? { dueDate: day(i % 20) } : {}), ...(i % 5 === 0 ? { note: 'Notiz' } : {}),
+    steps: i % 4 === 0 ? [{ id: `s${i}`, title: 'Schritt', done: false }] : [], order: i,
+  }))
+  const data = { version: 9, settings: { startBalanceCents: 150000, startCashCents: 20000 }, categories, transactions, recurring, transfers, invoices: [], events, todoLists, todos }
   localStorage.setItem('finanz-app:v1', JSON.stringify(data))
 })
 await page.reload()
@@ -209,7 +216,7 @@ const gesture = async (name, run) => {
   acc.longCount += raw.longs.length
   acc.longMs += raw.longs.reduce((s, d) => s + d, 0)
 }
-const times = { openList: [], tapSheet: [], saveClosed: [], tab: [], pinchOpen: [], pinchClose: [] }
+const times = { openList: [], tapSheet: [], saveClosed: [], tab: [], pinchOpen: [], pinchClose: [], todoOpen: [] }
 
 /** Zwei Finger per CDP (wie `pinchK` in smoke.mjs): erster Finger, dann der zweite, `steps` Bewegungen, Loslassen. */
 async function pinch({ cx, cy, d0, d1, steps = 8, ms = 30 }) {
@@ -342,6 +349,24 @@ async function mainScenarios(rep) {
     times.tab.push(await tapTime(cond, () => tapLoc(tab(name))))
     await sleep(400)
   }
+
+  // (k) To-do: Liste mit 100 offenen Aufgaben öffnen (Zeit bis alle Zeilen gemalt), (l) eine Aufgabe abhaken (Frames der Haken-Animation + Zuklappen)
+  await tab('Kalender').click()
+  await page.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'To-do' }).click()
+  await sleep(500)
+  times.todoOpen.push(await tapTime(`() => document.querySelectorAll('[data-testid="todo-row"]').length >= ${100 - rep}`, () => tapLoc(page.locator('button.todo-list-row').filter({ hasText: /^Perf-Liste/ }))))
+  await settled()
+  await sleep(500)
+  await gesture('l To-do abhaken', async () =>
+    record(async () => {
+      await tapLoc(page.locator('[data-testid="todo-row"]').first().getByRole('checkbox'))
+      await sleep(900)
+    }),
+  )
+  await page.getByRole('button', { name: 'Zurück', exact: true }).click()
+  await settled()
+  await page.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'Kalender' }).click()
+  await sleep(400)
 }
 
 
@@ -384,6 +409,7 @@ const summary = {
   'f Tab-Wechsel (Median ms)': median(times.tab),
   'i Pinch auf: Loslassen → Tagesansicht steht (Median ms)': median(times.pinchOpen),
   'j Pinch zu: Loslassen → Monat steht (Median ms)': median(times.pinchClose),
+  'k To-do-Liste mit 100 Aufgaben öffnen (Median ms)': median(times.todoOpen),
 }
 if (Object.keys(mainThread).length) {
   console.log('\n| Hauptthread (Summe aller Wiederholungen) | Task ms | Script ms | Layout ms (Anzahl) | Style ms (Anzahl) |\n|---|---|---|---|---|')

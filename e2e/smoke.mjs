@@ -5420,7 +5420,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const dlg = p.getByRole('alertdialog', { name: 'Alle Daten löschen?' })
   await dlg.waitFor()
   const msg = nbsp(await dlg.innerText())
-  for (const t of ['Buchungen, Verträge, Rechnungen, Termine und Kategorien werden gelöscht', 'Passwort, Face ID und dein Name bleiben', 'Mach vorher eine Sicherung, falls du etwas behalten willst.']) if (!msg.includes(t)) throw new Error('Alle Daten löschen – Dialogtext fehlt: ' + t)
+  for (const t of ['Buchungen, Verträge, Rechnungen, Termine, Aufgaben und Kategorien werden gelöscht', 'Passwort, Face ID und dein Name bleiben', 'Mach vorher eine Sicherung, falls du etwas behalten willst.']) if (!msg.includes(t)) throw new Error('Alle Daten löschen – Dialogtext fehlt: ' + t)
   must(await dlg.getByRole('button', { name: 'Alles löschen' }).evaluate((b) => b.classList.contains('danger')), true, 'Bestätigen-Knopf im Gefahren-Stil')
   await p.screenshot({ path: `${SHOTS}/r2-rueckfrage.png` })
   await dlg.getByRole('button', { name: 'Abbrechen' }).click()
