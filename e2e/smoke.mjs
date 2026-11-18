@@ -301,7 +301,7 @@ await dl.saveAs(file)
 const json = JSON.parse(fs.readFileSync(file, 'utf8'))
 if (dl.suggestedFilename() !== 'finanz-backup-2026-10-27.json' || json.transactions.length !== 5 || json.settings.startBalanceCents !== 100000)
   throw new Error('Export unvollständig ' + dl.suggestedFilename())
-if (json.version !== 8 || !Array.isArray(json.invoices) || json.settings.startCashCents !== 0 || json.transfers.length !== 0 || json.transactions.some((t) => t.account !== 'konto'))
+if (json.version !== 9 || !Array.isArray(json.invoices) || json.settings.startCashCents !== 0 || json.transfers.length !== 0 || json.transactions.some((t) => t.account !== 'konto'))
   throw new Error('Export: Version 7 / Bargeld-Felder fehlen')
 ok(`Export ${dl.suggestedFilename()}: Version 7, 5 Buchungen (alle auf dem Konto), Startguthaben 100000 Cent, Startbestand Bargeld 0, keine Umbuchungen`)
 // Daten ändern, dann Backup wieder einspielen
@@ -739,7 +739,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await tab('Budgets').click()
   await mustRow('Lebensmittel', 'Lebensmittel | 423,10 € von 400,00 € | 105,8 % | 23,10 € drüber', 'Nach Reload')
   const st = await stored()
-  if (st.version !== 8 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
+  if (st.version !== 9 || st.categories.find((c) => c.id === 'expense-lebensmittel').monthlyBudgetCents !== 40000 || st.categories.find((c) => c.id === 'income-gehalt').monthlyBudgetCents !== undefined)
     throw new Error('Gespeicherte Daten: Version/Budget falsch')
   ok('Budget bleibt nach Neuladen erhalten (gespeichert als Version 7, monthlyBudgetCents 40000)')
 
@@ -1271,7 +1271,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   const file2 = `${SHOTS}/../backup-test.json`
   await dl2.saveAs(file2)
   const j2 = JSON.parse(fs.readFileSync(file2, 'utf8'))
-  must(j2.version, 8, 'Export Version'); must(j2.settings.startCashCents, 2000, 'Export Startbestand Bargeld')
+  must(j2.version, 9, 'Export Version'); must(j2.settings.startCashCents, 2000, 'Export Startbestand Bargeld')
   must(JSON.stringify(j2.transfers.map((t) => [t.direction, t.amountCents, t.date, t.note])), '[["withdrawal",15000,"2026-10-27","Geldautomat"]]', 'Export Umbuchungen')
   must(j2.transactions.filter((t) => t.account === 'bargeld').map((t) => t.amountCents).join(), '4550', 'Export: Barbuchung')
   must(j2.transactions.length, 12, 'Export: 12 Buchungen')
@@ -1632,7 +1632,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p3.waitForTimeout(200)
   const s3 = await readStored(p3)
   must3(await p3.evaluate(() => localStorage.getItem('finanz-app:v1')), null, 'Klartext nach Einrichtung weg')
-  if (s3.version !== 8 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
+  if (s3.version !== 9 || s3.settings.startCashCents !== 0 || s3.transfers.length !== 0 || s3.transactions[0].account !== 'konto')
     throw new Error('Migration v3: gespeicherte Daten falsch ' + JSON.stringify(s3).slice(0, 300))
   await ctx3.close()
   ok('Migration v3 → v4 beim Laden: Kontostand 954,01 €, „Bargeld 0,00 € · Gesamt 954,01 €“, alte Buchung liegt auf dem Konto, Einrichtung übernimmt die Daten in den Tresor, gespeichert als Version 7 (startCashCents 0, keine Umbuchungen)')
@@ -1750,7 +1750,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p4.getByRole('button', { name: 'Sichern' }).click()
   await p4.waitForTimeout(200)
   const s4m = await readStored(p4)
-  if (s4m.version !== 8 || s4m.recurring[0].autoBook !== true) throw new Error('Migration v4: ' + JSON.stringify(s4m.recurring))
+  if (s4m.version !== 9 || s4m.recurring[0].autoBook !== true) throw new Error('Migration v4: ' + JSON.stringify(s4m.recurring))
   await ctx4.close()
   ok('Migration v4 → v5 beim Laden: bestehender Vertrag „Miete“ hat „Automatisch buchen“ an, gespeichert als Version 7 mit autoBook true')
 }
@@ -3844,7 +3844,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if ((await text7(p7.getByTestId('balance-sub'))).replace(/\s+/g, ' ') !== 'Bargeld 0,00 € Gesamt 0,00 €') throw new Error('Rechnung: balance-sub verändert')
   if (await card7().count()) throw new Error('Rechnung: Karte schon vor dem Erinnerungstag')
   let s = await st7()
-  if (s.version !== 8 || s.transactions.length !== 0 || s.invoices.length !== 1 || s.invoices[0].amountCents !== 13980 || s.invoices[0].dueDate !== '2026-11-03' || s.invoices[0].purchaseDate !== '2026-10-20' || s.invoices[0].note !== 'Otto' || s.invoices[0].categoryId !== 'expense-kleidung')
+  if (s.version !== 9 || s.transactions.length !== 0 || s.invoices.length !== 1 || s.invoices[0].amountCents !== 13980 || s.invoices[0].dueDate !== '2026-11-03' || s.invoices[0].purchaseDate !== '2026-10-20' || s.invoices[0].note !== 'Otto' || s.invoices[0].categoryId !== 'expense-kleidung')
     throw new Error('Rechnung: gespeicherter Stand ' + JSON.stringify(s.invoices))
   ok('Kauf auf Rechnung: Schalter nur bei neuen Ausgaben, Konto/Bargeld weg, „Kaufdatum“ + „Zahlen bis“ (heute + 14, folgt dem Kaufdatum, Fehler bei früherem Datum), Hinweis, „Rechnung sichern“; Kalender-Dialog („Erinnerung am 31.10.“) → .ics (CRLF, DTSTART 31.10. 09:00, SUMMARY, DESCRIPTION, VALARM); Kontostand unverändert, Chip „Offene Rechnungen 139,80 €“, balance-sub intakt, Rechnung gespeichert (keine Buchung)')
 
@@ -3981,7 +3981,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await openSettings(p7, 'Datensicherung')
   const bk = await plainExport(p7)
   const bkJson = JSON.parse(fs.readFileSync(await bk.path(), 'utf8'))
-  if (bkJson.version !== 8 || bkJson.invoices.length !== 2 || !bkJson.invoices.some((i) => i.amountCents === 11980 && i.snoozedUntil === '2026-11-02')) throw new Error('Rechnung: Backup-Export ' + JSON.stringify(bkJson.invoices))
+  if (bkJson.version !== 9 || bkJson.invoices.length !== 2 || !bkJson.invoices.some((i) => i.amountCents === 11980 && i.snoozedUntil === '2026-11-02')) throw new Error('Rechnung: Backup-Export ' + JSON.stringify(bkJson.invoices))
   const tmp = fs.mkdtempSync(`${process.env.TMPDIR ?? '/tmp'}/rechnung-`)
   const v6 = { ...bkJson, version: 6 }; delete v6.invoices
   fs.writeFileSync(`${tmp}/v6.json`, JSON.stringify(v6))
@@ -3993,10 +3993,10 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await p7.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).getByRole('button', { name: 'Ersetzen' }).click()
   await has7('Import erfolgreich')
   s = await storedWhen(p7, (d) => d.invoices.length === 0)
-  if (s.version !== 8) throw new Error('Rechnung: v6-Import ' + s.version)
+  if (s.version !== 9) throw new Error('Rechnung: v6-Import ' + s.version)
   await tabOn(p7, 'Start').click()
   if (await chip7().count()) throw new Error('Rechnung: Chip nach v6-Import')
-  ok('Backup: Export hat Version 8 mit beiden Rechnungen (inkl. Aufschub); ungültige Rechnung („Ein Betrag bei Rechnungen …“) wird abgelehnt; ein v6-Backup ohne Rechnungen lässt sich importieren (migriert zu Version 8, keine Rechnungen, Chip weg)')
+  ok('Backup: Export hat Version 9 mit beiden Rechnungen (inkl. Aufschub); ungültige Rechnung („Ein Betrag bei Rechnungen …“) wird abgelehnt; ein v6-Backup ohne Rechnungen lässt sich importieren (migriert zu Version 9, keine Rechnungen, Chip weg)')
   await ctx7.close()
 }
 
@@ -4549,8 +4549,8 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await pK.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).getByRole('button', { name: 'Ersetzen' }).click()
   await pK.getByText('Import erfolgreich').waitFor()
   const imported = await stK((d) => d.recurring.length === 2)
-  must([imported.version, imported.events], [8, []], 'v7-Backup wird zu Version 8 mit leeren Terminen')
-  ok('Backup v7 (ohne Termine) lässt sich importieren: wird zu Version 8 mit events []')
+  must([imported.version, imported.events, imported.todoLists, imported.todos], [9, [], [], []], 'v7-Backup wird zu Version 9 mit leeren Terminen und Aufgaben')
+  ok('Backup v7 (ohne Termine) lässt sich importieren: wird zu Version 9 mit events [], todoLists [] und todos []')
 
   // --- Termin anlegen: Zeitfelder, Ende folgt dem Beginn, Punkt + Listeneintrag ---
   await navK('Kalender').click()
@@ -4912,12 +4912,12 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   await openSettings(pK, 'Datensicherung')
   const bkK = await plainExport(pK)
   const bkj = JSON.parse(fs.readFileSync(await bkK.path(), 'utf8'))
-  must([bkj.version, bkj.events.length], [8, before + 8], 'Backup Version 8 mit Terminen')
+  must([bkj.version, bkj.events.length], [9, before + 8], 'Backup Version 9 mit Terminen')
   must(bkj.events.find((e) => e.title === 'Yoga').recurrence, { freq: 'weekly', interval: 1 }, 'Wiederholung im Backup')
   fs.writeFileSync(`${tmpK}/bad.json`, JSON.stringify({ ...bkj, events: [{ ...bkj.events[0], end: '2020-01-01T00:00' }] }))
   await pK.locator('input[type=file]').setInputFiles(`${tmpK}/bad.json`)
   await pK.getByRole('alert').filter({ hasText: 'Ein Termin endet vor seinem Beginn.' }).waitFor({ timeout: 5000 })
-  ok('Backup: Export hat Version 8 mit allen Terminen samt Wiederholung; ein Termin, der vor seinem Beginn endet, wird beim Import abgelehnt')
+  ok('Backup: Export hat Version 9 mit allen Terminen samt Wiederholung; ein Termin, der vor seinem Beginn endet, wird beim Import abgelehnt')
   await cK.close()
 
   // --- Bewegung reduzieren: Pinch funktioniert, aber ohne Zoom-Folgen und ohne Zoom-Übergang (nur Überblendung) ---
@@ -4967,6 +4967,408 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     const narrow = await layout()
     must(narrow.rx <= narrow.lx + 1 && !narrow.fab && narrow.newBtn !== 'none', true, 'schmal: eine Spalte, „+“ neben dem Tagestitel, kein schwebender Knopf')
     ok('iPad (834×1194 hoch, 1194×834 quer): Monatsraster links (breiter), Tagesliste rechts auf gleicher Höhe, bis zu 2 Titel in den Zellen, „+“ neben dem Tagestitel (kein schwebender Knopf), kein Überlauf; schmal wieder eine Spalte, „+“ ebenfalls neben dem Tagestitel')
+    await c.close()
+  }
+}
+
+// ---------- To-do im Kalender-Tab: Listen, Aufgaben, Mein Tag, Wichtig, Geplant, Schritte, Wiederholung, Erinnerung (.ics), Kalender, Start (frischer Kontext, Heute = Mi 18.11.2026) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`To-do – ${what}: erwartet ${JSON.stringify(expected)}, war ${JSON.stringify(actual)}`) }
+  const mkT = async (opts = {}, { vibes = true } = {}) => {
+    const c = await browser.newContext({ ...devices['iPhone 13'], acceptDownloads: true, locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', ...opts })
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-11-18T10:00:00+01:00') })
+    if (vibes) await p.addInitScript(() => { window.__vibes = []; Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__vibes.push(ms); return true }, configurable: true }) })
+    await withVault(p); await keepAlive(p); await p.goto(URL); await ensureOpen(p)
+    return { c, p }
+  }
+  const touchSwipe = async (p, { x0, y0, x1, y1, steps = 10 }) => {
+    const cdp = await p.context().newCDPSession(p)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] })
+    for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + ((x1 - x0) * i) / steps, y: y0 + ((y1 - y0) * i) / steps }] }); await sleep(25) }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
+  const { c: cT, p: pT } = await mkT()
+  const nav = (name) => tabOn(pT, name)
+  const h1 = async () => (await pT.locator('h1').first().innerText()).replace(/\s+/g, ' ').trim()
+  const waitH1 = async (t) => { for (let i = 0; i < 40; i++) { if ((await h1()) === t) return; await sleep(100) } throw new Error(`To-do – Überschrift erwartet "${t}", war "${await h1()}"`) }
+  const vibes = () => pT.evaluate(() => window.__vibes.length)
+  const st = (pred) => storedWhen(pT, pred)
+  const todoBy = (d, title) => d.todos.find((t) => t.title === title)
+  const input = () => pT.getByRole('textbox', { name: 'Aufgabe hinzufügen' })
+  const addTask = async (title) => { await input().click(); await input().fill(title); await input().press('Enter') }
+  const row = (title) => pT.getByTestId('todo-row').filter({ hasText: title })
+  const openList = async (name) => { await pT.locator('button.todo-list-row').filter({ hasText: new RegExp(`^${name}`) }).click(); await settled(pT); await waitH1(name) }
+  const backToHub = async () => { await pT.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled(pT); await waitH1('To-do') }
+  const detail = () => pT.getByRole('dialog', { name: 'Aufgabe' })
+  const openDetail = async (title) => { await row(title).locator('.todo-main').click(); await detail().waitFor() }
+  const closeDetail = async () => { await detail().getByRole('button', { name: 'Fertig' }).click(); await detail().waitFor({ state: 'detached' }) }
+  const countOf = async (name) => (await pT.locator('button.todo-list-row').filter({ hasText: new RegExp(`^${name}`) }).locator('.row-value').innerText()).trim()
+
+  // --- Umschalter „Kalender | To-do“ im Kalender-Tab ---
+  await nav('Kalender').click()
+  await waitH1('November 2026')
+  const seg = pT.getByRole('group', { name: 'Ansicht' })
+  must(await seg.getByRole('button').allInnerTexts(), ['Kalender', 'To-do'], 'Umschalter')
+  must(await pT.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('button').count(), 5, 'Tab-Leiste bleibt bei 5 Tabs')
+  await pT.evaluate(() => { window.__vibes.length = 0 })
+  await seg.getByRole('button', { name: 'To-do' }).click()
+  await waitH1('To-do')
+  must(await vibes(), 1, 'Haptik beim Umschalten')
+  must(await pT.locator('button.todo-list-row').allInnerTexts().then((t) => t.map((x) => nbsp(x).split('\n')[0].trim())), ['Mein Tag', 'Wichtig', 'Geplant', 'Aufgaben'], 'intelligente Listen')
+  await pT.getByText('Eigene Listen sammeln, was zusammengehört').waitFor()
+  await nav('Start').click(); await nav('Kalender').click()
+  await waitH1('To-do')
+  must(await pT.locator('.cal-grid').count(), 0, 'kein Monatsraster im To-do-Modus')
+  ok('To-do: Umschalter „Kalender | To-do“ unter dem Titel (Haptik), großer Titel „To-do“, die Tab-Leiste bleibt bei 5 Tabs; Übersicht mit Mein Tag, Wichtig, Geplant, Aufgaben und freundlichem Hinweis ohne eigene Listen; die Auswahl bleibt beim Tab-Wechsel erhalten')
+
+  // --- Neue Liste: Name, Farbe, Symbol ---
+  await pT.getByRole('button', { name: 'Neue Liste' }).click()
+  const listSheet = pT.getByRole('dialog', { name: 'Neue Liste' })
+  await listSheet.getByRole('button', { name: 'Liste erstellen' }).click()
+  await listSheet.getByRole('alert').filter({ hasText: 'Bitte einen Namen für die Liste eingeben.' }).waitFor()
+  await pT.fill('#todo-list-name', '  Einkaufsliste ')
+  await listSheet.getByRole('radio', { name: 'Sand' }).click()
+  await listSheet.getByRole('radio', { name: 'Einkauf' }).click()
+  must([await listSheet.getByRole('radio', { name: 'Sand' }).getAttribute('aria-checked'), await listSheet.getByRole('radio', { name: 'Lavendel' }).getAttribute('aria-checked')], ['true', 'false'], 'Farbwahl')
+  await listSheet.getByRole('button', { name: 'Liste erstellen' }).click()
+  await settled(pT); await waitH1('Einkaufsliste')
+  must(await pT.locator('h1').first().getAttribute('data-tone'), 'sand', 'Titel in der Listenfarbe')
+  const titleColor = await pT.locator('h1').first().evaluate((e) => getComputedStyle(e).color)
+  must(titleColor, 'rgb(125, 95, 44)', 'Sand-Ton hell (AA)')
+  let d = await st((x) => x.todoLists.length === 1)
+  must([d.version, d.todoLists[0].name, d.todoLists[0].color, d.todoLists[0].icon], [9, 'Einkaufsliste', 'sand', 'cart'], 'Liste gespeichert')
+  const listId = d.todoLists[0].id
+  ok('Neue Liste: leerer Name wird abgelehnt („Bitte einen Namen …“), Name wird getrimmt, Farbe „Sand“ und Symbol „Einkauf“ als Radio-Auswahl; danach öffnet sich die Liste mit großem Titel in Sand (#7D5F2C, AA); gespeichert als Version 9')
+
+  // --- Eingabezeile: anlegen, Feld bleibt fokussiert, Pillen ---
+  await pT.evaluate(() => { window.__vibes.length = 0 })
+  await input().click()
+  for (const pill of ['Fällig', 'Erinnerung', 'Wiederholen']) await pT.getByRole('group', { name: 'Für die neue Aufgabe' }).getByRole('button', { name: pill }).waitFor()
+  await addTask('Hafermilch')
+  await addTask('Kaffeebohnen')
+  must([await input().inputValue(), await pT.evaluate(() => document.activeElement?.getAttribute('aria-label'))], ['', 'Aufgabe hinzufügen'], 'Feld leer und weiter fokussiert')
+  must(await pT.getByTestId('todo-row').locator('.todo-title').allInnerTexts(), ['Kaffeebohnen', 'Hafermilch'], 'neue Aufgaben oben')
+  must(await vibes(), 2, 'Haptik je Anlegen')
+  d = await st((x) => x.todos.length === 2)
+  must(d.todos.map((t) => [t.title, t.listId, t.done, t.important]), [['Hafermilch', listId, false, false], ['Kaffeebohnen', listId, false, false]], 'Aufgaben gespeichert')
+  // nichts verdeckt: die letzte Zeile endet über der Eingabezeile, die Eingabezeile über der Tab-Leiste
+  await pT.keyboard.press('Escape'); await pT.locator('body').click({ position: { x: 5, y: 300 } })
+  await pT.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await sleep(300)
+  const geo = await pT.evaluate(() => ({ last: [...document.querySelectorAll('[data-testid="todo-row"]')].pop().getBoundingClientRect().bottom, bar: document.querySelector('.todo-add-card').getBoundingClientRect(), tab: document.querySelector('.tabbar').getBoundingClientRect().top }))
+  if (!(geo.last <= geo.bar.top && geo.bar.bottom <= geo.tab)) throw new Error('To-do – Eingabezeile verdeckt etwas: ' + JSON.stringify(geo))
+  ok('Eingabezeile „Aufgabe hinzufügen“: beim Tippen erscheinen die Pillen „Fällig“, „Erinnerung“, „Wiederholen“; Enter legt an (Haptik), das Feld wird geleert und bleibt fokussiert; neue Aufgaben stehen oben; die Zeile sitzt über der Tab-Leiste und verdeckt die letzte Aufgabe nicht')
+
+  // --- Stern → „Wichtig“ ---
+  const star = pT.getByRole('button', { name: 'Wichtig: Kaffeebohnen' })
+  must(await star.getAttribute('aria-pressed'), 'false', 'Stern aus')
+  await star.click()
+  must(await star.getAttribute('aria-pressed'), 'true', 'Stern an')
+  must(await star.evaluate((e) => getComputedStyle(e).color), 'rgb(180, 83, 9)', 'Stern bernstein, nicht rot/grün')
+  must(await vibes(), 3, 'Haptik beim Stern')
+  await backToHub()
+  must([await countOf('Wichtig'), await countOf('Einkaufsliste')], ['1', '2'], 'Zähler')
+  await openList('Wichtig')
+  must(nbsp(await row('Kaffeebohnen').innerText()).replace(/\s+/g, ' ').trim(), 'Kaffeebohnen Einkaufsliste', 'Zeile in „Wichtig“ mit Listenname')
+  await backToHub()
+  ok('Stern (aria-pressed, Bernstein #B45309, Haptik) markiert „Kaffeebohnen“ als wichtig; die Übersicht zählt Wichtig 1 / Einkaufsliste 2, „Wichtig“ zeigt die Aufgabe mit ihrem Listennamen')
+
+  // --- Mein Tag: neue Aufgaben gelten für heute ---
+  await openList('Mein Tag')
+  must(await pT.locator('.page-subtitle').innerText(), 'Mittwoch, 18. November', 'Datum unter „Mein Tag“')
+  await addTask('Steuererklärung abgeben')
+  d = await st((x) => !!todoBy(x, 'Steuererklärung abgeben'))
+  must([todoBy(d, 'Steuererklärung abgeben').myDay, todoBy(d, 'Steuererklärung abgeben').listId], ['2026-11-18', null], 'Mein Tag = heute, Liste „Aufgaben“')
+  must(nbsp(await row('Steuererklärung').innerText()).replace(/\s+/g, ' ').trim(), 'Steuererklärung abgeben Aufgaben', 'Meta ohne „Mein Tag“ in „Mein Tag“')
+  ok('„Mein Tag“: Untertitel „Mittwoch, 18. November“; dort angelegte Aufgaben bekommen myDay = heute und landen in „Aufgaben“')
+
+  // --- Schritte und Notiz im Aufgabendetail ---
+  await openDetail('Steuererklärung abgeben')
+  const stepIn = detail().getByRole('textbox', { name: 'Schritt hinzufügen' })
+  await stepIn.fill('Belege sortieren'); await stepIn.press('Enter')
+  await stepIn.fill('In ELSTER hochladen'); await stepIn.press('Enter')
+  await pT.evaluate(() => { window.__vibes.length = 0 })
+  await detail().getByRole('checkbox', { name: 'Als erledigt markieren: Belege sortieren' }).click()
+  await sleep(450)
+  must(await vibes(), 1, 'Haptik beim Schritt')
+  await detail().getByRole('textbox', { name: 'Notiz' }).fill('Belege liegen im blauen Ordner.')
+  await detail().getByRole('textbox', { name: 'Titel' }).click()
+  d = await st((x) => todoBy(x, 'Steuererklärung abgeben')?.note === 'Belege liegen im blauen Ordner.' && todoBy(x, 'Steuererklärung abgeben').steps.length === 2)
+  must(todoBy(d, 'Steuererklärung abgeben').steps.map((s) => [s.title, s.done]), [['Belege sortieren', true], ['In ELSTER hochladen', false]], 'Schritte')
+  await detail().getByRole('button', { name: 'Zu „Mein Tag“ hinzugefügt' }).waitFor()
+  await detail().getByText('Erstellt am 18.11.2026').waitFor()
+  await closeDetail()
+  if (!nbsp(await row('Steuererklärung').innerText()).includes('1 von 2')) throw new Error('To-do – Schrittzähler fehlt')
+  ok('Aufgabendetail: zwei Schritte per Enter angelegt, „Belege sortieren“ abgehakt (Haptik), Notiz beim Verlassen des Felds gespeichert; „Zu ‚Mein Tag‘ hinzugefügt“, „Erstellt am 18.11.2026“; die Zeile zeigt „1 von 2“ und das Notiz-Symbol')
+
+  // --- Erinnerung → .ics ---
+  await openDetail('Steuererklärung abgeben')
+  await detail().getByRole('button', { name: /^Erinnerung/ }).click()
+  const remSheet = pT.getByRole('dialog', { name: 'Erinnerung' })
+  await remSheet.waitFor()
+  await pT.fill('#todo-rem-date', '2026-11-19'); await pT.fill('#todo-rem-time', '18:30')
+  await remSheet.getByRole('button', { name: 'Übernehmen' }).click()
+  const offer = pT.getByRole('alertdialog', { name: 'In den Kalender eintragen?' })
+  await offer.waitFor()
+  const [dl] = await Promise.all([pT.waitForEvent('download'), offer.getByRole('button', { name: 'Eintragen' }).click()])
+  const ics = fs.readFileSync(await dl.path(), 'utf8').replace(/\r\n /g, '')
+  d = await st((x) => todoBy(x, 'Steuererklärung abgeben')?.reminder === '2026-11-19T18:30')
+  const steuerId = todoBy(d, 'Steuererklärung abgeben').id
+  must(dl.suggestedFilename(), 'aufgabe-2026-11-19.ics', 'Dateiname')
+  for (const line of ['DTSTART:20261119T183000', 'DTEND:20261119T184500', `UID:${steuerId}@finanzklar`, 'SUMMARY:Steuererklärung abgeben', 'BEGIN:VALARM', 'TRIGGER:-PT0M']) if (!ics.split('\r\n').includes(line)) throw new Error('To-do – .ics ohne ' + line + '\n' + ics)
+  await detail().getByRole('button', { name: /Erinnerung: Morgen, 18:30/ }).waitFor()
+  await detail().getByRole('button', { name: 'In den Kalender eintragen' }).waitFor()
+  await closeDetail()
+  ok('Erinnerung (Datum + Uhrzeit) im Detail: danach Angebot „In den Kalender eintragen?“ → Download aufgabe-2026-11-19.ics mit DTSTART 18:30 (schwebende Ortszeit), 15 Minuten, VALARM bei Beginn und UID <Aufgaben-ID>@finanzklar; die Zeile heißt „Erinnerung: Morgen, 18:30“, der Knopf „In den Kalender eintragen“ bleibt')
+
+  // --- Fälligkeit über die Pille → „Geplant“, Kalender-Marker, im Kalender abhaken ---
+  await backToHub()
+  await openList('Aufgaben')
+  await input().click()
+  await input().fill('Kfz-Versicherung kündigen')
+  await pT.getByRole('group', { name: 'Für die neue Aufgabe' }).getByRole('button', { name: 'Fällig' }).click()
+  await pT.getByRole('dialog', { name: 'Fälligkeit' }).getByRole('button', { name: /^Morgen/ }).click()
+  await pT.getByRole('dialog', { name: 'Fälligkeit' }).waitFor({ state: 'detached' })
+  must(await pT.getByRole('group', { name: 'Für die neue Aufgabe' }).getByRole('button', { name: 'Morgen' }).getAttribute('data-set'), '', 'Pille zeigt „Morgen“')
+  await input().press('Enter')
+  d = await st((x) => todoBy(x, 'Kfz-Versicherung kündigen')?.dueDate === '2026-11-19')
+  if (!nbsp(await row('Kfz').innerText()).includes('Morgen')) throw new Error('To-do – Fälligkeit fehlt in der Zeile')
+  await backToHub()
+  await openList('Geplant')
+  must(await pT.locator('.todo-group').allInnerTexts(), ['MORGEN'], 'Gruppen in „Geplant“')
+  await backToHub()
+  await pT.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'Kalender' }).click()
+  await waitH1('November 2026')
+  const cell19 = pT.locator('.cal-cell[data-date="2026-11-19"]')
+  must([await cell19.locator('[data-testid="cal-todo-dot"]').count(), await cell19.getAttribute('aria-label')], [1, 'Donnerstag, 19. November, 1 Aufgabe'], 'Marker und Label')
+  must(await cell19.locator('.cal-dot.todo').evaluate((e) => getComputedStyle(e).borderRadius), '1.5px', 'Marker als hohles Quadrat')
+  await cell19.click()
+  const calTodo = pT.getByTestId('cal-todo').filter({ hasText: 'Kfz-Versicherung kündigen' })
+  await calTodo.waitFor()
+  await calTodo.locator('.cal-item').click()
+  await detail().waitFor(); await closeDetail()
+  await calTodo.getByRole('checkbox', { name: 'Als erledigt markieren: Kfz-Versicherung kündigen' }).click()
+  d = await st((x) => todoBy(x, 'Kfz-Versicherung kündigen')?.done === true)
+  await calTodo.waitFor({ state: 'detached' })
+  must(await cell19.locator('[data-testid="cal-todo-dot"]').count(), 0, 'Marker weg nach dem Abhaken')
+  ok('Fälligkeit über die Pille „Fällig“ → „Morgen“ (Pille zeigt den Wert) → gespeichert 19.11., Zeile „Morgen“, „Geplant“ gruppiert unter MORGEN; im Kalender trägt der 19.11. einen hohlen Quadrat-Marker („1 Aufgabe“ im Label), die Tagesliste zeigt die Aufgabe (Tippen → Detail) und Abhaken dort erledigt sie, der Marker verschwindet')
+
+  // --- Pinch im Kalender-Modus funktioniert weiter ---
+  {
+    const b = await cell19.boundingBox()
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2
+    const cdp = await pT.context().newCDPSession(pT)
+    const pts = (dd) => [{ x: cx - dd / 2, y: cy, id: 1 }, { x: cx + dd / 2, y: cy, id: 2 }]
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pts(50)[0]] }); await sleep(20)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(50) })
+    for (let i = 1; i <= 8; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(50 + (80 * i) / 8) }); await sleep(30) }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
+  await settled(pT); await waitH1('19. November')
+  await pT.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled(pT); await waitH1('November 2026')
+  await pT.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'To-do' }).click(); await waitH1('To-do')
+  ok('Pinch auf dem Monatsraster öffnet weiter die Tagesansicht (19. November); zurück und wieder auf „To-do“ umgeschaltet')
+
+  // --- Wiederholung: Abhaken legt die nächste an ---
+  await openList('Aufgaben')
+  await input().click(); await input().fill('Gelbe Tonne rausstellen')
+  await pT.getByRole('group', { name: 'Für die neue Aufgabe' }).getByRole('button', { name: 'Wiederholen' }).click()
+  await pT.getByRole('dialog', { name: 'Wiederholen' }).getByRole('button', { name: 'Wöchentlich' }).click()
+  await input().press('Enter')
+  d = await st((x) => !!todoBy(x, 'Gelbe Tonne rausstellen'))
+  must([todoBy(d, 'Gelbe Tonne rausstellen').dueDate, todoBy(d, 'Gelbe Tonne rausstellen').recurrence], ['2026-11-18', { freq: 'weekly', interval: 1 }], 'Wiederholung + Fälligkeit heute')
+  await pT.evaluate(() => { window.__vibes.length = 0 })
+  await row('Gelbe Tonne').getByRole('checkbox').click()
+  must(await row('Gelbe Tonne').getByRole('checkbox').getAttribute('aria-checked'), 'true', 'Haken sofort gefüllt')
+  d = await st((x) => x.todos.filter((t) => t.title === 'Gelbe Tonne rausstellen').length === 2)
+  const tonnen = d.todos.filter((t) => t.title === 'Gelbe Tonne rausstellen')
+  must(tonnen.map((t) => [t.done, t.dueDate, !!t.recurrence]).sort(), [[false, '2026-11-25', true], [true, '2026-11-18', false]], 'nächste Aufgabe in einer Woche')
+  must(await vibes(), 1, 'Haptik beim Abhaken')
+  await pT.waitForFunction(() => [...document.querySelectorAll('[data-testid="todo-row"]:not([data-done])')].filter((e) => e.textContent.includes('Gelbe Tonne')).length === 1)
+  ok('Wiederholung über die Pille „Wiederholen“ → „Wöchentlich“ setzt auch die Fälligkeit (heute); Abhaken (Haken füllt sich sofort, Haptik) erledigt sie nach kurzer Pause und legt die nächste offene am 25.11. an')
+
+  // --- Erledigt-Bereich auf/zu, wieder öffnen ---
+  const doneHead = pT.getByRole('button', { name: /^Erledigt/ })
+  must([nbsp(await doneHead.innerText()).replace(/\s+/g, ' ').trim(), await doneHead.getAttribute('aria-expanded')], ['Erledigt (2)', 'false'], 'Erledigt zu')
+  await doneHead.click()
+  must(await doneHead.getAttribute('aria-expanded'), 'true', 'Erledigt auf')
+  await pT.locator('.todo-done [data-testid="todo-row"]').first().waitFor()
+  must(await pT.locator('.todo-done-chev').evaluate((e) => getComputedStyle(e).transform !== 'none'), true, 'Chevron gedreht')
+  await pT.locator('.todo-done [data-testid="todo-row"]').filter({ hasText: 'Kfz' }).getByRole('checkbox').click()
+  d = await st((x) => todoBy(x, 'Kfz-Versicherung kündigen')?.done === false)
+  must('completedAt' in todoBy(d, 'Kfz-Versicherung kündigen'), false, 'wieder offen ohne Erledigt-Zeitpunkt')
+  await doneHead.click()
+  must(await pT.locator('.todo-done [data-testid="todo-row"]').count(), 0, 'Erledigt zu')
+  ok('„Erledigt (2)“ ist aufklappbar (aria-expanded, Chevron dreht sich); Abhaken einer erledigten Aufgabe öffnet sie wieder; Zuklappen blendet die Liste aus')
+
+  // --- Löschen per Wischen + Rückgängig ---
+  const rb = await row('Kfz').boundingBox()
+  await touchSwipe(pT, { x0: 340, y0: rb.y + rb.height / 2, x1: 40, y1: rb.y + rb.height / 2 + 2 })
+  const toastDel = pT.getByRole('status').filter({ hasText: 'Aufgabe gelöscht' })
+  await toastDel.waitFor()
+  await st((x) => !todoBy(x, 'Kfz-Versicherung kündigen'))
+  await toastDel.getByRole('button', { name: 'Rückgängig' }).click()
+  d = await st((x) => !!todoBy(x, 'Kfz-Versicherung kündigen'))
+  await row('Kfz').waitFor()
+  ok('Aufgabe nach links wischen löscht sie (Toast „Aufgabe gelöscht“ über der Eingabezeile), „Rückgängig“ holt sie zurück')
+
+  // --- Kanten-Wischen zurück aus der Listenseite ---
+  await touchSwipe(pT, { x0: 8, y0: 300, x1: 330, y1: 305 })
+  await settled(pT); await waitH1('To-do')
+  ok('Kanten-Wischen vom linken Rand führt aus der Liste zurück zur To-do-Übersicht')
+
+  // --- Liste löschen + Rückgängig ---
+  await openList('Einkaufsliste')
+  await pT.getByRole('button', { name: 'Liste bearbeiten' }).click()
+  await pT.getByRole('dialog', { name: 'Liste bearbeiten' }).getByRole('button', { name: 'Liste löschen' }).click()
+  const delDlg = pT.getByRole('alertdialog', { name: 'Liste löschen?' })
+  if (!nbsp(await delDlg.innerText()).includes('„Einkaufsliste“ wird mit 2 Aufgaben gelöscht')) throw new Error('To-do – Rückfrage ohne Anzahl')
+  await delDlg.getByRole('button', { name: 'Löschen' }).click()
+  await settled(pT); await waitH1('To-do')
+  await st((x) => x.todoLists.length === 0 && !todoBy(x, 'Hafermilch'))
+  await pT.getByRole('status').filter({ hasText: 'Liste gelöscht' }).getByRole('button', { name: 'Rückgängig' }).click()
+  d = await st((x) => x.todoLists.length === 1 && !!todoBy(x, 'Hafermilch') && !!todoBy(x, 'Kaffeebohnen'))
+  await pT.locator('button.todo-list-row').filter({ hasText: /^Einkaufsliste/ }).waitFor()
+  ok('Liste löschen über „…“ → „Liste löschen“ fragt nach („… wird mit 2 Aufgaben gelöscht“), löscht Liste samt Aufgaben und kehrt zur Übersicht zurück; „Rückgängig“ bringt beides zurück')
+
+  // --- Startseiten-Karte „Heute“ ---
+  await openList('Geplant')
+  await addTask('Rundfunkbeitrag prüfen')
+  await st((x) => todoBy(x, 'Rundfunkbeitrag prüfen')?.dueDate === '2026-11-18')
+  await backToHub()
+  await nav('Start').click()
+  const card = pT.getByRole('region', { name: 'Heute zu erledigen' })
+  await card.waitFor()
+  must(await card.locator('.todo-today-main .t').allInnerTexts(), ['Rundfunkbeitrag prüfen', 'Steuererklärung abgeben'], 'Karte: heute fällig, dann Mein Tag')
+  if (!nbsp(await card.innerText()).includes('Mein Tag')) throw new Error('To-do – Karte ohne Mein-Tag-Hinweis')
+  await card.getByRole('button', { name: /^Alle anzeigen/ }).click()
+  await settled(pT); await waitH1('Mein Tag')
+  must(await pT.getByRole('group', { name: 'Ansicht' }).count(), 0, 'Unterseite')
+  await nav('Start').click()
+  await card.getByRole('checkbox', { name: 'Als erledigt markieren: Rundfunkbeitrag prüfen' }).click()
+  await st((x) => todoBy(x, 'Rundfunkbeitrag prüfen')?.done === true)
+  await card.locator('.todo-today-main .t', { hasText: 'Rundfunkbeitrag' }).waitFor({ state: 'detached' })
+  ok('Startseite: Karte „Heute“ (Lavendel) zeigt offene Aufgaben (in „Geplant“ angelegt = heute fällig, vor „Mein Tag“) mit Haken; „Alle anzeigen“ öffnet „Mein Tag“ im Kalender-Tab; Abhaken auf der Karte erledigt die Aufgabe, sie verschwindet von der Karte')
+
+  // --- Mein Tag gilt nur heute: Datumswechsel ---
+  await pT.clock.setSystemTime(new Date('2026-11-19T09:00:00+01:00'))
+  await reload(pT)
+  await nav('Kalender').click()
+  await pT.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'To-do' }).click()
+  must(await countOf('Mein Tag'), '', '„Mein Tag“ am nächsten Tag leer')
+  await openList('Mein Tag')
+  await pT.getByText('Was steht heute an?').waitFor()
+  await backToHub()
+  await openList('Aufgaben')
+  await row('Steuererklärung').waitFor()
+  ok('Am nächsten Tag (Neuladen am 19.11.) ist „Mein Tag“ leer (freundlicher Hinweis), die Aufgabe steht weiter in „Aufgaben“')
+
+  // --- Notiz bleibt nach Neuladen (Tresor) ---
+  await openDetail('Steuererklärung abgeben')
+  must(await detail().getByRole('textbox', { name: 'Notiz' }).inputValue(), 'Belege liegen im blauen Ordner.', 'Notiz nach Neuladen')
+  must(await detail().getByRole('textbox', { name: 'Titel' }).inputValue(), 'Steuererklärung abgeben', 'Titel')
+  await closeDetail()
+  must(await pT.evaluate(() => localStorage.getItem('finanz-app:v1')), null, 'kein Klartext')
+  ok('Nach dem Neuladen (entsperrt aus dem Tresor) sind Notiz, Titel und Schritte unverändert da; es gibt keinen Klartext-Speicher')
+
+  // --- Backup v9 Export, v8-Import migriert, ungültige Aufgabe abgelehnt ---
+  await openSettings(pT, 'Datensicherung')
+  const bk = await plainExport(pT)
+  const bkJson = JSON.parse(fs.readFileSync(await bk.path(), 'utf8'))
+  must([bkJson.version, bkJson.todoLists.length, bkJson.todos.length > 5], [9, 1, true], 'Export v9 mit To-dos')
+  const tmpT = fs.mkdtempSync(`${process.env.TMPDIR ?? '/tmp'}/todo-`)
+  const bad = JSON.parse(JSON.stringify(bkJson)); bad.todos[0].listId = 'gibt-es-nicht'
+  fs.writeFileSync(`${tmpT}/bad.json`, JSON.stringify(bad))
+  await pT.locator('input[type=file]').setInputFiles(`${tmpT}/bad.json`)
+  await pT.getByText('Eine Aufgabe verweist auf eine unbekannte Liste.').waitFor()
+  const v8 = { ...bkJson, version: 8 }; delete v8.todoLists; delete v8.todos
+  fs.writeFileSync(`${tmpT}/v8.json`, JSON.stringify(v8))
+  await pT.locator('input[type=file]').setInputFiles(`${tmpT}/v8.json`)
+  await pT.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).getByRole('button', { name: 'Ersetzen' }).click()
+  d = await st((x) => x.todos.length === 0)
+  must([d.version, d.todoLists], [9, []], 'v8 → v9 leer')
+  fs.writeFileSync(`${tmpT}/v9.json`, JSON.stringify(bkJson))
+  await pT.locator('input[type=file]').setInputFiles(`${tmpT}/v9.json`)
+  await pT.getByRole('alertdialog', { name: 'Alle Daten ersetzen?' }).getByRole('button', { name: 'Ersetzen' }).click()
+  d = await st((x) => x.todos.length === bkJson.todos.length)
+  must(d.todos, bkJson.todos, 'v9-Import stellt alle Aufgaben exakt her')
+  ok('Backup: Export hat Version 9 mit Listen und Aufgaben; eine Aufgabe mit unbekannter Liste wird abgelehnt; ein v8-Backup wird zu Version 9 mit leeren To-dos migriert; der v9-Import stellt alle Aufgaben exakt wieder her')
+
+  // --- Alle Daten löschen leert die To-dos ---
+  await pT.getByRole('button', { name: 'Alle Daten löschen', exact: true }).click()
+  await pT.getByRole('alertdialog', { name: 'Alle Daten löschen?' }).getByRole('button', { name: 'Alles löschen' }).click()
+  d = await st((x) => x.todos.length === 0 && x.todoLists.length === 0)
+  ok('„Alle Daten löschen“ leert Listen und Aufgaben')
+  await cT.close()
+
+  // --- Tastatur: die Eingabezeile steigt über die (simulierte) Bildschirmtastatur ---
+  {
+    const { c, p } = await mkT({}, { vibes: false })
+    await p.addInitScript(() => {
+      const vv = new EventTarget(); vv.height = window.innerHeight; vv.offsetTop = 0; vv.width = window.innerWidth; vv.scale = 1
+      Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true }); window.__vv = vv
+    })
+    await p.reload(); await ensureOpen(p)
+    await tabOn(p, 'Kalender').click()
+    await p.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'To-do' }).click()
+    await p.locator('button.todo-list-row').filter({ hasText: /^Aufgaben/ }).click(); await settled(p)
+    const barBottom = () => p.evaluate(() => window.innerHeight - document.querySelector('.todo-add-card').getBoundingClientRect().bottom)
+    const before = await barBottom()
+    await p.getByRole('textbox', { name: 'Aufgabe hinzufügen' }).click()
+    await p.evaluate(() => { window.__vv.height = window.innerHeight - 320; window.__vv.dispatchEvent(new Event('resize')) })
+    await sleep(150)
+    const open = await barBottom()
+    await p.evaluate(() => { window.__vv.height = window.innerHeight; window.__vv.dispatchEvent(new Event('resize')) })
+    await sleep(150)
+    if (!(before > 56 && open >= 320 && open < 345 && Math.abs((await barBottom()) - before) < 1)) throw new Error(`To-do – Tastatur-Leiste: vorher ${before}, offen ${open}`)
+    ok(`Tastatur (simulierter visualViewport, 320 px): die Eingabezeile steigt über die Tastatur (Abstand unten ${Math.round(before)} → ${Math.round(open)} px) und kehrt danach zurück`)
+    await c.close()
+  }
+
+  // --- Bewegung reduzieren: Abhaken sofort ---
+  {
+    const { c, p } = await mkT({ reducedMotion: 'reduce' }, { vibes: false })
+    await tabOn(p, 'Kalender').click()
+    await p.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'To-do' }).click()
+    await p.locator('button.todo-list-row').filter({ hasText: /^Aufgaben/ }).click(); await settled(p)
+    await p.getByRole('textbox', { name: 'Aufgabe hinzufügen' }).fill('Fenster putzen')
+    await p.getByRole('textbox', { name: 'Aufgabe hinzufügen' }).press('Enter')
+    await p.getByTestId('todo-row').first().getByRole('checkbox').click()
+    await p.getByRole('button', { name: 'Erledigt (1)' }).waitFor({ timeout: 300 })
+    await p.getByRole('button', { name: 'Erledigt (1)' }).click()
+    const circle = p.locator('.todo-done .todo-check-circle').first()
+    must(await circle.evaluate((e) => [getComputedStyle(e).animationName, getComputedStyle(e).transitionDuration]), ['none', '0s'], 'keine Animation')
+    ok('Bewegung reduzieren: Abhaken erledigt die Aufgabe sofort, ohne Pause und Animation')
+    await c.close()
+  }
+
+  // --- iPad + Dunkel: Übersicht, Liste, Kalender-Zelle mit Aufgabentitel ---
+  {
+    const { c, p } = await mkT({ viewport: { width: 834, height: 1194 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: 'dark' }, { vibes: false })
+    await tabOn(p, 'Kalender').click()
+    await p.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'To-do' }).click()
+    await p.locator('button.todo-list-row').filter({ hasText: /^Geplant/ }).click(); await settled(p)
+    must(await p.locator('h1').first().evaluate((e) => getComputedStyle(e).color), 'rgb(141, 184, 238)', 'Geplant-Titel dunkel')
+    await p.getByRole('textbox', { name: 'Aufgabe hinzufügen' }).fill('Heizkostenabrechnung ablegen')
+    await p.getByRole('textbox', { name: 'Aufgabe hinzufügen' }).press('Enter')
+    await p.locator('.todo-group', { hasText: /^heute$/i }).waitFor()
+    const starD = p.getByRole('button', { name: 'Wichtig: Heizkostenabrechnung ablegen' })
+    await starD.click()
+    await p.waitForFunction(() => document.querySelector('.todo-star[aria-pressed="true"]'))
+    must(await starD.evaluate((e) => getComputedStyle(e).color), 'rgb(251, 191, 36)', 'Stern dunkel')
+    const card = await p.locator('.todo-add-card').boundingBox()
+    if (card.width > 580) throw new Error('To-do – Eingabezeile auf dem iPad zu breit')
+    await p.getByRole('button', { name: 'Zurück', exact: true }).click(); await settled(p)
+    await p.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'Kalender' }).click()
+    await p.locator('.cal-cell[data-date="2026-11-18"] .cal-title[data-todo]').filter({ hasText: 'Heizkostenabrechnung' }).waitFor()
+    await p.screenshot({ path: `${SHOTS}/t-ipad-dunkel.png` })
+    ok('iPad (834 px, dunkel): „Geplant“ mit Titel #8DB8EE und Gruppe HEUTE, Stern #FBBF24, Eingabezeile höchstens 576 px breit; im Monatsraster steht der Aufgabentitel in der Zelle (data-todo)')
     await c.close()
   }
 }
