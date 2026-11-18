@@ -37,7 +37,7 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
     setBackupMsg({ ok: true, text: outcome === 'shared' ? 'Sicherung erstellt.' : 'Sicherung wurde als Datei geladen.' }),
   )
 
-  const isEmpty = data.transactions.length + data.transfers.length + data.recurring.length + data.invoices.length + data.events.length === 0
+  const isEmpty = data.transactions.length + data.transfers.length + data.recurring.length + data.invoices.length + data.events.length + data.todos.length + data.todoLists.length === 0
 
   function exportPlain() {
     downloadTextFile(`finanz-backup-${todayISO()}.json`, exportJSON(data))
@@ -164,7 +164,7 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
         </div>
       )}
       <div className="footnote">
-        Löscht Buchungen, Umbuchungen, Verträge, Rechnungen und Termine, setzt die Kategorien (samt Budgets) zurück und das
+        Löscht Buchungen, Umbuchungen, Verträge, Rechnungen, Termine und Aufgaben samt Listen, setzt die Kategorien (samt Budgets) zurück und das
         Startguthaben auf 0. Es bleiben: dein Name, Passwort, Face ID, Wiederherstellungsschlüssel und die Einstellungen
         dieses Geräts.
       </div>
@@ -196,7 +196,7 @@ export const BackupPage = memo(function BackupPage({ onBack }: { onBack: () => v
       {confirmReset && (
         <ConfirmDialog
           title="Alle Daten löschen?"
-          message="Buchungen, Verträge, Rechnungen, Termine und Kategorien werden gelöscht. Passwort, Face ID und dein Name bleiben. Mach vorher eine Sicherung, falls du etwas behalten willst."
+          message="Buchungen, Verträge, Rechnungen, Termine, Aufgaben und Kategorien werden gelöscht. Passwort, Face ID und dein Name bleiben. Mach vorher eine Sicherung, falls du etwas behalten willst."
           confirmLabel="Alles löschen"
           danger
           onCancel={() => setConfirmReset(false)}

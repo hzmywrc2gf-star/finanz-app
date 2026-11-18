@@ -90,7 +90,7 @@ describe('backup', () => {
   it('rejects invalid input with German errors', () => {
     expect(() => parseBackup('nope')).toThrow(/JSON/)
     expect(() => parseBackup('[]')).toThrow(/Ungültige Sicherungsdatei/)
-    expect(() => parseBackup(mutate((d) => (d.version = 9)))).toThrow(/Version/)
+    expect(() => parseBackup(mutate((d) => (d.version = 10)))).toThrow(/Version/)
     expect(() => parseBackup(mutate((d) => (d.transactions = {})))).toThrow(/Buchungen/)
     expect(() => parseBackup(mutate((d) => (d.categories = null)))).toThrow(/Kategorien/)
     expect(() => parseBackup(mutate((d) => (d.settings.startBalanceCents = 1.5)))).toThrow()
@@ -105,7 +105,7 @@ describe('backup', () => {
   })
   it('exports version 6 with accounts, start cash and transfers', () => {
     const out = JSON.parse(exportJSON(sample()))
-    expect(out.version).toBe(8)
+    expect(out.version).toBe(9)
     expect(out.settings.startCashCents).toBe(2000)
     expect(out.transactions.map((t: any) => t.account)).toEqual(['konto', 'bargeld'])
     expect(out.transfers).toEqual([{ id: 't1', direction: 'withdrawal', amountCents: 20000, date: '2026-10-03', note: 'Automat', createdAt: 3 }])
@@ -134,12 +134,14 @@ describe('backup', () => {
     const out = parseBackup(JSON.stringify(v1))
     expect(out).toEqual({
       ...v1,
-      version: 8,
+      version: 9,
       settings: { startBalanceCents: 5, startCashCents: 0 },
       recurring: [],
       transfers: [],
       invoices: [],
       events: [],
+      todoLists: [],
+      todos: [],
     })
   })
   it('validates recurring rules strictly', () => {
@@ -173,7 +175,7 @@ describe('backup', () => {
   it('migrates a v2 backup up to v7 (everything on the Konto)', () => {
     const v2 = { ...JSON.parse(exportJSON(sample())), version: 2 }
     const out = parseBackup(JSON.stringify(v2))
-    expect(out.version).toBe(8)
+    expect(out.version).toBe(9)
     expect(out.transactions.every((t) => t.account === 'konto')).toBe(true)
     expect(out.transfers).toEqual([])
     expect(out.settings.startCashCents).toBe(0)
@@ -185,7 +187,7 @@ describe('backup', () => {
     delete v3.settings.startCashCents
     for (const t of v3.transactions) delete t.account
     const out = parseBackup(JSON.stringify(v3))
-    expect(out.version).toBe(8)
+    expect(out.version).toBe(9)
     expect(out.settings).toEqual({ startBalanceCents: 0, startCashCents: 0 })
     expect(out.transfers).toEqual([])
     expect(out.transactions.map((t) => [t.id, t.account, t.amountCents])).toEqual([['a', 'konto', 250000], ['b', 'konto', 4550]])
@@ -196,7 +198,7 @@ describe('backup', () => {
     v4.version = 4
     for (const r of v4.recurring) delete r.autoBook
     const out = parseBackup(JSON.stringify(v4))
-    expect(out.version).toBe(8)
+    expect(out.version).toBe(9)
     expect(out.recurring.map((r) => [r.id, r.autoBook, r.bookedThrough])).toEqual([['r1', true, '2026-10-31']])
     expect(out).toEqual(sample())
   })
@@ -205,11 +207,11 @@ describe('backup', () => {
     v6.version = 6
     delete v6.invoices
     const out = parseBackup(JSON.stringify(v6))
-    expect(out.version).toBe(8)
+    expect(out.version).toBe(9)
     expect(out.invoices).toEqual([])
     expect(out).toEqual(sample())
   })
-  it('roundtrips invoices and exports version 8', () => {
+  it('roundtrips invoices and exports version 9', () => {
     const d = addInvoice(
       sample(),
       { amountCents: 13980, note: 'Otto', categoryId: 'expense-kleidung', purchaseDate: '2026-10-20', dueDate: '2026-11-03' },
@@ -217,7 +219,7 @@ describe('backup', () => {
       'inv1',
     )
     const withSnooze = { ...d, invoices: [{ ...d.invoices[0], snoozedUntil: '2026-10-31' }] }
-    expect(JSON.parse(exportJSON(withSnooze)).version).toBe(8)
+    expect(JSON.parse(exportJSON(withSnooze)).version).toBe(9)
     expect(parseBackup(exportJSON(withSnooze))).toEqual(withSnooze)
   })
   it('validates invoices strictly', () => {
@@ -249,7 +251,7 @@ describe('backup', () => {
     const v5 = JSON.parse(exportJSON(sample()))
     v5.version = 5
     const out = parseBackup(JSON.stringify(v5))
-    expect(out.version).toBe(8)
+    expect(out.version).toBe(9)
     expect(out).toEqual(sample())
     expect(out.settings.displayName).toBeUndefined()
   })

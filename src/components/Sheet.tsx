@@ -18,9 +18,12 @@ export function Sheet({
   title,
   onClose,
   dismissible = true,
+  closeLabel = 'Abbrechen',
   children,
 }: {
   title: string
+  /** Text of the close button in the header; „Fertig“ where changes are saved right away (task details). */
+  closeLabel?: string
   onClose: () => void
   /** false: the sheet cannot be closed by the user (e.g. while a nested prompt is pending). */
   dismissible?: boolean
@@ -207,7 +210,7 @@ export function Sheet({
           <div className="grabber" aria-hidden="true" />
           <div className="sheet-head">
             <button className="link-btn" onClick={dismiss} style={{ paddingLeft: 0 }}>
-              Abbrechen
+              {closeLabel}
             </button>
             <h2>{title}</h2>
             <span />

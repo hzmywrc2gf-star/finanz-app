@@ -9,7 +9,7 @@ import type { RecurringSuggestion } from '../domain/recurringDetect'
 import { haptic } from '../lib/haptics'
 import { UndoToast } from '../components/UndoToast'
 import * as A from './actions'
-import type { ContractBookingInput, EventInput, InvoiceInput, RecurringInput, TransactionInput, TransferInput } from './actions'
+import type { ContractBookingInput, EventInput, InvoiceInput, RecurringInput, TodoInput, TodoListInput, TodoPatch, TransactionInput, TransferInput } from './actions'
 
 export interface FinanceApi {
   data: AppData
@@ -62,6 +62,25 @@ export interface FinanceApi {
   deleteOccurrence(id: string, date: string): void
   /** Imports parsed .ics events (duplicates are skipped); "Rückgängig" removes the batch. Returns the number added. */
   importEvents(events: Omit<CalendarEvent, 'id' | 'createdAt'>[]): number
+  /** To-do: a new task (top of its list); returns its id. */
+  addTodo(input: TodoInput): string
+  updateTodo(id: string, patch: TodoPatch): void
+  /** Ticks a task off (a repeating one creates its next copy) or opens it again. */
+  toggleTodo(id: string): void
+  toggleImportant(id: string): void
+  /** true = „Mein Tag“ today, false = removed from it. */
+  setMyDay(id: string, on: boolean): void
+  /** Deletes a task; "Rückgängig" in the toast restores it. */
+  deleteTodo(id: string): void
+  addStep(todoId: string, title: string): void
+  toggleStep(todoId: string, stepId: string): void
+  updateStep(todoId: string, stepId: string, title: string): void
+  deleteStep(todoId: string, stepId: string): void
+  /** A new own list; returns its id. */
+  addList(input: TodoListInput): string
+  updateList(id: string, input: TodoListInput): void
+  /** Deletes a list with its tasks; "Rückgängig" brings both back. */
+  deleteList(id: string): void
   replaceAll(data: AppData): void
   /** "Alle Daten löschen": fresh start (only the name stays); "Rückgängig" in the toast brings everything back for 5 s. */
   resetAll(): void
@@ -238,6 +257,36 @@ export function FinanceProvider({
         return ids.length
       },
       snoozeInvoice: (id) => apply((d) => A.snoozeInvoice(d, id, todayISO())),
+      addTodo: (i) => {
+        const meta = { id: crypto.randomUUID(), createdAt: Date.now() }
+        apply((d) => A.addTodo(d, i, meta))
+        return meta.id
+      },
+      updateTodo: (id, patch) => apply((d) => A.updateTodo(d, id, patch)),
+      toggleTodo: (id) => apply((d) => A.toggleTodo(d, id, { now: Date.now(), today: todayISO() })),
+      toggleImportant: (id) => apply((d) => A.toggleImportant(d, id)),
+      setMyDay: (id, on) => apply((d) => A.setMyDay(d, id, on ? todayISO() : null)),
+      deleteTodo: (id) => {
+        const value = ref.current?.todos.find((t) => t.id === id)
+        apply((d) => A.deleteTodo(d, id))
+        if (value) setUndo({ id: ++undoSeq.current, message: 'Aufgabe gelöscht', revert: (d) => A.restoreTodo(d, value) })
+      },
+      addStep: (id, title) => apply((d) => A.addStep(d, id, title)),
+      toggleStep: (id, stepId) => apply((d) => A.toggleStep(d, id, stepId)),
+      updateStep: (id, stepId, title) => apply((d) => A.updateStep(d, id, stepId, title)),
+      deleteStep: (id, stepId) => apply((d) => A.deleteStep(d, id, stepId)),
+      addList: (i) => {
+        const meta = { id: crypto.randomUUID(), createdAt: Date.now() }
+        apply((d) => A.addList(d, i, meta))
+        return meta.id
+      },
+      updateList: (id, i) => apply((d) => A.updateList(d, id, i)),
+      deleteList: (id) => {
+        const list = ref.current?.todoLists.find((l) => l.id === id)
+        const todos = ref.current?.todos.filter((t) => t.listId === id) ?? []
+        apply((d) => A.deleteList(d, id))
+        if (list) setUndo({ id: ++undoSeq.current, message: 'Liste gelöscht', revert: (d) => A.restoreList(d, list, todos) })
+      },
       // an older backup may already have occurrences due
       replaceAll: (nd) => {
         apply(() => bookDue(nd, todayISO()))

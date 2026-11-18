@@ -1,4 +1,5 @@
-import type { Account, AppData, CalendarEvent, Category, EventRecurrence, Interval, Invoice, Kind, RecurringRule, Transaction, Transfer, TransferDirection } from '../domain/types'
+import type { Account, AppData, CalendarEvent, Category, EventRecurrence, Interval, Invoice, Kind, RecurringRule, Todo, TodoList, TodoRecurrence, TodoStep, Transaction, Transfer, TransferDirection } from '../domain/types'
+import { TODO_COLORS, TODO_ICONS, TODO_LIMITS } from '../domain/todos'
 import { isValidISODate } from '../domain/dates'
 import { FALLBACK_NAME } from '../domain/defaults'
 import { migrate } from './migrate'
@@ -97,10 +98,92 @@ export function validateEvents(list: unknown[]): CalendarEvent[] {
   return events
 }
 
-/** Strictly validates a parsed object of the current version (8); also used for stored data. Throws German Error. */
+const isTrimmedText = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim() !== '' && v.trim() === v && v.length <= max
+
+function validateTodoRecurrence(r: unknown): TodoRecurrence {
+  if (!isObj(r)) return fail('Eine Aufgabenwiederholung ist ungültig.')
+  const { freq, interval, byWeekday } = r
+  if (freq !== 'daily' && freq !== 'weekly' && freq !== 'monthly' && freq !== 'yearly') return fail('Eine Aufgabenwiederholung hat einen ungültigen Rhythmus.')
+  if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < 1 || interval > 99) return fail('Der Abstand einer Aufgabenwiederholung ist ungültig (1–99).')
+  for (const k of Object.keys(r)) if (k !== 'freq' && k !== 'interval' && k !== 'byWeekday') return fail('Eine Aufgabenwiederholung hat ein unbekanntes Feld.')
+  const out: TodoRecurrence = { freq, interval }
+  if (byWeekday !== undefined) {
+    if (freq !== 'weekly') return fail('Wochentage gibt es nur bei wöchentlichen Aufgaben.')
+    if (!Array.isArray(byWeekday) || byWeekday.length === 0 || byWeekday.length > 7 || byWeekday.some((d) => typeof d !== 'number' || !Number.isInteger(d) || d < 0 || d > 6) || new Set(byWeekday).size !== byWeekday.length) {
+      return fail('Die Wochentage einer Aufgabenwiederholung sind ungültig.')
+    }
+    out.byWeekday = [...(byWeekday as number[])].sort((a, b) => a - b)
+  }
+  return out
+}
+
+/** Strict validation of the to-do lists and tasks (v9); also used by the to-do actions. Throws German errors. */
+export function validateTodoData(rawLists: unknown[], rawTodos: unknown[]): { todoLists: TodoList[]; todos: Todo[] } {
+  const todoLists: TodoList[] = []
+  const listIds = new Set<string>()
+  for (const l of rawLists) {
+    if (!isObj(l)) return fail('Eine Liste ist ungültig.')
+    if (typeof l.id !== 'string' || !l.id) return fail('Eine Liste hat keine ID.')
+    if (listIds.has(l.id)) return fail('Doppelte Listen-ID.')
+    listIds.add(l.id)
+    if (!isTrimmedText(l.name, TODO_LIMITS.listName)) return fail(`Eine Liste hat keinen gültigen Namen (1–${TODO_LIMITS.listName} Zeichen).`)
+    if (typeof l.color !== 'string' || !(TODO_COLORS as readonly string[]).includes(l.color)) return fail('Eine Liste hat eine ungültige Farbe.')
+    if (typeof l.icon !== 'string' || !(TODO_ICONS as readonly string[]).includes(l.icon)) return fail('Eine Liste hat ein ungültiges Symbol.')
+    if (typeof l.createdAt !== 'number' || !Number.isFinite(l.createdAt)) return fail('Ein Erstellungszeitpunkt bei Listen ist ungültig.')
+    if (typeof l.order !== 'number' || !Number.isFinite(l.order)) return fail('Eine Liste hat keine gültige Reihenfolge.')
+    todoLists.push({ id: l.id, createdAt: l.createdAt, name: l.name, color: l.color as TodoList['color'], icon: l.icon as TodoList['icon'], order: l.order })
+  }
+  const todos: Todo[] = []
+  const todoIds = new Set<string>()
+  for (const t of rawTodos) {
+    if (!isObj(t)) return fail('Eine Aufgabe ist ungültig.')
+    if (typeof t.id !== 'string' || !t.id) return fail('Eine Aufgabe hat keine ID.')
+    if (todoIds.has(t.id)) return fail('Doppelte Aufgaben-ID.')
+    todoIds.add(t.id)
+    if (!isTrimmedText(t.title, TODO_LIMITS.title)) return fail(`Eine Aufgabe hat keinen gültigen Titel (1–${TODO_LIMITS.title} Zeichen).`)
+    if (t.listId !== null && (typeof t.listId !== 'string' || !listIds.has(t.listId))) return fail('Eine Aufgabe verweist auf eine unbekannte Liste.')
+    if (typeof t.createdAt !== 'number' || !Number.isFinite(t.createdAt)) return fail('Ein Erstellungszeitpunkt bei Aufgaben ist ungültig.')
+    if (typeof t.done !== 'boolean') return fail('Eine Aufgabe hat keine Angabe zu „erledigt“.')
+    if (typeof t.important !== 'boolean') return fail('Eine Aufgabe hat keine Angabe zu „wichtig“.')
+    if (typeof t.order !== 'number' || !Number.isFinite(t.order)) return fail('Eine Aufgabe hat keine gültige Reihenfolge.')
+    const todo: Todo = { id: t.id, createdAt: t.createdAt, listId: t.listId as string | null, title: t.title, done: t.done, important: t.important, steps: [], order: t.order }
+    if (t.completedAt !== undefined) {
+      if (typeof t.completedAt !== 'number' || !Number.isFinite(t.completedAt) || !t.done) return fail('Ein Erledigt-Zeitpunkt bei Aufgaben ist ungültig.')
+      todo.completedAt = t.completedAt
+    }
+    for (const key of ['myDay', 'dueDate'] as const) {
+      const v = t[key]
+      if (v === undefined) continue
+      if (typeof v !== 'string' || !isValidISODate(v)) return fail('Ein Datum bei Aufgaben ist ungültig.')
+      todo[key] = v
+    }
+    if (t.reminder !== undefined) {
+      if (!isLocalDateTime(t.reminder)) return fail('Eine Erinnerung bei Aufgaben ist ungültig.')
+      todo.reminder = t.reminder
+    }
+    if (t.recurrence !== undefined) todo.recurrence = validateTodoRecurrence(t.recurrence)
+    if (!Array.isArray(t.steps) || t.steps.length > TODO_LIMITS.steps) return fail(`Die Schritte einer Aufgabe sind ungültig (höchstens ${TODO_LIMITS.steps}).`)
+    const stepIds = new Set<string>()
+    for (const st of t.steps as unknown[]) {
+      if (!isObj(st) || typeof st.id !== 'string' || !st.id || stepIds.has(st.id)) return fail('Ein Schritt hat keine gültige ID.')
+      stepIds.add(st.id)
+      if (!isTrimmedText(st.title, TODO_LIMITS.title)) return fail(`Ein Schritt hat keinen gültigen Titel (1–${TODO_LIMITS.title} Zeichen).`)
+      if (typeof st.done !== 'boolean') return fail('Ein Schritt hat keine Angabe zu „erledigt“.')
+      todo.steps.push({ id: st.id, title: st.title, done: st.done } satisfies TodoStep)
+    }
+    if (t.note !== undefined) {
+      if (typeof t.note !== 'string' || t.note.length > TODO_LIMITS.note) return fail(`Eine Notiz bei Aufgaben ist ungültig (höchstens ${TODO_LIMITS.note} Zeichen).`)
+      if (t.note) todo.note = t.note
+    }
+    todos.push(todo)
+  }
+  return { todoLists, todos }
+}
+
+/** Strictly validates a parsed object of the current version (9); also used for stored data. Throws German Error. */
 export function validateAppData(raw: unknown): AppData {
   if (!isObj(raw)) return fail('Kein gültiges Objekt.')
-  if (raw.version !== 8) return fail('Unbekannte Version.')
+  if (raw.version !== 9) return fail('Unbekannte Version.')
   if (!isObj(raw.settings)) return fail('Einstellungen fehlen.')
   const start = raw.settings.startBalanceCents
   if (typeof start !== 'number' || !Number.isSafeInteger(start)) {
@@ -123,6 +206,8 @@ export function validateAppData(raw: unknown): AppData {
   if (!Array.isArray(raw.transfers)) return fail('Umbuchungen fehlen.')
   if (!Array.isArray(raw.invoices)) return fail('Rechnungen fehlen.')
   if (!Array.isArray(raw.events)) return fail('Termine fehlen.')
+  if (!Array.isArray(raw.todoLists)) return fail('Listen fehlen.')
+  if (!Array.isArray(raw.todos)) return fail('Aufgaben fehlen.')
 
   const categories: Category[] = []
   const catIds = new Map<string, Category>()
@@ -299,9 +384,10 @@ export function validateAppData(raw: unknown): AppData {
   }
 
   const events = validateEvents(raw.events as unknown[])
+  const { todoLists, todos } = validateTodoData(raw.todoLists as unknown[], raw.todos as unknown[])
 
   return {
-    version: 8,
+    version: 9,
     settings: { startBalanceCents: start, startCashCents: startCash, ...(displayName ? { displayName } : {}) },
     categories,
     transactions,
@@ -309,6 +395,8 @@ export function validateAppData(raw: unknown): AppData {
     transfers,
     invoices,
     events,
+    todoLists,
+    todos,
   }
 }
 

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { FinanceEntry, GridDay, Occurrence } from '../domain/calendar'
+import type { Todo } from '../domain/types'
 import { WEEKDAY_LONG, WEEKDAY_SHORT, weekdayOf } from '../domain/calendar'
 import { SPRING_BOUNCY } from '../domain/spring'
 import type { SpringParams } from '../domain/spring'
@@ -14,17 +15,18 @@ const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-function dayLabel(date: string, events: number, finance: number): string {
+function dayLabel(date: string, events: number, finance: number, todos: number): string {
   const text = `${WEEKDAY_LONG[weekdayOf(date)]}, ${Number(date.slice(8, 10))}. ${MONTH_NAMES[Number(date.slice(5, 7)) - 1]}`
   const parts = [text]
   if (events) parts.push(plural(events, 'Termin', 'Termine'))
   if (finance) parts.push(plural(finance, 'Zahlung', 'Zahlungen'))
+  if (todos) parts.push(plural(todos, 'Aufgabe', 'Aufgaben'))
   return parts.join(', ')
 }
 
 /**
  * The month as a 7 x 6 grid (Monday first). Today is a filled circle, the selected day a ring; below the number a filled dot
- * marks own events and a hollow dot marks payments (Verträge, Rechnungen). On wide screens (iPad) the cells also show up to two titles (events first, then payments on sand).
+ * marks own events, a hollow dot marks payments (Verträge, Rechnungen) and a small hollow square open tasks due that day. On wide screens (iPad) the cells also show up to two titles (events first, then payments on sand).
  * The selection ring is one layer of its own that glides from day to day on a spring (transform only); after a month change
  * it simply stands at the new place. Reduced motion: it jumps.
  */
@@ -34,6 +36,7 @@ export const MonthGrid = memo(function MonthGrid({
   today,
   events,
   finance,
+  todos,
   onSelect,
 }: {
   weeks: GridDay[][]
@@ -41,6 +44,8 @@ export const MonthGrid = memo(function MonthGrid({
   today: string
   events: ReadonlyMap<string, Occurrence[]>
   finance: ReadonlyMap<string, FinanceEntry[]>
+  /** Open tasks by due date. */
+  todos: ReadonlyMap<string, Todo[]>
   onSelect: (date: string) => void
 }) {
   const gridRef = useRef<HTMLDivElement>(null)
@@ -129,9 +134,11 @@ export const MonthGrid = memo(function MonthGrid({
           {week.map(({ date, inMonth }) => {
             const evs = events.get(date)
             const fin = finance.get(date)
+            const tds = todos.get(date)
             const items = [
-              ...(evs ?? []).map((o) => ({ key: o.key, title: o.event.title, fin: false })),
-              ...(fin ?? []).map((f) => ({ key: f.key, title: f.title, fin: true })),
+              ...(evs ?? []).map((o) => ({ key: o.key, title: o.event.title, kind: undefined })),
+              ...(fin ?? []).map((f) => ({ key: f.key, title: f.title, kind: 'fin' })),
+              ...(tds ?? []).map((t) => ({ key: `todo-${t.id}`, title: t.title, kind: 'todo' })),
             ]
             const titles = items.slice(0, 2)
             const more = items.length - titles.length
@@ -146,17 +153,18 @@ export const MonthGrid = memo(function MonthGrid({
                 data-today={date === today}
                 data-selected={date === selected}
                 aria-selected={date === selected}
-                aria-label={dayLabel(date, evs?.length ?? 0, fin?.length ?? 0)}
+                aria-label={dayLabel(date, evs?.length ?? 0, fin?.length ?? 0, tds?.length ?? 0)}
                 onClick={() => onSelect(date)}
               >
                 <span className="cal-num num">{Number(date.slice(8, 10))}</span>
                 <span className="cal-dots" aria-hidden="true">
                   {evs && <i className="cal-dot" />}
                   {fin && <i className="cal-dot hollow" />}
+                  {tds && <i className="cal-dot todo" data-testid="cal-todo-dot" />}
                 </span>
                 <span className="cal-titles" aria-hidden="true">
                   {titles.map((o) => (
-                    <span key={o.key} className="cal-title" data-fin={o.fin || undefined}>
+                    <span key={o.key} className="cal-title" data-fin={o.kind === 'fin' || undefined} data-todo={o.kind === 'todo' || undefined}>
                       {o.title}
                     </span>
                   ))}

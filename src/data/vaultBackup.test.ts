@@ -145,7 +145,7 @@ describe('restore', () => {
     await vault.saveData(session.dek, old as unknown as AppData)
     const file = buildVaultBackup(vault.snapshot())
     const restored = await restoreVaultBackup(file, recoveryKey, FAST)
-    expect(restored.version).toBe(8)
+    expect(restored.version).toBe(9)
     expect(restored.invoices).toEqual([])
     expect(restored.events).toEqual([])
     expect(restored.transactions).toHaveLength(1)

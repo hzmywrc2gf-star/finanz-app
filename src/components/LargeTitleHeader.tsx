@@ -23,6 +23,8 @@ export function LargeTitleHeader({
   onBack,
   parent = 'Start',
   action,
+  tone,
+  subtitle,
 }: {
   title: string
   /** Read by screen readers after the title but not shown (calendar: the year behind "November"). */
@@ -31,6 +33,10 @@ export function LargeTitleHeader({
   onBack?: () => void
   parent?: string
   action?: HeaderAction
+  /** Colour key of the large title (to-do lists carry their colour); CSS `.page-title[data-tone]`. */
+  tone?: string
+  /** A line below the large title (to-do „Mein Tag“: the date). */
+  subtitle?: string
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const glowRef = useRef<HTMLDivElement>(null)
@@ -57,7 +63,7 @@ export function LargeTitleHeader({
   })
 
   const heading = (
-    <h1 ref={titleRef} className={`page-title ${onBack ? 'sub-title' : ''}`}>
+    <h1 ref={titleRef} className={`page-title ${onBack ? 'sub-title' : ''}`} data-tone={tone}>
       {title}
       {srSuffix && <span className="sr-only">{` ${srSuffix}`}</span>}
     </h1>
@@ -80,11 +86,17 @@ export function LargeTitleHeader({
             {/* the text comes from CSS (::before), so it is no second copy of the title in the DOM text */}
             <span className="navbar-title" data-title={title} aria-hidden="true" />
             <div className="navbar-side navbar-end">
-              {action && (
-                <button className="round-btn navbar-action" onClick={action.onClick} aria-hidden="true" tabIndex={-1}>
-                  {action.icon}
-                </button>
-              )}
+              {action &&
+                (onBack ? (
+                  // sub-pages: the action stays in the bar all the time, next to the back button's row (to-do list: "…")
+                  <button className="round-btn navbar-subaction" onClick={action.onClick} aria-label={action.label}>
+                    {action.icon}
+                  </button>
+                ) : (
+                  <button className="round-btn navbar-action" onClick={action.onClick} aria-hidden="true" tabIndex={-1}>
+                    {action.icon}
+                  </button>
+                ))}
             </div>
           </div>
         </div>
@@ -94,6 +106,7 @@ export function LargeTitleHeader({
         <>
           <div className="subnav-space" />
           {heading}
+          {subtitle && <p className="page-subtitle">{subtitle}</p>}
         </>
       ) : action ? (
         <div className="titlebar">
@@ -103,7 +116,10 @@ export function LargeTitleHeader({
           </button>
         </div>
       ) : (
-        heading
+        <>
+          {heading}
+          {subtitle && <p className="page-subtitle">{subtitle}</p>}
+        </>
       )}
     </>
   )

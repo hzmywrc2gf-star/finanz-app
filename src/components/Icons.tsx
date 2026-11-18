@@ -78,3 +78,39 @@ export const CloudUpIcon = () => wrap(<><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6
 export const CalendarIcon = () =>
   wrap(<><rect x="4" y="5.5" width="16" height="14.5" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /><path d="M8.5 14h.01M12 14h.01M15.5 14h.01M8.5 17h.01M12 17h.01" strokeWidth={2.4} /></>)
 export const MoreIcon = () => wrap(<><circle cx="6" cy="12" r="1.3" fill="currentColor" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /><circle cx="18" cy="12" r="1.3" fill="currentColor" /></>, 22)
+
+// To-do: smart lists, list symbols and the small markers of a task row (own drawings, stroke style like the rest)
+export const SunIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><circle cx="12" cy="12" r="4" /><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" /></>, size)
+const STAR = 'M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z'
+export const StarIcon = ({ size = 18, filled = false }: { size?: number; filled?: boolean }) =>
+  wrap(<path d={STAR} fill={filled ? 'currentColor' : 'none'} />, size)
+export const PlannedIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><rect x="4" y="5.5" width="16" height="14.5" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /><path d="M8.5 14.5h3" strokeWidth={2.4} /></>, size)
+export const TasksIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><path d="M3.5 11.5 12 4.5l8.5 7" /><path d="M6 10v9.5h12V10" /><path d="m9.5 14.5 2 2 3.5-3.5" /></>, size)
+export const CartIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><path d="M3 4.5h2.2l2.2 10.5h10.2L19.8 8H6.3" /><circle cx="9.5" cy="19" r="1.4" /><circle cx="16.5" cy="19" r="1.4" /></>, size)
+export const HouseIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><path d="M3.5 11.5 12 4.5l8.5 7" /><path d="M6 10v9.5h12V10" /><path d="M10 19.5v-5h4v5" /></>, size)
+export const WorkIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><rect x="3.5" y="7.5" width="17" height="12" rx="2" /><path d="M9 7.5V5.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3.5 12.5h17" /></>, size)
+export const HeartIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<path d="M12 19.5s-7.5-4.4-7.5-9.6A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.3c0 5.2-7.5 9.6-7.5 9.6z" />, size)
+export const GiftIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><rect x="4" y="9" width="16" height="11" rx="1.5" /><path d="M3 9h18M12 9v11" /><path d="M12 9C9 9 7.5 4.5 10 4.5c1.5 0 2 2.5 2 4.5zM12 9c3 0 4.5-4.5 2-4.5-1.5 0-2 2.5-2 4.5z" /></>, size)
+export const TravelIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<path d="M10.5 13.5 4 12l-.8-1.6 7.5-.4 4.4-5.5a1.6 1.6 0 0 1 2.3 2.2l-5.4 4.5-.5 7.5L9.9 18z" />, size)
+export const BookIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><path d="M4.5 5.5c2.5-1 5-1 7.5.5 2.5-1.5 5-1.5 7.5-.5v13c-2.5-1-5-1-7.5.5-2.5-1.5-5-1.5-7.5-.5z" /><path d="M12 6v13" /></>, size)
+export const BellIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>, size)
+export const NoteIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><path d="M5.5 4.5h13v15h-13z" /><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" /></>, size)
+export const RepeatSmallIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19l-3-3" /><path d="M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5l3 3" /></>, size)
+export const XIcon = ({ size = 18 }: { size?: number }) => wrap(<path d="M6.5 6.5l11 11M17.5 6.5l-11 11" strokeWidth={2} />, size)
+export const FolderIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<path d="M3.5 7a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2.5H19a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z" />, size)
+export const StepsIcon = ({ size = 18 }: { size?: number }) =>
+  wrap(<><circle cx="6" cy="7" r="2" /><path d="M10.5 7h9M10.5 17h9" /><circle cx="6" cy="17" r="2" /><path d="m5 17 .8.8 1.6-1.6" /></>, size)

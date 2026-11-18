@@ -22,6 +22,11 @@ import { MonthPage } from './pages/MonthPage'
 import { BudgetPage } from './pages/BudgetPage'
 import { CalendarPage } from './pages/CalendarPage'
 import { DayPage } from './pages/DayPage'
+import { TodoPage } from './pages/TodoPage'
+import { TodoListPage } from './pages/TodoListPage'
+import { TodoDetailSheet } from './components/TodoDetailSheet'
+import type { CalendarMode } from './components/CalendarModeSwitch'
+import type { TodoViewId } from './domain/todos'
 import { SettingsPage } from './pages/SettingsPage'
 import type { SettingsSub, SettingsView } from './pages/SettingsPage'
 import { ProfilePage } from './pages/settings/ProfilePage'
@@ -34,13 +39,13 @@ import { BackupPage } from './pages/settings/BackupPage'
 type FormState = (AddPreset & { transaction?: Transaction }) | null
 /** Sub-page of the active tab (`hub` = its overview); only the start and settings tabs have sub-pages. */
 type SubView = StartView | SettingsView | CalendarView
-/** The calendar tab has one sub-page: the day view. */
-type CalendarView = 'hub' | 'day'
+/** The calendar tab's sub-pages: the day view (calendar mode) and one to-do list (to-do mode). */
+type CalendarView = 'hub' | 'day' | 'todo'
 type Nav = { view: SubView; anim: StackAnim }
 
 const START_SUBS: readonly SubView[] = ['bookings', 'cash', 'contracts']
 const SETTINGS_SUBS: readonly SubView[] = ['profile', 'balance', 'categories', 'excel', 'security', 'backup']
-const CALENDAR_SUBS: readonly SubView[] = ['day']
+const CALENDAR_SUBS: readonly SubView[] = ['day', 'todo']
 const tabOf = (view: SubView): TabId => (SETTINGS_SUBS.includes(view) ? 'settings' : CALENDAR_SUBS.includes(view) ? 'calendar' : 'start')
 
 /** The sub-page a history entry belongs to (entries pushed by `openSub` carry it in their state). */
@@ -73,6 +78,10 @@ function AppContent() {
   const [financeEntry, setFinanceEntry] = useState<FinanceEntry | null>(null)
   // calendar: while two fingers pinch, the page they lead to is rendered ahead of time (hidden), so the zoom only shows it
   const [calPrerender, setCalPrerender] = useState<'day' | 'hub' | null>(null)
+  // calendar tab: "Kalender | To-do" (kept for the session, also across tab changes), the open to-do list and task details
+  const [calMode, setCalMode] = useState<CalendarMode>('calendar')
+  const [todoView, setTodoView] = useState<TodoViewId>('myday')
+  const [todoDetail, setTodoDetail] = useState<string | null>(null)
   const closeForm = useCallback(() => setForm(null), [])
   // how the next popstate reaches the screen (our own back = animated, system back = the OS already animated)
   const pendingAnim = useRef<StackAnim>('instant')
@@ -152,6 +161,27 @@ function AppContent() {
     [],
   )
   const closeFinance = useCallback(() => setFinanceEntry(null), [])
+  const changeCalMode = useCallback((mode: CalendarMode) => {
+    setCalPrerender(null)
+    setCalMode(mode)
+    window.scrollTo(0, 0)
+  }, [])
+  const openTodoList = useCallback(
+    (view: TodoViewId) => {
+      setTodoView(view)
+      openSub('todo')
+    },
+    [openSub],
+  )
+  const openTodo = useCallback((id: string) => setTodoDetail(id), [])
+  const closeTodo = useCallback(() => setTodoDetail(null), [])
+  // start page card „Heute“ → calendar tab, to-do mode, „Mein Tag“
+  const openMyDay = useCallback(() => {
+    changeTab('calendar')
+    setCalMode('todo')
+    setTodoView('myday')
+    setTimeout(() => openSub('todo'), 80)
+  }, [changeTab, openSub])
   const openContracts = useCallback(() => {
     setFinanceEntry(null)
     changeTab('start')
@@ -169,7 +199,7 @@ function AppContent() {
             onBack={goBack}
             hub={
               <main className="app">
-                <StartPage onAdd={addNew} onOpenBudgets={openBudgets} onNavigate={openSub} />
+                <StartPage onAdd={addNew} onOpenBudgets={openBudgets} onNavigate={openSub} onOpenTodo={openTodo} onOpenMyDay={openMyDay} />
               </main>
             }
             renderSub={(view) => (
@@ -192,30 +222,54 @@ function AppContent() {
           </main>
         )}
         {tab === 'calendar' && (
-          <NavStack<'day'>
+          <NavStack<'day' | 'todo'>
             view={nav.view as CalendarView}
             anim={nav.anim}
             onBack={goBack}
             zoomAnchor={dayCell}
             prerender={calPrerender}
             hub={
-              <main className="app app-cal">
-                <CalendarPage
-                  day={calDay}
-                  onDay={setCalDay}
-                  onOpenDay={openDay}
-                  onPinch={prerenderDay}
-                  onNewEvent={newEvent}
-                  onEditEvent={editEvent}
-                  onOpenFinance={setFinanceEntry}
-                />
-              </main>
+              calMode === 'calendar' ? (
+                <main className="app app-cal">
+                  <CalendarPage
+                    day={calDay}
+                    onDay={setCalDay}
+                    onOpenDay={openDay}
+                    onPinch={prerenderDay}
+                    onNewEvent={newEvent}
+                    onEditEvent={editEvent}
+                    onOpenFinance={setFinanceEntry}
+                    onOpenTodo={openTodo}
+                    onMode={changeCalMode}
+                  />
+                </main>
+              ) : (
+                <main className="app">
+                  <TodoPage onMode={changeCalMode} onOpenList={openTodoList} />
+                </main>
+              )
             }
-            renderSub={() => (
-              <main className="app app-cal">
-                <DayPage day={calDay} onDay={setCalDay} onBack={back} onPinchBack={zoomBack} onPinch={prerenderMonth} onNewEvent={newEvent} onEditEvent={editEvent} onOpenFinance={setFinanceEntry} />
-              </main>
-            )}
+            renderSub={(view) =>
+              view === 'todo' ? (
+                <main className="app app-todo">
+                  <TodoListPage key={todoView} view={todoView} onBack={back} onOpenTodo={openTodo} />
+                </main>
+              ) : (
+                <main className="app app-cal">
+                  <DayPage
+                    day={calDay}
+                    onDay={setCalDay}
+                    onBack={back}
+                    onPinchBack={zoomBack}
+                    onPinch={prerenderMonth}
+                    onNewEvent={newEvent}
+                    onEditEvent={editEvent}
+                    onOpenFinance={setFinanceEntry}
+                    onOpenTodo={openTodo}
+                  />
+                </main>
+              )
+            }
           />
         )}
         {tab === 'settings' && (
@@ -243,6 +297,7 @@ function AppContent() {
       </div>
       <TabBar active={tab} onChange={changeTab} />
       {eventForm && <EventSheet key={eventForm.key} {...eventFormProps(eventForm)} />}
+      {todoDetail && <TodoDetailSheet key={todoDetail} id={todoDetail} onClose={closeTodo} />}
       {financeEntry && <FinanceEntrySheet entry={financeEntry} onClose={closeFinance} onOpenContracts={openContracts} />}
       {form && (
         <TransactionForm

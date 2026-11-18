@@ -9,6 +9,7 @@ import { SPRING_BOUNCY } from '../domain/spring'
 import { usePinch } from '../hooks/usePinch'
 import { haptic } from '../lib/haptics'
 import { animateSpring, modalOpen, reducedMotion } from '../lib/motion'
+import { todosByDueDate } from '../domain/todos'
 import { useFinance } from '../state/FinanceContext'
 import { DayList } from '../components/DayList'
 import { Fab } from '../components/Fab'
@@ -49,6 +50,7 @@ export const DayPage = memo(function DayPage({
   onNewEvent,
   onEditEvent,
   onOpenFinance,
+  onOpenTodo,
 }: {
   day: string
   onDay: (day: string) => void
@@ -73,6 +75,7 @@ export const DayPage = memo(function DayPage({
   const allDay = segments.filter((s) => s.allDay)
   const placed = useMemo(() => layoutDay(segments), [segments])
   const finance = useMemo(() => financeEntries(data, day, day), [data, day])
+  const todos = useMemo(() => todosByDueDate(data, day, day).get(day) ?? [], [data, day])
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart(day), i)), [day])
 
   // minute hand of the "now" line
@@ -180,9 +183,9 @@ export const DayPage = memo(function DayPage({
           ))}
         </div>
         <SwipePane onStep={(n) => onDay(addDays(day, n))}>
-          {(allDay.length > 0 || finance.length > 0) && (
-            <section className="card cal-allday" aria-label="Ganztägig und Zahlungen">
-              <DayList segments={allDay} finance={finance} onEvent={onEditEvent} onFinance={onOpenFinance} />
+          {(allDay.length > 0 || finance.length > 0 || todos.length > 0) && (
+            <section className="card cal-allday" aria-label="Ganztägig, Zahlungen und Aufgaben">
+              <DayList segments={allDay} finance={finance} todos={todos} onEvent={onEditEvent} onFinance={onOpenFinance} onTodo={onOpenTodo} />
             </section>
           )}
           <div ref={timelineRef} className="tl" style={{ height: 24 * HOUR_PX }} data-testid="timeline" onClick={tapSlot}>
