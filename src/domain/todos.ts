@@ -278,6 +278,22 @@ export function stepsLabel(todo: Pick<Todo, 'steps'>): string | null {
   return `${todo.steps.filter((s) => s.done).length} von ${todo.steps.length}`
 }
 
+/** Fields a new task starts with in a view (the entry line of a list). */
+export interface TodoDefaults {
+  listId?: string | null
+  important?: boolean
+  myDay?: string
+  dueDate?: string
+}
+
+/** What a task added in a view starts with: „Mein Tag“ = today, „Wichtig“ = starred, „Geplant“ = due today; smart lists add to „Aufgaben“. */
+export function viewDefaults(view: TodoViewId, today: string): TodoDefaults {
+  if (view === 'myday') return { myDay: today }
+  if (view === 'important') return { important: true }
+  if (view === 'planned') return { dueDate: today }
+  return isSmartList(view) ? {} : { listId: view }
+}
+
 /** Next Monday after today (the option „Nächste Woche“). */
 export function nextWeekStart(today: string): string {
   return addDays(weekStart(today), 7)

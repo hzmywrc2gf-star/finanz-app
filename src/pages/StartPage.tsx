@@ -22,6 +22,7 @@ import { InvoiceFlowDialogs, InvoiceListSheet } from '../components/InvoiceSheet
 import type { InvoiceFlow } from '../components/InvoiceSheets'
 import { CashIcon, ChevronRight, ContractIcon, ListIcon, LockIcon, PlusIcon, ReceiptIcon, RefreshIcon } from '../components/Icons'
 import { LargeTitleHeader } from '../components/LargeTitleHeader'
+import { TodayTodosCard } from '../components/TodayTodosCard'
 
 export type StartView = 'hub' | 'bookings' | 'cash' | 'contracts'
 
@@ -32,10 +33,15 @@ export const StartPage = memo(function StartPage({
   onAdd,
   onOpenBudgets,
   onNavigate,
+  onOpenTodo,
+  onOpenMyDay,
 }: {
   onAdd: () => void
   onOpenBudgets: () => void
   onNavigate: (view: StartView) => void
+  /** To-do card „Heute“: a task's details / „Mein Tag“ in the calendar tab. */
+  onOpenTodo: (id: string) => void
+  onOpenMyDay: () => void
 }) {
   const { data, confirmOccurrence, skipOccurrence, snoozeInvoice } = useFinance()
   const { lockNow } = useLock()
@@ -175,6 +181,8 @@ export const StartPage = memo(function StartPage({
           })}
         </section>
       )}
+
+      <TodayTodosCard data={data} today={today} onOpenTodo={onOpenTodo} onOpenMyDay={onOpenMyDay} />
 
       {alerts.length > 0 && (
         <button className="card pcard budgets budget-alert" onClick={onOpenBudgets}>

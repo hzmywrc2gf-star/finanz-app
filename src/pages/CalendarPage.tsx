@@ -9,7 +9,10 @@ import {
   daySegments, financeEntries, longDayLabel, monthGrid, occurrencesByDay, occurrencesInRange, sameDayInMonth,
 } from '../domain/calendar'
 import type { DaySegment, FinanceEntry } from '../domain/calendar'
+import { todosByDueDate } from '../domain/todos'
 import { useFinance } from '../state/FinanceContext'
+import { CalendarModeSwitch } from '../components/CalendarModeSwitch'
+import type { CalendarMode } from '../components/CalendarModeSwitch'
 import { CalendarImportSheet } from '../components/CalendarImport'
 import { DayList } from '../components/DayList'
 import { ChevronLeft, ChevronRight, MoreIcon, PlusIcon } from '../components/Icons'
@@ -21,6 +24,8 @@ export interface CalendarHandlers {
   onNewEvent: (day: string, hour?: number) => void
   onEditEvent: (seg: DaySegment) => void
   onOpenFinance: (entry: FinanceEntry) => void
+  /** Opens the details of a task (open tasks with a due date show up in the grid and the day lists). */
+  onOpenTodo: (id: string) => void
 }
 
 /** The pinch spring runs over scale × this (its rest thresholds are in px). */
@@ -40,7 +45,11 @@ export const CalendarPage = memo(function CalendarPage({
   onNewEvent,
   onEditEvent,
   onOpenFinance,
+  onOpenTodo,
+  onMode,
 }: {
+  /** "Kalender | To-do" below the title. */
+  onMode: (mode: CalendarMode) => void
   day: string
   onDay: (day: string) => void
   /** `zoom`: opened by a pinch, the day view grows out of the selected cell. */
@@ -73,8 +82,10 @@ export const CalendarPage = memo(function CalendarPage({
     }
     return map
   }, [data, from, to])
+  const todos = useMemo(() => todosByDueDate(data, from, to), [data, from, to])
   const segments = useMemo(() => daySegments(occs, day), [occs, day])
   const dayFinance = finance.get(day) ?? []
+  const dayTodos = todos.get(day)
 
   const step = (n: number) => onDay(sameDayInMonth(day, addMonths(month, n)))
   const year = month.slice(0, 4)
@@ -157,6 +168,7 @@ export const CalendarPage = memo(function CalendarPage({
         srSuffix={title === monthLabel(month) ? undefined : year}
         action={{ label: 'Kalender importieren', icon: <MoreIcon />, onClick: () => setImporting(true) }}
       />
+      <CalendarModeSwitch value="calendar" onChange={onMode} />
       <SwipePane onStep={step}>
         <div className="cal-toolbar">
           <button className="icon-btn" onClick={() => step(-1)} aria-label="Vorheriger Monat">
@@ -172,7 +184,7 @@ export const CalendarPage = memo(function CalendarPage({
         <div className="cal-split">
           <div ref={pinchRef} className="cal-left" data-testid="cal-pinch">
             <div ref={zoomRef} className="cal-zoom">
-              <MonthGrid weeks={weeks} selected={day} today={today} events={byDay} finance={finance} onSelect={onDay} />
+              <MonthGrid weeks={weeks} selected={day} today={today} events={byDay} finance={finance} todos={todos} onSelect={onDay} />
             </div>
           </div>
           <section className="cal-right" aria-label="Termine des Tages">
@@ -188,7 +200,7 @@ export const CalendarPage = memo(function CalendarPage({
             </div>
             {/* a new day fades in and rises a little (keyed by the day) */}
             <div key={day} className="cal-day-anim">
-              <DayList segments={segments} finance={dayFinance} onEvent={onEditEvent} onFinance={onOpenFinance} />
+              <DayList segments={segments} finance={dayFinance} todos={dayTodos} onEvent={onEditEvent} onFinance={onOpenFinance} onTodo={onOpenTodo} />
             </div>
           </section>
         </div>
