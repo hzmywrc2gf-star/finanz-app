@@ -5486,7 +5486,8 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
 {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   const must = (actual, expected, what) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`Koralle – ${what}: erwartet ${JSON.stringify(expected)}, war ${JSON.stringify(actual)}`) }
-  const CORAL = 'rgb(242, 92, 84)', INK = 'rgb(15, 23, 42)'
+  const CORAL_L = 'rgb(242, 92, 84)', CORAL_D = 'rgb(255, 122, 89)', INK = 'rgb(15, 23, 42)'
+  let CORAL = CORAL_L
   const cats = [
     ...['Lebensmittel', 'Fixkosten', 'Mobilität', 'Freizeit', 'Kleidung', 'Gesundheit', 'Sonstiges'].map((name) => ({ id: `expense-${name.toLowerCase()}`, name, kind: 'expense', builtIn: name === 'Sonstiges' })),
     ...['Gehalt', 'Nebeneinkünfte', 'Sonstiges'].map((name) => ({ id: `income-${name.toLowerCase()}`, name, kind: 'income', builtIn: name === 'Sonstiges' })),
@@ -5508,6 +5509,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   }
   for (const scheme of ['light', 'dark']) {
     const dark = scheme === 'dark'
+    CORAL = dark ? CORAL_D : CORAL_L
     const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', colorScheme: scheme })
     await c.addInitScript((sd) => { if (!localStorage.getItem('finanz-app:vault') && !sessionStorage.getItem('seeded')) { localStorage.setItem('finanz-app:v1', sd); sessionStorage.setItem('seeded', '1') } }, JSON.stringify(seed))
     const p = await c.newPage()
@@ -5521,7 +5523,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     const TAB = dark ? 'rgb(241, 245, 249)' : 'rgb(30, 41, 59)'
 
     // 2) Tab-Pille zart Koralle, Text/Symbol bleiben --tab-active; der Inline-Knopf „Buchung hinzufügen“ bleibt neutral
-    must(await cs('.tab[aria-current="page"] .tab-ind', 'backgroundColor'), dark ? 'rgba(242, 92, 84, 0.3)' : 'rgba(242, 92, 84, 0.2)', 'aktive Tab-Pille')
+    must(await cs('.tab[aria-current="page"] .tab-ind', 'backgroundColor'), dark ? 'rgba(255, 122, 89, 0.3)' : 'rgba(242, 92, 84, 0.2)', 'aktive Tab-Pille')
     must(await cs('.tab[aria-current="page"]', 'color'), TAB, 'aktiver Tab Text')
     must(await cs('.tab:not([aria-current="page"]) .tab-ind', 'backgroundColor'), 'rgba(0, 0, 0, 0)', 'inaktive Tabs ohne Pille')
     must(await cs('.add-btn', 'backgroundColor') !== CORAL, true, '„Buchung hinzufügen“ (Pille mit Text) nicht Koralle')
@@ -5575,7 +5577,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
     await p.getByTestId('balance').waitFor()
     must(await p.getByRole('region', { name: 'Offene Rechnungen' }).locator('.pamt.expense-text').evaluate((e) => getComputedStyle(e).color), dark ? 'rgb(248, 113, 113)' : 'rgb(200, 30, 30)', 'Rechnungsbetrag auf Nebel bleibt --expense-text-t')
     await c.close()
-    ok(`Koralle (${dark ? 'dunkel' : 'hell'}): Heute-Kreis im Raster und in der Wochenleiste (#F25C54, Zahl #0F172A), Auswahl-Ring neutral, Jetzt-Linie, „Termin hinzufügen“, Fabs (Tagesansicht, Monat), erledigte To-do-Haken + „+“ der Eingabezeile, Schalter „an“ (Knopf weiß), aktive Tab-Pille ${dark ? '30' : '20'} % Koralle mit Text in --tab-active; Zahlungsbeträge bleiben Rot/Grün, „Buchung hinzufügen“ neutral`)
+    ok(`Koralle (${dark ? 'dunkel' : 'hell'}): Heute-Kreis im Raster und in der Wochenleiste (${dark ? '#FF7A59' : '#F25C54'}, Zahl #0F172A), Auswahl-Ring neutral, Jetzt-Linie, „Termin hinzufügen“, Fabs (Tagesansicht, Monat), erledigte To-do-Haken + „+“ der Eingabezeile, Schalter „an“ (Knopf weiß), aktive Tab-Pille ${dark ? '30' : '20'} % Koralle mit Text in --tab-active; Zahlungsbeträge bleiben Rot/Grün, „Buchung hinzufügen“ neutral`)
   }
 }
 
