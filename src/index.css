@@ -31,7 +31,7 @@
   --btn-text: #ffffff;
   --tab-active: #1e293b;
   --tab-inactive: #64748b;
-  --switch-on: #1e293b;
+  --switch-on: var(--coral);
   --toast-bg: #1e293b;
   --toast-text: #ffffff;
   --tile-1: #1e293b;
@@ -71,6 +71,12 @@
   --todo-violet: #8045ad;
   --todo-fg: #ffffff;
   --star: #b45309;
+  /* Koralle-Akzent (Nutzerwahl #F25C54, 60-30-10: nur ca. 10 % der Fläche): Heute im Kalender, Jetzt-Linie, aktive Tab-Pille,
+     Schalter „an“, erledigter To-do-Haken, runde „+“-Knöpfe. NIE für Beträge, Balken, Diagramme, Warnungen/Löschen/Fehler,
+     Karten oder große Flächen. Text/Symbol darauf --coral-ink (#0F172A 5,47:1; #1E293B wären nur 4,48:1). */
+  --coral: #f25c54;
+  --coral-ink: #0f172a;
+  --coral-soft: rgba(242, 92, 84, 0.2);
   color-scheme: light dark;
 }
 
@@ -105,7 +111,7 @@
     --danger: #fb923c;
     --danger-text: #fb923c;
     --delete-bg: #c2410c;
-    --switch-on: #64748b;
+    --switch-on: var(--coral);
     --tabbar-bg: rgba(30, 41, 59, 0.86);
     --backdrop: rgba(0, 0, 0, 0.6);
     --seg-bg: rgba(148, 163, 184, 0.2);
@@ -147,6 +153,10 @@
     --todo-violet: #d3a8f0;
     --todo-fg: #0f172a;
     --star: #fbbf24;
+    /* Koralle bleibt im Dunkeln #F25C54 (5,47:1 auf #0F172A, 4,48:1 auf Karten); ein helleres #F46A62 läge näher am Ausgaben-Rot #F87171 */
+    --coral: #ff7a59;
+    --coral-ink: #0f172a;
+    --coral-soft: rgba(255, 122, 89, 0.3);
   }
 }
 
@@ -172,7 +182,7 @@
   --danger: #fb923c;
   --danger-text: #fb923c;
   --delete-bg: #c2410c;
-  --switch-on: #64748b;
+  --switch-on: var(--coral);
   --tabbar-bg: rgba(30, 41, 59, 0.86);
   --backdrop: rgba(0, 0, 0, 0.6);
   --seg-bg: rgba(148, 163, 184, 0.2);
@@ -214,6 +224,9 @@
   --todo-violet: #d3a8f0;
   --todo-fg: #0f172a;
   --star: #fbbf24;
+  --coral: #ff7a59;
+  --coral-ink: #0f172a;
+  --coral-soft: rgba(255, 122, 89, 0.3);
 }
 
 * {
@@ -811,8 +824,8 @@ button.row:is(:active, [data-pressed]) {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--btn-bg);
-  color: var(--btn-text);
+  background: var(--coral);
+  color: var(--coral-ink);
   display: grid;
   place-items: center;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
@@ -868,7 +881,7 @@ button.row:is(:active, [data-pressed]) {
   border-radius: 15px;
 }
 .tab[aria-current='page'] .tab-ind {
-  background: var(--ink-soft);
+  background: var(--coral-soft);
 }
 
 /* Sheet */
@@ -2678,8 +2691,8 @@ html[data-privacy] #privacy-cover {
   font-weight: 700;
 }
 .cal-cell[data-today='true'] .cal-num {
-  background: var(--btn-bg);
-  color: var(--btn-text);
+  background: var(--coral);
+  color: var(--coral-ink);
   font-weight: 700;
 }
 .cal-dots {
@@ -2743,6 +2756,8 @@ html[data-privacy] #privacy-cover {
 }
 .cal-new {
   flex: none;
+  background: var(--coral);
+  color: var(--coral-ink);
 }
 .cal-empty {
   background: var(--card);
@@ -2864,9 +2879,13 @@ html[data-privacy] #privacy-cover {
   font-weight: 700;
 }
 .day-chip[data-today='true'] .dn {
-  background: var(--btn-bg);
-  color: var(--btn-text);
+  background: var(--coral);
+  color: var(--coral-ink);
   font-weight: 700;
+}
+/* today and selected: the neutral ring sits outside the coral circle (like the month grid) */
+.day-chip[data-today='true'][data-selected='true'] .dn {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--btn-bg);
 }
 .cal-allday {
   margin-bottom: 12px;
@@ -2948,7 +2967,7 @@ html[data-privacy] #privacy-cover {
   left: 40px;
   right: 0;
   height: 2px;
-  background: var(--btn-bg);
+  background: var(--coral);
   pointer-events: none;
 }
 .tl-now::before {
@@ -2959,7 +2978,7 @@ html[data-privacy] #privacy-cover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--btn-bg);
+  background: var(--coral);
 }
 
 /* Import */
@@ -3304,8 +3323,9 @@ button.todo-check:is(:active, [data-pressed]):not(:disabled) {
   stroke-dashoffset: 22;
 }
 .todo-check[aria-checked='true'] .todo-check-circle {
-  background: var(--btn-bg);
-  box-shadow: inset 0 0 0 2px var(--btn-bg);
+  background: var(--coral);
+  box-shadow: inset 0 0 0 2px var(--coral);
+  color: var(--coral-ink);
 }
 .todo-check[aria-checked='true'] .todo-check-circle path {
   stroke-dashoffset: 0;
@@ -3427,14 +3447,22 @@ button.todo-star:is(:active, [data-pressed]):not(:disabled) {
   height: 44px;
   display: grid;
   place-items: center;
-  color: var(--text-2);
+  color: var(--coral-ink);
+}
+/* a 30 px coral circle in the 44 px touch area */
+.todo-add-plus::before {
+  content: '';
+  grid-area: 1 / 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--coral);
 }
 .todo-add-plus svg {
-  width: 22px;
-  height: 22px;
-}
-.todo-add[data-active] .todo-add-plus {
-  color: var(--text);
+  grid-area: 1 / 1;
+  position: relative;
+  width: 20px;
+  height: 20px;
 }
 .todo-add-input {
   flex: 1;

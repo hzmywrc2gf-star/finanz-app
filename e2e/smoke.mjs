@@ -4524,7 +4524,7 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   must((await pK.locator('.cal-cell').last().getAttribute('data-date')), '2026-12-06', 'letzter Tag')
   must(await pK.locator('.cal-cell[data-out="false"]').count(), 30, '30 Tage im November')
   must(await pK.locator('.cal-cell[data-today="true"]').evaluateAll((els) => els.map((e) => e.dataset.date)), ['2026-11-15'], 'heute')
-  must(await cssK(cell('2026-11-15').locator('.cal-num'), 'backgroundColor'), 'rgb(30, 41, 59)', 'heute gefüllt')
+  must(await cssK(cell('2026-11-15').locator('.cal-num'), 'backgroundColor'), 'rgb(242, 92, 84)', 'heute gefüllt (Koralle)')
   must(await cell('2026-11-15').getAttribute('aria-selected'), 'true', 'heute ausgewählt')
   await pK.getByText('Keine Termine').waitFor()
   await pK.screenshot({ path: `${SHOTS}/k1-monat-leer-375.png` })
@@ -5480,6 +5480,105 @@ ok('Verträge gelöscht: 3 gebuchte Einträge (↻) und Kontostand 200,00 € bl
   if (!nbsp(await p.locator('button.menu-row').filter({ hasText: /^Profil/ }).innerText()).includes('Felix')) throw new Error('Alle Daten löschen – Name fehlt in der Profil-Zeile')
   ok('Tresor bleibt: nach dem Neuladen erscheint der Sperrbildschirm, Entsperren mit demselben Passwort, kein Klartext-Speicher, die gespeicherten Daten sind leer, der Name „Felix“ steht weiter in der Profil-Zeile')
   await c.close()
+}
+
+// ---------- Koralle-Akzent (#F25C54) an genau den abgesprochenen Orten, Hell und Dunkel; Beträge bleiben Rot/Grün (Heute = Mi 18.11.2026) ----------
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const must = (actual, expected, what) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`Koralle – ${what}: erwartet ${JSON.stringify(expected)}, war ${JSON.stringify(actual)}`) }
+  const CORAL_L = 'rgb(242, 92, 84)', CORAL_D = 'rgb(255, 122, 89)', INK = 'rgb(15, 23, 42)'
+  let CORAL = CORAL_L
+  const cats = [
+    ...['Lebensmittel', 'Fixkosten', 'Mobilität', 'Freizeit', 'Kleidung', 'Gesundheit', 'Sonstiges'].map((name) => ({ id: `expense-${name.toLowerCase()}`, name, kind: 'expense', builtIn: name === 'Sonstiges' })),
+    ...['Gehalt', 'Nebeneinkünfte', 'Sonstiges'].map((name) => ({ id: `income-${name.toLowerCase()}`, name, kind: 'income', builtIn: name === 'Sonstiges' })),
+  ]
+  const seed = {
+    version: 9,
+    settings: { startBalanceCents: 100000, startCashCents: 0 },
+    categories: cats,
+    transactions: [{ id: 't1', kind: 'expense', amountCents: 2345, date: '2026-11-10', categoryId: 'expense-lebensmittel', note: 'Einkauf', account: 'konto', createdAt: 1 }],
+    transfers: [],
+    recurring: [{ id: 'r1', kind: 'income', amountCents: 250000, categoryId: 'income-nebeneinkünfte', note: 'Honorar', interval: 'monthly', dayOfMonth: 18, startDate: '2026-10-18', bookedThrough: '2026-11-18', autoBook: true }],
+    invoices: [{ id: 'i1', createdAt: 2, note: 'Otto', categoryId: 'expense-kleidung', amountCents: 4999, purchaseDate: '2026-11-04', dueDate: '2026-11-18' }],
+    events: [],
+    todoLists: [],
+    todos: [
+      { id: 'o1', createdAt: 3, listId: null, title: 'Steuer prüfen', done: false, important: false, myDay: '2026-11-18', steps: [], order: 0 },
+      { id: 'd1', createdAt: 4, listId: null, title: 'Paket abholen', done: true, completedAt: 5, important: false, myDay: '2026-11-18', steps: [], order: 1 },
+    ],
+  }
+  for (const scheme of ['light', 'dark']) {
+    const dark = scheme === 'dark'
+    CORAL = dark ? CORAL_D : CORAL_L
+    const c = await browser.newContext({ ...devices['iPhone 13'], locale: 'de-DE', timezoneId: 'Europe/Berlin', serviceWorkers: 'block', colorScheme: scheme })
+    await c.addInitScript((sd) => { if (!localStorage.getItem('finanz-app:vault') && !sessionStorage.getItem('seeded')) { localStorage.setItem('finanz-app:v1', sd); sessionStorage.setItem('seeded', '1') } }, JSON.stringify(seed))
+    const p = await c.newPage()
+    p.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    p.on('pageerror', (e) => errors.push(e.message))
+    await p.clock.install({ time: new Date('2026-11-18T10:00:00+01:00') })
+    await keepAlive(p)
+    await p.goto(URL); await ensureOpen(p)
+    const cs = (sel, prop, pseudo = null) => p.locator(sel).first().evaluate((el, [pr, ps]) => getComputedStyle(el, ps)[pr], [prop, pseudo])
+    const RED = dark ? 'rgb(248, 113, 113)' : 'rgb(220, 38, 38)', GREEN = dark ? 'rgb(52, 211, 153)' : 'rgb(4, 120, 87)'
+    const TAB = dark ? 'rgb(241, 245, 249)' : 'rgb(30, 41, 59)'
+
+    // 2) Tab-Pille zart Koralle, Text/Symbol bleiben --tab-active; der Inline-Knopf „Buchung hinzufügen“ bleibt neutral
+    must(await cs('.tab[aria-current="page"] .tab-ind', 'backgroundColor'), dark ? 'rgba(255, 122, 89, 0.3)' : 'rgba(242, 92, 84, 0.2)', 'aktive Tab-Pille')
+    must(await cs('.tab[aria-current="page"]', 'color'), TAB, 'aktiver Tab Text')
+    must(await cs('.tab:not([aria-current="page"]) .tab-ind', 'backgroundColor'), 'rgba(0, 0, 0, 0)', 'inaktive Tabs ohne Pille')
+    must(await cs('.add-btn', 'backgroundColor') !== CORAL, true, '„Buchung hinzufügen“ (Pille mit Text) nicht Koralle')
+    if (!dark) await p.screenshot({ path: `${SHOTS}/kor-start-hell.png` })
+
+    // 1) + 5) Kalender: Heute-Kreis, „Termin hinzufügen“; Beträge der Zahlungen weiter Rot/Grün
+    await tabOn(p, 'Kalender').click()
+    await p.locator('.cal-grid').waitFor()
+    must(await cs('.cal-cell[data-today="true"] .cal-num', 'backgroundColor'), CORAL, 'Heute-Kreis')
+    must(await cs('.cal-cell[data-today="true"] .cal-num', 'color'), INK, 'Heute-Zahl dunkel')
+    must(await cs('.cal-ring', 'boxShadow').then((v) => v.includes(dark ? 'rgb(241, 245, 249)' : 'rgb(30, 41, 59)')), true, 'Auswahl-Ring neutral (auch auf heute sichtbar)')
+    must([await cs('.cal-new', 'backgroundColor'), await cs('.cal-new', 'color')], [CORAL, INK], '„Termin hinzufügen“')
+    const amts = await p.locator('.cal-amt').evaluateAll((els) => els.map((e) => [e.classList.contains('income-text') ? 'in' : 'out', getComputedStyle(e).color]))
+    must(amts.map((a) => a[0]).sort(), ['in', 'out'], 'Zahlung und Rechnung in der Tagesliste')
+    for (const [k, col] of amts) must(col, k === 'in' ? GREEN : RED, `Betrag ${k}`)
+    // Tagesansicht: Wochenleiste heute, Jetzt-Linie, Fab
+    await p.getByRole('button', { name: /^Tagesansicht:/ }).click(); await settled(p)
+    must(await cs('.day-chip[data-today="true"] .dn', 'backgroundColor'), CORAL, 'Wochenleiste heute')
+    must(await cs('.day-chip[data-today="true"] .dn', 'color'), INK, 'Wochenleiste heute: Zahl dunkel')
+    must(await cs('.day-chip[data-today="true"][data-selected="true"] .dn', 'boxShadow').then((v) => v.includes(dark ? 'rgb(241, 245, 249)' : 'rgb(30, 41, 59)')), true, 'Auswahl außen neutral')
+    must(await cs('[data-testid="now-line"]', 'backgroundColor'), CORAL, 'Jetzt-Linie')
+    must([await cs('.fab.cal-fab', 'backgroundColor'), await cs('.fab.cal-fab', 'color')], [CORAL, INK], 'Fab Tagesansicht')
+    await p.getByRole('button', { name: 'Zurück' }).first().click(); await settled(p)
+
+    // 4) To-do: erledigter Haken Koralle mit dunklem Häkchen, „+“ der Eingabezeile
+    await p.getByRole('group', { name: 'Ansicht' }).getByRole('button', { name: 'To-do' }).click()
+    await p.locator('button.todo-list-row').filter({ hasText: /^Mein Tag/ }).click(); await settled(p)
+    await p.getByRole('button', { name: 'Erledigt (1)' }).click()
+    await sleep(250)
+    must([await cs('.todo-done .todo-check-circle', 'backgroundColor'), await cs('.todo-done .todo-check-circle', 'color')], [CORAL, INK], 'erledigter Haken')
+    must(await cs('.todo-row .todo-check[aria-checked="false"] .todo-check-circle', 'backgroundColor'), 'rgba(0, 0, 0, 0)', 'offener Haken leer')
+    must([await cs('.todo-add-plus', 'backgroundColor', '::before'), await cs('.todo-add-plus', 'color')], [CORAL, INK], '„+“ der Eingabezeile')
+    await p.getByRole('button', { name: 'Zurück' }).first().click(); await settled(p)
+
+    // 5) Monat-Fab
+    await tabOn(p, 'Monat').click()
+    must([await cs('.fab', 'backgroundColor'), await cs('.fab', 'color')], [CORAL, INK], 'Fab Monat')
+
+    // 3) Schalter „an“ Koralle, „aus“ neutral
+    await openSettings(p, 'Datensicherung')
+    const sw = p.getByRole('switch', { name: 'Am 1. des Monats erinnern' })
+    const off = await sw.evaluate((e) => getComputedStyle(e).backgroundColor)
+    must(off !== CORAL, true, 'Schalter aus nicht Koralle')
+    await sw.check(); await sleep(300)
+    must(await sw.evaluate((e) => getComputedStyle(e).backgroundColor), CORAL, 'Schalter an')
+    must(await sw.evaluate((e) => getComputedStyle(e, '::after').backgroundColor), 'rgb(255, 255, 255)', 'Schalterknopf weiß')
+    await sw.uncheck()
+
+    // Rot/Grün bleiben Beträgen vorbehalten: Start-Beträge unverändert
+    await tabOn(p, 'Start').click()
+    await p.getByTestId('balance').waitFor()
+    must(await p.getByRole('region', { name: 'Offene Rechnungen' }).locator('.pamt.expense-text').evaluate((e) => getComputedStyle(e).color), dark ? 'rgb(248, 113, 113)' : 'rgb(200, 30, 30)', 'Rechnungsbetrag auf Nebel bleibt --expense-text-t')
+    await c.close()
+    ok(`Koralle (${dark ? 'dunkel' : 'hell'}): Heute-Kreis im Raster und in der Wochenleiste (${dark ? '#FF7A59' : '#F25C54'}, Zahl #0F172A), Auswahl-Ring neutral, Jetzt-Linie, „Termin hinzufügen“, Fabs (Tagesansicht, Monat), erledigte To-do-Haken + „+“ der Eingabezeile, Schalter „an“ (Knopf weiß), aktive Tab-Pille ${dark ? '30' : '20'} % Koralle mit Text in --tab-active; Zahlungsbeträge bleiben Rot/Grün, „Buchung hinzufügen“ neutral`)
+  }
 }
 
 await browser.close()
